@@ -1,0 +1,23 @@
+{
+  "name": "promise-pool-executor",
+  "version": "0.1.1",
+  "description": "A TypeScript module for managing ES6 promise concurrency.",
+  "author": "Wes van Vugt <baudzila@gmail.com>",
+  "scripts": {
+    "build": "tsc -p ts",
+    "test": "./node_modules/.bin/mocha js/test/*.js --reporter spec"
+  },
+  "main": "js/index.js",
+  "typings": "js/index",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chai": "3.4.35",
+    "@types/mocha": "2.2.40",
+    "@types/node": "^7.0.12",
+    "chai": "3.5.0",
+    "mocha": "3.2.0",
+    "typescript": "^2.2.2"
+  },
+  "license": "MIT",
+  "public": true
+}

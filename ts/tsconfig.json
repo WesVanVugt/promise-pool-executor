@@ -1,0 +1,15 @@
+{
+    "compileOnSave": true,
+    "compilerOptions": {
+        "target": "es6",
+        "module": "commonjs",
+        "noImplicitAny": true,
+        "preserveConstEnums": true,
+        "declaration": true,
+        "sourceMap": true,
+        "outDir": "../js"
+    },
+    "include": [
+        "./**/*.ts"
+    ]
+}
