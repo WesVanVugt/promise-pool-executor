@@ -9,7 +9,8 @@
             "stopOnEntry": false,
             "preLaunchTask": "tsc",
             "console": "internalConsole",
-            "program": "${workspaceRoot}/ts/test.ts",
+            "program": "${workspaceRoot}/node_modules/mocha/bin/_mocha",
+            "args": ["js/test/*.js", "--reporter", "spec"],
             "outFiles": [
                 "${workspaceRoot}/js/**/*.js"
             ]
