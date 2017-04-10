@@ -23,7 +23,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
-     * @param invocation The invocation number for this call, starting at 0 and incrementing once for each call.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
     generator: (invocation?: number) => Promise<R> | null,
 }
@@ -37,6 +37,14 @@ export interface SingleTaskParameters<T, R> {
      * Optional data to pass to the generator function as a parameter.
      */
     data?: T;
+}
+
+export interface LinearTaskParameters<T, R> extends Identifier, InvocationLimit {
+    /**
+     * A function used for creating promises to run.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
+     */
+    generator: (invocation?: number) => Promise<R>;
 }
 
 export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
@@ -306,6 +314,21 @@ export class PromisePoolExecutor {
             invocationLimit: 1,
         }).then((result) => {
             return result[0];
+        });
+    }
+
+    /**
+     * Runs a task with a concurrency limit of 1
+     * 
+     * @param params 
+     * @return A promise which resolves to an array containing the results of the task.
+     */
+    public addLinearTask<T, R>(params: LinearTaskParameters<T, R>): Promise<R[]> {
+        return this.addGenericTask({
+            generator: params.generator,
+            identifier: params.identifier,
+            invocationLimit: params.invocationLimit,
+            concurrencyLimit: 1,
         });
     }
 
