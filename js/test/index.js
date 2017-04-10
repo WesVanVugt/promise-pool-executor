@@ -25,7 +25,7 @@ function sum(nums) {
     }
     return total;
 }
-describe("Concurrency Test", () => {
+describe("Concurrency", () => {
     it("No Limit", (done) => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
@@ -76,7 +76,7 @@ describe("Concurrency Test", () => {
         }).catch(done);
     });
 });
-describe("Task Secializations Test", () => {
+describe("Task Secializations", () => {
     it("Single Task", (done) => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
@@ -115,22 +115,46 @@ describe("Task Secializations Test", () => {
             done();
         }).catch(done);
     });
-    it("Batch Task", (done) => {
-        let pool = new Pool.PromisePoolExecutor();
-        let start = Date.now();
-        pool.addBatchTask({
-            data: [3, 1, 2],
-            batchSize: 2,
-            generator: (data) => {
-                return wait(tick * sum(data))
-                    .then(() => {
-                    return Date.now() - start;
-                });
-            }
-        }).then((results) => {
-            expectTimes(results, [4, 2], "Timing Results");
-            done();
-        }).catch(done);
+    describe("Batch Task", () => {
+        it("Static Batch Size", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            pool.addBatchTask({
+                data: [3, 1, 2],
+                // Groups the data as [[3, 1], [2]]
+                batchSize: 2,
+                generator: (data) => {
+                    return wait(tick * sum(data))
+                        .then(() => {
+                        return Date.now() - start;
+                    });
+                }
+            }).then((results) => {
+                expectTimes(results, [4, 2], "Timing Results");
+                done();
+            }).catch(done);
+        });
+        it("Dynamic Batch Size", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            pool.addBatchTask({
+                data: [2, 1, 3],
+                batchSize: (elements, freeSlots) => {
+                    // Groups the data as [[2], [1, 3]]
+                    return Math.floor(elements / freeSlots);
+                },
+                generator: (data) => {
+                    return wait(tick * sum(data))
+                        .then(() => {
+                        return Date.now() - start;
+                    });
+                },
+                concurrencyLimit: 2
+            }).then((results) => {
+                expectTimes(results, [2, 4], "Timing Results");
+                done();
+            }).catch(done);
+        });
     });
 });
 //# sourceMappingURL=index.js.map
