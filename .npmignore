@@ -1,5 +1,3 @@
-ts/
-node_modules/
-.vscode/
-js/*.map
-.gitignore
+**/*
+!js/index.js
+!js/index.d.ts
