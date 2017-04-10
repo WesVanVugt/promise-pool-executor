@@ -99,6 +99,12 @@ function nextPromise(task) {
         this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
+    if (this._activePromiseCount === 0 && this._tasks.length === 0) {
+        this._idlePromises.forEach((resolver) => {
+            resolver.resolveInstance();
+        });
+        this._idlePromises.length = 0;
+    }
 }
 function createResolvablePromise(resolver) {
     return new Promise((resolve, reject) => {
@@ -307,6 +313,14 @@ class PromisePoolExecutor {
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
         });
+    }
+    /**
+     * Returns a promise which resolves when there are no more tasks queued to run.
+     */
+    waitForIdle() {
+        let resolver = {};
+        this._idlePromises.push(resolver);
+        return createResolvablePromise(resolver);
     }
 }
 exports.PromisePoolExecutor = PromisePoolExecutor;

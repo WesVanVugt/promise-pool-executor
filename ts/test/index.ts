@@ -191,7 +191,50 @@ describe("Miscellaneous Features", () => {
         }).then(() => {
             done();
         }).catch(done);
-    })
+    });
+
+    describe("waitForIdle", () => {
+        it("Simple", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick);
+                },
+                invocationLimit: 1,
+            });
+            pool.waitForIdle()
+                .then(() => {
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                    done();
+                }).catch(done);
+        });
+
+        it("Chained", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            generator: () => {
+                                return wait(tick);
+                            },
+                            invocationLimit: 1,
+                        });
+                    });
+                },
+                invocationLimit: 1,
+            });
+            pool.waitForIdle()
+                .then(() => {
+                    expectTimes([Date.now() - start], [2], "Timing Results");
+                    done();
+                }).catch(done);
+        });
+    });
 });
 
 describe("Task Secializations", () => {

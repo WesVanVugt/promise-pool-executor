@@ -179,4 +179,8 @@ export declare class PromisePoolExecutor {
      * @return A promise which resolves to an array containing the results of the task.
      */
     addEachTask<T, R>(params: EachTaskParams<T, R>): Promise<R[]>;
+    /**
+     * Returns a promise which resolves when there are no more tasks queued to run.
+     */
+    waitForIdle(): Promise<void>;
 }
