@@ -104,28 +104,30 @@ export interface TaskStatus {
     freeSlots: number;
 }
 export declare class PromisePoolExecutor {
-    /**
-     * The maximum number of promises which are allowed to run at one time.
-     */
-    private concurrencyLimit;
-    /**
-     * The number of promises which are active.
-     */
-    private activePromiseCount;
+    private _concurrencyLimit;
+    private _activePromiseCount;
     /**
      * All tasks which are active or waiting.
      */
-    private tasks;
+    private _tasks;
     /**
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
-    private taskMap;
+    private _taskMap;
     /**
      * Construct a new PromisePoolExecutor object.
      *
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
     constructor(concurrencyLimit?: number);
+    /**
+     * The maximum number of promises which are allowed to run at one time.
+     */
+    readonly concurrencyLimit: number;
+    /**
+     * The number of promises which are active.
+     */
+    readonly activePromiseCount: number;
     /**
      * The number of promises which can be invoked before the concurrency limit is reached.
      */

@@ -29,6 +29,9 @@ function expectTimes(resultTimes, targetTicks, message) {
         chai_1.expect(val).to.be.within(targetTicks[i] * tick - tolerance, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
     });
 }
+/**
+ * Returns the sum of an array of numbers.
+ */
 function sum(nums) {
     let total = 0;
     let i;

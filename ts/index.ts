@@ -149,7 +149,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
             promise = Promise.resolve(promise);
         }
 
-        this.activePromiseCount++;
+        this._activePromiseCount++;
         task.activeCount++;
         let resultIndex: number = task.invocations;
         task.invocations++;
@@ -161,7 +161,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
             errorTask(task, err);
             // Resolve
         }).then((result: any) => {
-            this.activePromiseCount--;
+            this._activePromiseCount--;
             task.activeCount--;
             task.result[resultIndex] = result;
             // Remove the task if needed and start the next task
@@ -195,8 +195,8 @@ function errorTask(task: InternalTaskDefinition<any>, err: any) {
 function triggerPromises() {
     let taskIndex: number = 0;
     let task: InternalTaskDefinition<any>;
-    while (this.activePromiseCount < this.concurrencyLimit && taskIndex < this.tasks.length) {
-        task = this.tasks[taskIndex];
+    while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
+        task = this._tasks[taskIndex];
         if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
             startPromise.call(this, task);
         } else {
@@ -222,8 +222,8 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
                 }, 1);
             }
         }
-        this.tasks.splice(this.tasks.indexOf(task), 1);
-        this.taskMap.delete(task.id);
+        this._tasks.splice(this._tasks.indexOf(task), 1);
+        this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
 }

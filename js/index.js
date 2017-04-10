@@ -23,7 +23,7 @@ function startPromise(task) {
             // In case what is returned is not a promise, make it one
             promise = Promise.resolve(promise);
         }
-        this.activePromiseCount++;
+        this._activePromiseCount++;
         task.activeCount++;
         let resultIndex = task.invocations;
         task.invocations++;
@@ -34,7 +34,7 @@ function startPromise(task) {
             errorTask(task, err);
             // Resolve
         }).then((result) => {
-            this.activePromiseCount--;
+            this._activePromiseCount--;
             task.activeCount--;
             task.result[resultIndex] = result;
             // Remove the task if needed and start the next task
@@ -67,8 +67,8 @@ function errorTask(task, err) {
 function triggerPromises() {
     let taskIndex = 0;
     let task;
-    while (this.activePromiseCount < this.concurrencyLimit && taskIndex < this.tasks.length) {
-        task = this.tasks[taskIndex];
+    while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
+        task = this._tasks[taskIndex];
         if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
             startPromise.call(this, task);
         }
@@ -95,8 +95,8 @@ function nextPromise(task) {
                 }, 1);
             }
         }
-        this.tasks.splice(this.tasks.indexOf(task), 1);
-        this.taskMap.delete(task.id);
+        this._tasks.splice(this._tasks.indexOf(task), 1);
+        this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
 }
@@ -107,28 +107,37 @@ class PromisePoolExecutor {
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
     constructor(concurrencyLimit) {
-        /**
-         * The number of promises which are active.
-         */
-        this.activePromiseCount = 0;
+        this._activePromiseCount = 0;
         /**
          * All tasks which are active or waiting.
          */
-        this.tasks = [];
+        this._tasks = [];
         /**
          * A map containing all tasks which are active or waiting, indexed by their ids.
          */
-        this.taskMap = new Map();
-        this.concurrencyLimit = concurrencyLimit || Infinity;
-        if (typeof this.concurrencyLimit !== "number" || this.concurrencyLimit <= 0) {
-            throw new Error("Invalid concurrency limit: " + this.concurrencyLimit);
+        this._taskMap = new Map();
+        this._concurrencyLimit = concurrencyLimit || Infinity;
+        if (typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
+            throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
         }
+    }
+    /**
+     * The maximum number of promises which are allowed to run at one time.
+     */
+    get concurrencyLimit() {
+        return this._concurrencyLimit;
+    }
+    /**
+     * The number of promises which are active.
+     */
+    get activePromiseCount() {
+        return this._activePromiseCount;
     }
     /**
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
     get freeSlots() {
-        return this.concurrencyLimit - this.activePromiseCount;
+        return this._concurrencyLimit - this._activePromiseCount;
     }
     /**
      * Gets the current status of a task.
@@ -136,7 +145,7 @@ class PromisePoolExecutor {
      * @param id Unique value used to identify the task.
      */
     getTaskStatus(id) {
-        let task = this.taskMap.get(id);
+        let task = this._taskMap.get(id);
         if (!task) {
             return;
         }
@@ -154,7 +163,7 @@ class PromisePoolExecutor {
      * @param taskId
      */
     stopTask(id) {
-        let task = this.taskMap.get(id);
+        let task = this._taskMap.get(id);
         if (!task) {
             return false;
         }
@@ -178,7 +187,7 @@ class PromisePoolExecutor {
             invocationLimit: params.invocationLimit || Infinity,
             returnReady: false,
         };
-        if (this.taskMap.has(task.id)) {
+        if (this._taskMap.has(task.id)) {
             return Promise.reject("The id used for this task already exists.");
         }
         if (typeof task.invocationLimit !== "number") {
@@ -197,8 +206,8 @@ class PromisePoolExecutor {
         setTimeout(() => {
             task.returnReady = true;
         }, 1);
-        this.tasks.push(task);
-        this.taskMap.set(task.id, task);
+        this._tasks.push(task);
+        this._taskMap.set(task.id, task);
         triggerPromises.call(this);
         return promise;
     }
