@@ -1,8 +1,8 @@
 export interface Identifier {
     /**
-     * A symbol used to identify the task. This can be later used to check the status of a task.
+     * A unique value used to identify the task. This can be later used to reference the task while it runs.
      */
-    identifier?: Symbol;
+    id?: any;
 }
 
 export interface ConcurrencyLimit {
@@ -28,7 +28,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     generator: (invocation?: number) => Promise<R> | null,
 }
 
-export interface SingleTaskParameters<T, R> {
+export interface SingleTaskParameters<T, R> extends Identifier {
     /**
      * A function used for creating promises to run.
      */
@@ -84,7 +84,7 @@ export interface EachTaskParams<T, R> extends Identifier, ConcurrencyLimit, Invo
 }
 
 interface InternalTaskDefinition<R> {
-    identifier: Symbol,
+    id: any,
     generator: (invocation?: number) => Promise<R> | null;
     activeCount: number;
     concurrencyLimit: number;
@@ -100,9 +100,9 @@ interface InternalTaskDefinition<R> {
 
 export interface TaskStatus {
     /**
-     * A symbol used for identifying a task.
+     * A unique value used for identifying a task (such as a Symbol).
      */
-    identifier: Symbol,
+    id: any,
     /**
      * The current number of active invocations for the task.
      */
@@ -121,7 +121,7 @@ export interface TaskStatus {
     invocationLimit: number;
     /**
      * The number of times the task can be invoked before reaching the invocation limit,
-     * or the local or global concurrency limit.
+     * or the pool or task concurrency limit.
      */
     freeSlots: number;
 }
@@ -222,7 +222,7 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
             }
         }
         this.tasks.splice(this.tasks.indexOf(task), 1);
-        this.taskMap.delete(task.identifier);
+        this.taskMap.delete(task.id);
     }
     triggerPromises.call(this);
 }
@@ -241,9 +241,9 @@ export class PromisePoolExecutor {
      */
     private tasks: InternalTaskDefinition<any>[] = [];
     /**
-     * A map containing all tasks which are active or waiting, indexed by their identifier symbol.
+     * A map containing all tasks which are active or waiting, indexed by their ids.
      */
-    private taskMap: Map<Symbol, InternalTaskDefinition<any>> = new Map();
+    private taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -268,15 +268,15 @@ export class PromisePoolExecutor {
     /**
      * Gets the current status of a task.
      * 
-     * @param taskIdentifier Symbol used to identify the task.
+     * @param id Unique value used to identify the task.
      */
-    public getTaskStatus(taskIdentifier: Symbol): TaskStatus {
-        let task: InternalTaskDefinition<any> = this.taskMap.get(taskIdentifier);
+    public getTaskStatus(id: any): TaskStatus {
+        let task: InternalTaskDefinition<any> = this.taskMap.get(id);
         if (!task) {
             return;
         }
         return {
-            identifier: task.identifier,
+            id: task.id,
             activeCount: task.activeCount,
             concurrencyLimit: task.concurrencyLimit,
             invocations: task.invocations,
@@ -310,7 +310,7 @@ export class PromisePoolExecutor {
      */
     public addGenericTask<R>(params: GenericTaskParameters<R>): Promise<R[]> {
         let task: InternalTaskDefinition<R> = {
-            identifier: params.identifier || Symbol(),
+            id: params.id || Symbol(),
             generator: params.generator,
             activeCount: 0,
             invocations: 0,
@@ -319,8 +319,8 @@ export class PromisePoolExecutor {
             invocationLimit: params.invocationLimit || Infinity,
             returnReady: false,
         }
-        if (this.taskMap.has(task.identifier)) {
-            return Promise.reject("The identifier used for this task already exists.");
+        if (this.taskMap.has(task.id)) {
+            return Promise.reject("The id used for this task already exists.");
         }
         if (typeof task.invocationLimit !== "number") {
             return Promise.reject("Invalid invocation limit: " + task.invocationLimit);
@@ -342,7 +342,7 @@ export class PromisePoolExecutor {
         }, 1);
 
         this.tasks.push(task);
-        this.taskMap.set(task.identifier, task);
+        this.taskMap.set(task.id, task);
         triggerPromises.call(this);
         return promise;
     }
@@ -355,6 +355,7 @@ export class PromisePoolExecutor {
      */
     public addSingleTask<T, R>(params: SingleTaskParameters<T, R>): Promise<R> {
         return this.addGenericTask({
+            id: params.id,
             generator: () => {
                 return params.generator(params.data);
             },
@@ -373,7 +374,7 @@ export class PromisePoolExecutor {
     public addLinearTask<T, R>(params: LinearTaskParameters<T, R>): Promise<R[]> {
         return this.addGenericTask({
             generator: params.generator,
-            identifier: params.identifier,
+            id: params.id,
             invocationLimit: params.invocationLimit,
             concurrencyLimit: 1,
         });
@@ -395,7 +396,7 @@ export class PromisePoolExecutor {
             return Promise.reject(new Error("Invalid batch size: " + params.batchSize));
         }
 
-        let identifier: Symbol = params.identifier || Symbol();
+        let id: any = params.id || Symbol();
 
         let promise: Promise<R[]> = this.addGenericTask({
             generator: (invocation) => {
@@ -404,7 +405,7 @@ export class PromisePoolExecutor {
                 }
                 let oldIndex: number = index;
                 if (typeof params.batchSize === "function") {
-                    let status: TaskStatus = this.getTaskStatus(identifier);
+                    let status: TaskStatus = this.getTaskStatus(id);
                     let batchSize: number = params.batchSize(
                         params.data.length - oldIndex,
                         status.freeSlots
@@ -420,7 +421,7 @@ export class PromisePoolExecutor {
 
                 return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
-            identifier: identifier,
+            id: id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
         });
@@ -444,7 +445,7 @@ export class PromisePoolExecutor {
                 index++;
                 return params.generator(params.data[oldIndex], oldIndex);
             },
-            identifier: params.identifier,
+            id: params.id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
         });
