@@ -4,6 +4,11 @@ export interface Identifier {
      * Symbols are a good option to use since they are always unique.
      */
     id?: any;
+    /**
+     * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
+     * to the completion of a larger task.
+     */
+    groupsIds?: any[];
 }
 
 export interface ConcurrencyLimit {
@@ -36,7 +41,7 @@ export interface SingleTaskParams<T, R> extends Identifier {
     generator: (data?: T) => Promise<R>;
     /**
      * Optional data to pass to the generator function as a parameter.
-     */
+    */
     data?: T;
 }
 
@@ -135,7 +140,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
     try {
         promise = task.generator(task.invocations);
     } catch (err) {
-        errorTask(task, err);
+        errorTask.call(this, task, err);
         return;
     }
     if (!promise) {
@@ -157,7 +162,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
         }
 
         promise.catch((err) => {
-            errorTask(task, err);
+            errorTask.call(this, task, err);
             // Resolve
         }).then((result: any) => {
             this._activePromiseCount--;
@@ -172,7 +177,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
 /**
  * Private Method: Registers an error for a task.
  */
-function errorTask(task: InternalTaskDefinition<any>, err: any) {
+function errorTask(task: InternalTaskDefinition<any>, err: any): void {
     if (!task.errored) {
         task.errored = true;
         task.exhausted = true;
@@ -186,6 +191,10 @@ function errorTask(task: InternalTaskDefinition<any>, err: any) {
             }, 1);
         }
     }
+    this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
+        resolver.rejectInstance(err);
+    });
+    this._idlePromises.length = 0;
 }
 
 /**
