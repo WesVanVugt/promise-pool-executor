@@ -9,7 +9,7 @@ const tick = 50;
 /**
  * Milliseconds tolerance for tests, above or below the target.
  */
-const tolerance = 15;
+const tolerance = 20;
 /**
  * Returns a promise which waits the specified amount of time before resolving.
  */
@@ -92,7 +92,7 @@ describe("Concurrency", () => {
     });
 });
 describe("Exception Handling", () => {
-    it("Generator Function", (done) => {
+    it("Generator Function (synchronous)", (done) => {
         let pool = new Pool.PromisePoolExecutor();
         let error = new Error();
         let caught = false;
@@ -127,26 +127,67 @@ describe("Exception Handling", () => {
             done();
         }).catch(done);
     });
-    it("waitForIdle", (done) => {
-        let pool = new Pool.PromisePoolExecutor();
-        let error = new Error();
-        let caught = false;
-        pool.addGenericTask({
-            generator: () => {
-                return wait(1).then(() => {
+    describe("waitForIdle", () => {
+        it("Generator Function (synchronous)", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            pool.addGenericTask({
+                generator: () => {
                     throw error;
-                });
-            },
-            invocationLimit: 1,
-            noPromise: true,
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            pool.waitForIdle().catch((err) => {
+                chai_1.expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
         });
-        pool.waitForIdle().catch((err) => {
-            chai_1.expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            chai_1.expect(caught).to.equal(true, "Must throw an error");
-            done();
-        }).catch(done);
+        it("Promise Rejection", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            pool.waitForIdle().catch((err) => {
+                chai_1.expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
+        });
+        it("Invalid Parameters", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            console.log("Test Start");
+            pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0,
+                noPromise: true,
+            });
+            console.log("Wait for idle");
+            pool.waitForIdle().catch((err) => {
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
+        });
     });
 });
 describe("Miscellaneous Features", () => {

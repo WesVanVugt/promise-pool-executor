@@ -145,7 +145,6 @@ function startPromise(task: InternalTaskDefinition<any>): void {
         promise = task.generator(task.invocations);
     } catch (err) {
         errorTask.call(this, task, err);
-        return;
     }
     if (!promise) {
         task.exhausted = true;
@@ -197,10 +196,16 @@ function errorTask(task: InternalTaskDefinition<any>, err: any): void {
             }
         }
     }
+    errorGroups.call(this, err, []);
+}
+
+function errorGroups(err: any, groupsIds: any[]): void {
     if (this._tasksInit === 0) {
         errorIdle.call(this, err);
     } else {
+        this._erroring++;
         setTimeout(() => {
+            this._erroring--;
             errorIdle.call(this, err);
         }, 1);
     }
@@ -284,6 +289,19 @@ function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
     });
 }
 
+function instantResolve<T>(task: TaskGeneral, data: T): Promise<T> {
+    if (!task.noPromise) {
+        return Promise.resolve(data);
+    }
+}
+
+function instantReject(task: TaskGeneral, err: any): Promise<any> {
+    errorGroups.call(this, err, task.groupsIds);
+    if (!task.noPromise) {
+        return Promise.reject(err);
+    }
+}
+
 export class PromisePoolExecutor {
     private _concurrencyLimit: number;
     private _activePromiseCount: number = 0;
@@ -303,6 +321,7 @@ export class PromisePoolExecutor {
      * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
      */
     private _tasksInit: number = 0;
+    private _erroring: number = 0;
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -310,9 +329,10 @@ export class PromisePoolExecutor {
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
     constructor(concurrencyLimit?: number) {
-        this._concurrencyLimit = concurrencyLimit || Infinity;
+        this._concurrencyLimit = concurrencyLimit !== undefined
+            && concurrencyLimit !== null ? concurrencyLimit : Infinity;
 
-        if (typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
+        if (!this._concurrencyLimit || typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
             throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
         }
     }
@@ -392,21 +412,31 @@ export class PromisePoolExecutor {
             activeCount: 0,
             invocations: 0,
             result: [],
-            concurrencyLimit: params.concurrencyLimit || Infinity,
-            invocationLimit: params.invocationLimit || Infinity,
+            concurrencyLimit: params.concurrencyLimit !== undefined
+                && params.concurrencyLimit !== null ? params.concurrencyLimit : Infinity,
+            invocationLimit: params.invocationLimit !== undefined
+                && params.invocationLimit !== null ? params.invocationLimit : Infinity,
             init: true,
         }
+
+        // This must be done before any errors are thrown
+        this._tasksInit++;
+        setTimeout(() => {
+            this._tasksInit--;
+            task.init = false;
+        }, 1);
+
         if (this._taskMap.has(task.id)) {
-            return Promise.reject("The id used for this task already exists.");
+            return instantReject.call(this, params, new Error("The id used for this task already exists."));
         }
         if (typeof task.invocationLimit !== "number") {
-            return Promise.reject("Invalid invocation limit: " + task.invocationLimit);
+            return instantReject.call(this, params, new Error("Invalid invocation limit: " + task.invocationLimit));
         }
         if (task.invocationLimit <= 0) {
-            return Promise.resolve(task.result);
+            return instantResolve.call(this, params, task.result);
         }
-        if (typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+        if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
+            return instantReject.call(this, params, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
         let promise: Promise<R[]> = null;
@@ -414,12 +444,6 @@ export class PromisePoolExecutor {
             task.promise = {};
             promise = createResolvablePromise(task.promise);
         }
-
-        this._tasksInit++;
-        setTimeout(() => {
-            this._tasksInit--;
-            task.init = false;
-        }, 1);
 
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
@@ -474,7 +498,7 @@ export class PromisePoolExecutor {
         if (!params.batchSize || typeof params.batchSize !== "function"
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
 
-            return Promise.reject(new Error("Invalid batch size: " + params.batchSize));
+            return instantReject.call(this, params, new Error("Invalid batch size: " + params.batchSize));
         }
 
         let id: any = params.id || Symbol();
@@ -538,7 +562,7 @@ export class PromisePoolExecutor {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     public waitForIdle(): Promise<void> {
-        if (this.idling) {
+        if (this.idling && this._erroring === 0) {
             return Promise.resolve();
         }
         let resolver: PromiseResolver<void> = {};

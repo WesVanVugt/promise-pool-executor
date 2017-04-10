@@ -130,6 +130,7 @@ export declare class PromisePoolExecutor {
      * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
      */
     private _tasksInit;
+    private _erroring;
     /**
      * Construct a new PromisePoolExecutor object.
      *

@@ -101,7 +101,7 @@ describe("Concurrency", () => {
 });
 
 describe("Exception Handling", () => {
-    it("Generator Function", (done) => {
+    it("Generator Function (synchronous)", (done) => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let error: Error = new Error();
@@ -140,29 +140,76 @@ describe("Exception Handling", () => {
         }).catch(done);
     });
 
-    it("waitForIdle", (done) => {
-        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+    describe("waitForIdle", () => {
+        it("Generator Function (synchronous)", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        let error: Error = new Error();
-        let caught: boolean = false;
-        pool.addGenericTask({
-            generator: () => {
-                return wait(1).then(() => {
+            let error: Error = new Error();
+            let caught: boolean = false;
+            pool.addGenericTask({
+                generator: () => {
                     throw error;
-                });
-            },
-            invocationLimit: 1,
-            noPromise: true,
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            pool.waitForIdle(
+            ).catch((err) => {
+                expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
         });
-        pool.waitForIdle(
-        ).catch((err) => {
-            expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            expect(caught).to.equal(true, "Must throw an error");
-            done();
-        }).catch(done);
-    })
+
+        it("Promise Rejection", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            let caught: boolean = false;
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            pool.waitForIdle(
+            ).catch((err) => {
+                expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
+        });
+
+        it("Invalid Parameters", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            let caught: boolean = false;
+            console.log("Test Start");
+            pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0, // invalid
+                noPromise: true,
+            });
+            console.log("Wait for idle");
+            pool.waitForIdle(
+            ).catch((err) => {
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+                done();
+            }).catch(done);
+        });
+    });
 });
 
 describe("Miscellaneous Features", () => {
