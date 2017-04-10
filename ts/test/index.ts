@@ -215,6 +215,24 @@ describe("Task Secializations", () => {
         }).catch(done);
     });
 
+    it("Linear Task", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let start: number = Date.now();
+        pool.addLinearTask({
+            generator: (element) => {
+                return wait(tick)
+                    .then(() => {
+                        return Date.now() - start;
+                    });
+            },
+            invocationLimit: 3
+        }).then((results) => {
+            expectTimes(results, [1, 2, 3], "Timing Results");
+            done();
+        }).catch(done);
+    });
+
     it("Each Task", (done) => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 

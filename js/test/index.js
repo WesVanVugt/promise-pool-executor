@@ -2,8 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const chai_1 = require("chai");
 const Pool = require("../index");
+/**
+ * Milliseconds per tick.
+ */
 const tick = 50;
+/**
+ * Milliseconds tolerance for tests, above or below the target.
+ */
 const tolerance = 15;
+/**
+ * Returns a promise which waits the specified amount of time before resolving.
+ */
 function wait(time) {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
@@ -11,10 +20,13 @@ function wait(time) {
         }, time);
     });
 }
-function expectTimes(a, b, message) {
-    chai_1.expect(a).to.have.lengthOf(b.length, message);
-    a.forEach((val, i) => {
-        chai_1.expect(val).to.be.within(b[i] * tick - tolerance, b[i] * tick + tolerance, message + " (" + i + ")");
+/**
+ * Expects an array of result times (ms) to be within the tolerance range of the specified numbers of target ticks.
+ */
+function expectTimes(resultTimes, targetTicks, message) {
+    chai_1.expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
+    resultTimes.forEach((val, i) => {
+        chai_1.expect(val).to.be.within(targetTicks[i] * tick - tolerance, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
     });
 }
 function sum(nums) {
@@ -181,6 +193,22 @@ describe("Task Secializations", () => {
         }).then((result) => {
             // The task must return the expected non-array result
             expectTimes([result], [1], "Timing Results");
+            done();
+        }).catch(done);
+    });
+    it("Linear Task", (done) => {
+        let pool = new Pool.PromisePoolExecutor();
+        let start = Date.now();
+        pool.addLinearTask({
+            generator: (element) => {
+                return wait(tick)
+                    .then(() => {
+                    return Date.now() - start;
+                });
+            },
+            invocationLimit: 3
+        }).then((results) => {
+            expectTimes(results, [1, 2, 3], "Timing Results");
             done();
         }).catch(done);
     });
