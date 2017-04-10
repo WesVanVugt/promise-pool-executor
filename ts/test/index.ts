@@ -1,9 +1,18 @@
 import { expect } from "chai";
 import * as Pool from "../index";
 
+/**
+ * Milliseconds per tick.
+ */
 const tick: number = 50;
-const tolerance: number = 10;
+/**
+ * Milliseconds tolerance for tests, above or below the target.
+ */
+const tolerance: number = 15;
 
+/**
+ * Returns a promise which waits the specified amount of time before resolving.
+ */
 function wait(time: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         setTimeout(() => {
@@ -12,10 +21,13 @@ function wait(time: number): Promise<void> {
     });
 }
 
-function expectTimes(a: number[], b: number[], message: string) {
-    expect(a).to.have.lengthOf(b.length, message);
-    a.forEach((val, i) => {
-        expect(val).to.be.within(b[i] * tick - tolerance, b[i] * tick + tolerance, message + " (" + i + ")");
+/**
+ * Expects an array of result times (ms) to be within the tolerance range of the specified numbers of target ticks.
+ */
+function expectTimes(resultTimes: number[], targetTicks: number[], message: string) {
+    expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
+    resultTimes.forEach((val, i) => {
+        expect(val).to.be.within(targetTicks[i] * tick - tolerance, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
     });
 }
 
@@ -146,6 +158,34 @@ describe("Miscellaneous Features", () => {
         }).then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
+            done();
+        }).catch(done);
+    });
+
+    it("Get Task Status", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let start: number = Date.now();
+        let id: Symbol = Symbol();
+        pool.addGenericTask({
+            identifier: id,
+            generator: (index) => {
+                return wait(tick)
+                    .then(() => {
+                        let status: Pool.TaskStatus = pool.getTaskStatus(id);
+                        expect(status).to.deep.equal({
+                            identifier: id,
+                            activeCount: 1,
+                            concurrencyLimit: 5,
+                            invocations: 1,
+                            invocationLimit: 1,
+                            freeSlots: 0,
+                        } as Pool.TaskStatus);
+                    });
+            },
+            invocationLimit: 1,
+            concurrencyLimit: 5,
+        }).then(() => {
             done();
         }).catch(done);
     })

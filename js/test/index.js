@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const chai_1 = require("chai");
 const Pool = require("../index");
 const tick = 50;
-const tolerance = 10;
+const tolerance = 15;
 function wait(time) {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
@@ -132,6 +132,32 @@ describe("Miscellaneous Features", () => {
         }).then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
+            done();
+        }).catch(done);
+    });
+    it("Get Task Status", (done) => {
+        let pool = new Pool.PromisePoolExecutor();
+        let start = Date.now();
+        let id = Symbol();
+        pool.addGenericTask({
+            identifier: id,
+            generator: (index) => {
+                return wait(tick)
+                    .then(() => {
+                    let status = pool.getTaskStatus(id);
+                    chai_1.expect(status).to.deep.equal({
+                        identifier: id,
+                        activeCount: 1,
+                        concurrencyLimit: 5,
+                        invocations: 1,
+                        invocationLimit: 1,
+                        freeSlots: 0,
+                    });
+                });
+            },
+            invocationLimit: 1,
+            concurrencyLimit: 5,
+        }).then(() => {
             done();
         }).catch(done);
     });
