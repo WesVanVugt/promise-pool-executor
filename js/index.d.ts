@@ -1,8 +1,9 @@
 export interface Identifier {
     /**
-     * A symbol used to identify the task. This can be later used to check the status of a task.
+     * A unique value used to identify the task. This can be later used to reference the task while it runs.
+     * Symbols are a good option to use since they are always unique.
      */
-    identifier?: Symbol;
+    id?: any;
 }
 export interface ConcurrencyLimit {
     /**
@@ -24,7 +25,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
      */
     generator: (invocation?: number) => Promise<R> | null;
 }
-export interface SingleTaskParameters<T, R> {
+export interface SingleTaskParameters<T, R> extends Identifier {
     /**
      * A function used for creating promises to run.
      */
@@ -77,9 +78,9 @@ export interface EachTaskParams<T, R> extends Identifier, ConcurrencyLimit, Invo
 }
 export interface TaskStatus {
     /**
-     * A symbol used for identifying a task.
+     * A unique value used for identifying a task (such as a Symbol).
      */
-    identifier: Symbol;
+    id: any;
     /**
      * The current number of active invocations for the task.
      */
@@ -98,7 +99,7 @@ export interface TaskStatus {
     invocationLimit: number;
     /**
      * The number of times the task can be invoked before reaching the invocation limit,
-     * or the local or global concurrency limit.
+     * or the pool or task concurrency limit.
      */
     freeSlots: number;
 }
@@ -116,7 +117,7 @@ export declare class PromisePoolExecutor {
      */
     private tasks;
     /**
-     * A map containing all tasks which are active or waiting, indexed by their identifier symbol.
+     * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private taskMap;
     /**
@@ -132,9 +133,9 @@ export declare class PromisePoolExecutor {
     /**
      * Gets the current status of a task.
      *
-     * @param taskIdentifier Symbol used to identify the task.
+     * @param id Unique value used to identify the task.
      */
-    getTaskStatus(taskIdentifier: Symbol): TaskStatus;
+    getTaskStatus(id: any): TaskStatus;
     /**
      * Stops a running task.
      * @param taskId

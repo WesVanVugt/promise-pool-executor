@@ -145,7 +145,7 @@ describe("Miscellaneous Features", () => {
         let start: number = Date.now();
         let id: Symbol = Symbol();
         pool.addGenericTask({
-            identifier: id,
+            id: id,
             generator: (index) => {
                 if (index >= 2) {
                     expect(pool.stopTask(id)).to.equal(true, "Stop task must succede");
@@ -168,13 +168,13 @@ describe("Miscellaneous Features", () => {
         let start: number = Date.now();
         let id: Symbol = Symbol();
         pool.addGenericTask({
-            identifier: id,
+            id: id,
             generator: (index) => {
                 return wait(tick)
                     .then(() => {
                         let status: Pool.TaskStatus = pool.getTaskStatus(id);
                         expect(status).to.deep.equal({
-                            identifier: id,
+                            id: id,
                             activeCount: 1,
                             concurrencyLimit: 5,
                             invocations: 1,

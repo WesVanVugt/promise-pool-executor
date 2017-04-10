@@ -1,6 +1,7 @@
 export interface Identifier {
     /**
      * A unique value used to identify the task. This can be later used to reference the task while it runs.
+     * Symbols are a good option to use since they are always unique.
      */
     id?: any;
 }

@@ -96,7 +96,7 @@ function nextPromise(task) {
             }
         }
         this.tasks.splice(this.tasks.indexOf(task), 1);
-        this.taskMap.delete(task.identifier);
+        this.taskMap.delete(task.id);
     }
     triggerPromises.call(this);
 }
@@ -116,7 +116,7 @@ class PromisePoolExecutor {
          */
         this.tasks = [];
         /**
-         * A map containing all tasks which are active or waiting, indexed by their identifier symbol.
+         * A map containing all tasks which are active or waiting, indexed by their ids.
          */
         this.taskMap = new Map();
         this.concurrencyLimit = concurrencyLimit || Infinity;
@@ -133,15 +133,15 @@ class PromisePoolExecutor {
     /**
      * Gets the current status of a task.
      *
-     * @param taskIdentifier Symbol used to identify the task.
+     * @param id Unique value used to identify the task.
      */
-    getTaskStatus(taskIdentifier) {
-        let task = this.taskMap.get(taskIdentifier);
+    getTaskStatus(id) {
+        let task = this.taskMap.get(id);
         if (!task) {
             return;
         }
         return {
-            identifier: task.identifier,
+            id: task.id,
             activeCount: task.activeCount,
             concurrencyLimit: task.concurrencyLimit,
             invocations: task.invocations,
@@ -169,7 +169,7 @@ class PromisePoolExecutor {
      */
     addGenericTask(params) {
         let task = {
-            identifier: params.identifier || Symbol(),
+            id: params.id || Symbol(),
             generator: params.generator,
             activeCount: 0,
             invocations: 0,
@@ -178,8 +178,8 @@ class PromisePoolExecutor {
             invocationLimit: params.invocationLimit || Infinity,
             returnReady: false,
         };
-        if (this.taskMap.has(task.identifier)) {
-            return Promise.reject("The identifier used for this task already exists.");
+        if (this.taskMap.has(task.id)) {
+            return Promise.reject("The id used for this task already exists.");
         }
         if (typeof task.invocationLimit !== "number") {
             return Promise.reject("Invalid invocation limit: " + task.invocationLimit);
@@ -198,7 +198,7 @@ class PromisePoolExecutor {
             task.returnReady = true;
         }, 1);
         this.tasks.push(task);
-        this.taskMap.set(task.identifier, task);
+        this.taskMap.set(task.id, task);
         triggerPromises.call(this);
         return promise;
     }
@@ -210,6 +210,7 @@ class PromisePoolExecutor {
      */
     addSingleTask(params) {
         return this.addGenericTask({
+            id: params.id,
             generator: () => {
                 return params.generator(params.data);
             },
@@ -227,7 +228,7 @@ class PromisePoolExecutor {
     addLinearTask(params) {
         return this.addGenericTask({
             generator: params.generator,
-            identifier: params.identifier,
+            id: params.id,
             invocationLimit: params.invocationLimit,
             concurrencyLimit: 1,
         });
@@ -245,7 +246,7 @@ class PromisePoolExecutor {
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
             return Promise.reject(new Error("Invalid batch size: " + params.batchSize));
         }
-        let identifier = params.identifier || Symbol();
+        let id = params.id || Symbol();
         let promise = this.addGenericTask({
             generator: (invocation) => {
                 if (index >= params.data.length) {
@@ -253,7 +254,7 @@ class PromisePoolExecutor {
                 }
                 let oldIndex = index;
                 if (typeof params.batchSize === "function") {
-                    let status = this.getTaskStatus(identifier);
+                    let status = this.getTaskStatus(id);
                     let batchSize = params.batchSize(params.data.length - oldIndex, status.freeSlots);
                     // Unacceptable values: NaN, <=0, type not number
                     if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
@@ -266,7 +267,7 @@ class PromisePoolExecutor {
                 }
                 return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
-            identifier: identifier,
+            id: id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
         });
@@ -288,7 +289,7 @@ class PromisePoolExecutor {
                 index++;
                 return params.generator(params.data[oldIndex], oldIndex);
             },
-            identifier: params.identifier,
+            id: params.id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
         });
