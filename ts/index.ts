@@ -1,4 +1,4 @@
-export interface Identifier {
+export interface TaskGeneral {
     /**
      * A unique value used to identify the task. This can be later used to reference the task while it runs.
      * Symbols are a good option to use since they are always unique.
@@ -9,6 +9,10 @@ export interface Identifier {
      * to the completion of a larger task.
      */
     groupsIds?: any[];
+    /**
+     * If this is set to true, no promise will be returned.
+     */
+    noPromise?: boolean;
 }
 
 export interface ConcurrencyLimit {
@@ -25,7 +29,7 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface GenericTaskParams<R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -34,7 +38,7 @@ export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, Invo
     generator: (invocation?: number) => Promise<R> | null,
 }
 
-export interface SingleTaskParams<T, R> extends Identifier {
+export interface SingleTaskParams<T, R> extends TaskGeneral {
     /**
      * A function used for creating promises to run.
      */
@@ -45,7 +49,7 @@ export interface SingleTaskParams<T, R> extends Identifier {
     data?: T;
 }
 
-export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
+export interface LinearTaskParams<T, R> extends TaskGeneral, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -53,7 +57,7 @@ export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
     generator: (invocation?: number) => Promise<R>;
 }
 
-export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface BatchTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
@@ -75,7 +79,7 @@ export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, Inv
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface EachTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
@@ -181,14 +185,16 @@ function errorTask(task: InternalTaskDefinition<any>, err: any): void {
     if (!task.errored) {
         task.errored = true;
         task.exhausted = true;
-        if (!task.init) {
-            task.promise.rejectInstance(err);
-        } else {
-            // If the error is thrown immediately after task generation,
-            // a delay must be added for the promise rejection to work.
-            setTimeout(() => {
+        if (task.promise) {
+            if (!task.init) {
                 task.promise.rejectInstance(err);
-            }, 1);
+            } else {
+                // If the error is thrown immediately after task generation,
+                // a delay must be added for the promise rejection to work.
+                setTimeout(() => {
+                    task.promise.rejectInstance(err);
+                }, 1);
+            }
         }
     }
     if (this._tasksInit === 0) {
@@ -237,7 +243,7 @@ function triggerPromises() {
  */
 function nextPromise(task: InternalTaskDefinition<any>): void {
     if (task.exhausted && task.activeCount <= 0) {
-        if (!task.errored) {
+        if (!task.errored && task.promise) {
             if (task.init) {
                 task.promise.resolveInstance(task.result);
             } else {
@@ -289,6 +295,8 @@ export class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
+    private _groupActiveCountMap: Map<any, number> = new Map();
+    private _groupPromisesMap: Map<any, PromiseResolver<void>> = new Map();
 
     private _idlePromises: Array<PromiseResolver<void>> = [];
     /**
@@ -401,8 +409,11 @@ export class PromisePoolExecutor {
             return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
-        task.promise = {};
-        let promise: Promise<R[]> = createResolvablePromise(task.promise);
+        let promise: Promise<R[]> = null;
+        if (!params.noPromise) {
+            task.promise = {};
+            promise = createResolvablePromise(task.promise);
+        }
 
         this._tasksInit++;
         setTimeout(() => {
@@ -446,6 +457,7 @@ export class PromisePoolExecutor {
             id: params.id,
             invocationLimit: params.invocationLimit,
             concurrencyLimit: 1,
+            noPromise: params.noPromise,
         });
     }
 
@@ -493,6 +505,7 @@ export class PromisePoolExecutor {
             id: id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
+            noPromise: params.noPromise,
         });
 
         return promise;
@@ -517,6 +530,7 @@ export class PromisePoolExecutor {
             id: params.id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
+            noPromise: params.noPromise,
         });
     }
 

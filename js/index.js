@@ -49,15 +49,17 @@ function errorTask(task, err) {
     if (!task.errored) {
         task.errored = true;
         task.exhausted = true;
-        if (!task.init) {
-            task.promise.rejectInstance(err);
-        }
-        else {
-            // If the error is thrown immediately after task generation,
-            // a delay must be added for the promise rejection to work.
-            setTimeout(() => {
+        if (task.promise) {
+            if (!task.init) {
                 task.promise.rejectInstance(err);
-            }, 1);
+            }
+            else {
+                // If the error is thrown immediately after task generation,
+                // a delay must be added for the promise rejection to work.
+                setTimeout(() => {
+                    task.promise.rejectInstance(err);
+                }, 1);
+            }
         }
     }
     if (this._tasksInit === 0) {
@@ -103,7 +105,7 @@ function triggerPromises() {
  */
 function nextPromise(task) {
     if (task.exhausted && task.activeCount <= 0) {
-        if (!task.errored) {
+        if (!task.errored && task.promise) {
             if (task.init) {
                 task.promise.resolveInstance(task.result);
             }
@@ -154,6 +156,8 @@ class PromisePoolExecutor {
          * A map containing all tasks which are active or waiting, indexed by their ids.
          */
         this._taskMap = new Map();
+        this._groupActiveCountMap = new Map();
+        this._groupPromisesMap = new Map();
         this._idlePromises = [];
         /**
          * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
@@ -248,8 +252,11 @@ class PromisePoolExecutor {
         if (typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
             return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
-        task.promise = {};
-        let promise = createResolvablePromise(task.promise);
+        let promise = null;
+        if (!params.noPromise) {
+            task.promise = {};
+            promise = createResolvablePromise(task.promise);
+        }
         this._tasksInit++;
         setTimeout(() => {
             this._tasksInit--;
@@ -289,6 +296,7 @@ class PromisePoolExecutor {
             id: params.id,
             invocationLimit: params.invocationLimit,
             concurrencyLimit: 1,
+            noPromise: params.noPromise,
         });
     }
     /**
@@ -328,6 +336,7 @@ class PromisePoolExecutor {
             id: id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
+            noPromise: params.noPromise,
         });
         return promise;
     }
@@ -350,6 +359,7 @@ class PromisePoolExecutor {
             id: params.id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
+            noPromise: params.noPromise,
         });
     }
     /**

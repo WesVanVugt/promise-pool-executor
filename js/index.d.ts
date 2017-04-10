@@ -1,4 +1,4 @@
-export interface Identifier {
+export interface TaskGeneral {
     /**
      * A unique value used to identify the task. This can be later used to reference the task while it runs.
      * Symbols are a good option to use since they are always unique.
@@ -9,6 +9,10 @@ export interface Identifier {
      * to the completion of a larger task.
      */
     groupsIds?: any[];
+    /**
+     * If this is set to true, no promise will be returned.
+     */
+    noPromise?: boolean;
 }
 export interface ConcurrencyLimit {
     /**
@@ -22,7 +26,7 @@ export interface InvocationLimit {
      */
     invocationLimit?: number;
 }
-export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface GenericTaskParams<R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -30,7 +34,7 @@ export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, Invo
      */
     generator: (invocation?: number) => Promise<R> | null;
 }
-export interface SingleTaskParams<T, R> extends Identifier {
+export interface SingleTaskParams<T, R> extends TaskGeneral {
     /**
      * A function used for creating promises to run.
      */
@@ -40,14 +44,14 @@ export interface SingleTaskParams<T, R> extends Identifier {
     */
     data?: T;
 }
-export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
+export interface LinearTaskParams<T, R> extends TaskGeneral, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
     generator: (invocation?: number) => Promise<R>;
 }
-export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface BatchTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      *
@@ -68,7 +72,7 @@ export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, Inv
      */
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
-export interface EachTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface EachTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      *
@@ -119,6 +123,8 @@ export declare class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap;
+    private _groupActiveCountMap;
+    private _groupPromisesMap;
     private _idlePromises;
     /**
      * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.

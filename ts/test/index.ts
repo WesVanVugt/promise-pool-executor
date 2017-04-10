@@ -8,7 +8,7 @@ const tick: number = 50;
 /**
  * Milliseconds tolerance for tests, above or below the target.
  */
-const tolerance: number = 15;
+const tolerance: number = 20;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -138,6 +138,30 @@ describe("Exception Handling", () => {
             expect(caught).to.equal(true, "Must throw an error");
             done();
         }).catch(done);
+    });
+
+    it("waitForIdle", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let error: Error = new Error();
+        let caught: boolean = false;
+        pool.addGenericTask({
+            generator: () => {
+                return wait(1).then(() => {
+                    throw error;
+                });
+            },
+            invocationLimit: 1,
+            noPromise: true,
+        });
+        pool.waitForIdle(
+        ).catch((err) => {
+            expect(err).to.equal(error);
+            caught = true;
+        }).then((results) => {
+            expect(caught).to.equal(true, "Must throw an error");
+            done();
+        }).catch(done);
     })
 });
 
@@ -203,6 +227,7 @@ describe("Miscellaneous Features", () => {
                     return wait(tick);
                 },
                 invocationLimit: 1,
+                noPromise: true,
             });
             pool.waitForIdle()
                 .then(() => {
@@ -227,6 +252,7 @@ describe("Miscellaneous Features", () => {
                     });
                 },
                 invocationLimit: 1,
+                noPromise: true,
             });
             pool.waitForIdle()
                 .then(() => {

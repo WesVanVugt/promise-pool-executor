@@ -127,6 +127,27 @@ describe("Exception Handling", () => {
             done();
         }).catch(done);
     });
+    it("waitForIdle", (done) => {
+        let pool = new Pool.PromisePoolExecutor();
+        let error = new Error();
+        let caught = false;
+        pool.addGenericTask({
+            generator: () => {
+                return wait(1).then(() => {
+                    throw error;
+                });
+            },
+            invocationLimit: 1,
+            noPromise: true,
+        });
+        pool.waitForIdle().catch((err) => {
+            chai_1.expect(err).to.equal(error);
+            caught = true;
+        }).then((results) => {
+            chai_1.expect(caught).to.equal(true, "Must throw an error");
+            done();
+        }).catch(done);
+    });
 });
 describe("Miscellaneous Features", () => {
     it("Stop Task", (done) => {
@@ -185,6 +206,7 @@ describe("Miscellaneous Features", () => {
                     return wait(tick);
                 },
                 invocationLimit: 1,
+                noPromise: true,
             });
             pool.waitForIdle()
                 .then(() => {
@@ -207,6 +229,7 @@ describe("Miscellaneous Features", () => {
                     });
                 },
                 invocationLimit: 1,
+                noPromise: true,
             });
             pool.waitForIdle()
                 .then(() => {
