@@ -20,7 +20,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
-     * @param invocation The invocation number for this call, starting at 0 and incrementing once for each call.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
     generator: (invocation?: number) => Promise<R> | null;
 }
@@ -33,6 +33,13 @@ export interface SingleTaskParameters<T, R> {
      * Optional data to pass to the generator function as a parameter.
      */
     data?: T;
+}
+export interface LinearTaskParameters<T, R> extends Identifier, InvocationLimit {
+    /**
+     * A function used for creating promises to run.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
+     */
+    generator: (invocation?: number) => Promise<R>;
 }
 export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
     /**
@@ -123,21 +130,6 @@ export declare class PromisePoolExecutor {
      */
     readonly freeSlots: number;
     /**
-     * Triggers promises to start.
-     */
-    private triggerPromises();
-    /**
-     * Starts a promise.
-     *
-     * @param task The task to start.
-     */
-    private startPromise(task);
-    /**
-     * Continues execution to the next task.
-     * Resolves and removes the specified task if it is exhausted and has no active invocations.
-     */
-    private nextPromise(task);
-    /**
      * Gets the current status of a task.
      *
      * @param taskIdentifier Symbol used to identify the task.
@@ -157,6 +149,13 @@ export declare class PromisePoolExecutor {
      * @return A promise which resolves to the result of the task.
      */
     addSingleTask<T, R>(params: SingleTaskParameters<T, R>): Promise<R>;
+    /**
+     * Runs a task with a concurrency limit of 1.
+     *
+     * @param params
+     * @return A promise which resolves to an array containing the results of the task.
+     */
+    addLinearTask<T, R>(params: LinearTaskParameters<T, R>): Promise<R[]>;
     /**
      * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
      *

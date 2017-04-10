@@ -125,6 +125,78 @@ export interface TaskStatus {
     freeSlots: number;
 }
 
+/**
+ * Private Method: Starts a promise. * 
+ * @param task The task to start.
+ */
+function startPromise(task: InternalTaskDefinition<any>): void {
+    let promise: Promise<any> = task.generator(task.invocations);
+    if (!promise) {
+        task.exhausted = true;
+        // Remove the task if needed and start the next task
+        nextPromise.call(this, task);
+    } else {
+        if (!(promise instanceof Promise)) {
+            // In case what is returned is not a promise, make it one
+            promise = Promise.resolve(promise);
+        }
+
+        this.activePromiseCount++;
+        task.activeCount++;
+        let resultIndex: number = task.invocations;
+        task.invocations++;
+        if (task.invocations >= task.invocationLimit) {
+            task.exhausted = true;
+        }
+
+        promise.catch((err) => {
+            if (!task.errored) {
+                task.errored = true;
+                task.exhausted = true;
+                task.reject(err);
+            }
+            // Resolve
+        }).then((result: any) => {
+            this.activePromiseCount--;
+            task.activeCount--;
+            task.result[resultIndex] = result;
+            // Remove the task if needed and start the next task
+            nextPromise.call(this, task);
+        });
+    }
+}
+
+/**
+ * Private Method: Triggers promises to start.
+ */
+function triggerPromises() {
+    let taskIndex: number = 0;
+    let task: InternalTaskDefinition<any>;
+    while (this.activePromiseCount < this.concurrencyLimit && taskIndex < this.tasks.length) {
+        task = this.tasks[taskIndex];
+        if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
+            startPromise.call(this, task);
+        } else {
+            taskIndex++;
+        }
+    }
+}
+
+/**
+ * Private Method: Continues execution to the next task.
+ * Resolves and removes the specified task if it is exhausted and has no active invocations.
+ */
+function nextPromise(task: InternalTaskDefinition<any>): void {
+    if (task.exhausted && task.activeCount <= 0) {
+        if (!task.errored) {
+            task.resolve(task.result);
+        }
+        this.tasks.splice(this.tasks.indexOf(task), 1);
+        this.taskMap.delete(task.identifier);
+    }
+    triggerPromises.call(this);
+}
+
 export class PromisePoolExecutor {
     /**
      * The maximum number of promises which are allowed to run at one time.
@@ -161,79 +233,6 @@ export class PromisePoolExecutor {
      */
     get freeSlots(): number {
         return this.concurrencyLimit - this.activePromiseCount;
-    }
-
-    /**
-     * Triggers promises to start.
-     */
-    private triggerPromises() {
-        let taskIndex: number = 0;
-        let task: InternalTaskDefinition<any>;
-        while (this.activePromiseCount < this.concurrencyLimit && taskIndex < this.tasks.length) {
-            task = this.tasks[taskIndex];
-            if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
-                this.startPromise(task);
-            } else {
-                taskIndex++;
-            }
-        }
-    }
-
-    /**
-     * Starts a promise.
-     * 
-     * @param task The task to start.
-     */
-    private startPromise(task: InternalTaskDefinition<any>): void {
-        let promise: Promise<any> = task.generator(task.invocations);
-        if (!promise) {
-            task.exhausted = true;
-            // Remove the task if needed and start the next task
-            this.nextPromise(task);
-        } else {
-            if (!(promise instanceof Promise)) {
-                // In case what is returned is not a promise, make it one
-                promise = Promise.resolve(promise);
-            }
-
-            this.activePromiseCount++;
-            task.activeCount++;
-            let resultIndex: number = task.invocations;
-            task.invocations++;
-            if (task.invocations >= task.invocationLimit) {
-                task.exhausted = true;
-            }
-
-            promise.catch((err) => {
-                if (!task.errored) {
-                    task.errored = true;
-                    task.exhausted = true;
-                    task.reject(err);
-                }
-                // Resolve
-            }).then((result: any) => {
-                this.activePromiseCount--;
-                task.activeCount--;
-                task.result[resultIndex] = result;
-                // Remove the task if needed and start the next task
-                this.nextPromise(task);
-            });
-        }
-    }
-
-    /**
-     * Continues execution to the next task.
-     * Resolves and removes the specified task if it is exhausted and has no active invocations.
-     */
-    private nextPromise(task: InternalTaskDefinition<any>): void {
-        if (task.exhausted && task.activeCount <= 0) {
-            if (!task.errored) {
-                task.resolve(task.result);
-            }
-            this.tasks.splice(this.tasks.indexOf(task), 1);
-            this.taskMap.delete(task.identifier);
-        }
-        this.triggerPromises();
     }
 
     /**
@@ -296,7 +295,7 @@ export class PromisePoolExecutor {
 
         this.tasks.push(task);
         this.taskMap.set(task.identifier, task);
-        this.triggerPromises();
+        triggerPromises.call(this);
         return promise;
     }
 
@@ -318,7 +317,7 @@ export class PromisePoolExecutor {
     }
 
     /**
-     * Runs a task with a concurrency limit of 1
+     * Runs a task with a concurrency limit of 1.
      * 
      * @param params 
      * @return A promise which resolves to an array containing the results of the task.
