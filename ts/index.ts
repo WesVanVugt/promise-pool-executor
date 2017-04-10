@@ -23,8 +23,9 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing once for each call.
      */
-    generator: () => Promise<R> | null,
+    generator: (invocation?: number) => Promise<R> | null,
 }
 
 export interface SingleTaskParameters<T, R> {
@@ -45,7 +46,7 @@ export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit,
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (values: T[], startIndex?: number) => Promise<R> | null;
+    generator: (values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -76,7 +77,7 @@ export interface EachTaskParams<T, R> extends Identifier, ConcurrencyLimit, Invo
 
 interface InternalTaskDefinition<R> {
     identifier: Symbol,
-    generator: () => Promise<R> | null;
+    generator: (invocation?: number) => Promise<R> | null;
     activeCount: number;
     concurrencyLimit: number;
     invocations: number;
@@ -176,7 +177,7 @@ export class PromisePoolExecutor {
      * @param task The task to start.
      */
     private startPromise(task: InternalTaskDefinition<any>): void {
-        let promise: Promise<any> = task.generator();
+        let promise: Promise<any> = task.generator(task.invocations);
         if (!promise) {
             task.exhausted = true;
             // Remove the task if needed and start the next task
@@ -327,7 +328,7 @@ export class PromisePoolExecutor {
         let identifier: Symbol = params.identifier || Symbol();
 
         let promise: Promise<R[]> = this.addGenericTask({
-            generator: () => {
+            generator: (invocation) => {
                 if (index >= params.data.length) {
                     return null;
                 }
@@ -347,7 +348,7 @@ export class PromisePoolExecutor {
                     index += params.batchSize;
                 }
 
-                return params.generator(params.data.slice(oldIndex, index), oldIndex);
+                return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
             identifier: identifier,
             concurrencyLimit: params.concurrencyLimit,
@@ -364,10 +365,8 @@ export class PromisePoolExecutor {
      * @return A promise which resolves to an array containing the results of the task.
      */
     public addEachTask<T, R>(params: EachTaskParams<T, R>): Promise<R[]> {
-        let index: number = 0;
-
         return this.addGenericTask({
-            generator: () => {
+            generator: (index) => {
                 if (index >= params.data.length) {
                     return null;
                 }

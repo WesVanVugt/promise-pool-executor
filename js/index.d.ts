@@ -20,8 +20,9 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing once for each call.
      */
-    generator: () => Promise<R> | null;
+    generator: (invocation?: number) => Promise<R> | null;
 }
 export interface SingleTaskParameters<T, R> {
     /**
@@ -40,7 +41,7 @@ export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit,
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (values: T[], startIndex?: number) => Promise<R> | null;
+    generator: (values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
     /**
      * An array to be divided up and passed to {generator}.
      */

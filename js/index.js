@@ -52,7 +52,7 @@ class PromisePoolExecutor {
      * @param task The task to start.
      */
     startPromise(task) {
-        let promise = task.generator();
+        let promise = task.generator(task.invocations);
         if (!promise) {
             task.exhausted = true;
             // Remove the task if needed and start the next task
@@ -187,7 +187,7 @@ class PromisePoolExecutor {
         }
         let identifier = params.identifier || Symbol();
         let promise = this.addGenericTask({
-            generator: () => {
+            generator: (invocation) => {
                 if (index >= params.data.length) {
                     return null;
                 }
@@ -204,7 +204,7 @@ class PromisePoolExecutor {
                 else {
                     index += params.batchSize;
                 }
-                return params.generator(params.data.slice(oldIndex, index), oldIndex);
+                return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
             identifier: identifier,
             concurrencyLimit: params.concurrencyLimit,
@@ -219,9 +219,8 @@ class PromisePoolExecutor {
      * @return A promise which resolves to an array containing the results of the task.
      */
     addEachTask(params) {
-        let index = 0;
         return this.addGenericTask({
-            generator: () => {
+            generator: (index) => {
                 if (index >= params.data.length) {
                     return null;
                 }
