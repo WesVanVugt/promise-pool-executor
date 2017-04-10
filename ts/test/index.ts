@@ -31,6 +31,9 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     });
 }
 
+/**
+ * Returns the sum of an array of numbers.
+ */
 function sum(nums: number[]): number {
     let total: number = 0;
     let i: number;

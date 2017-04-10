@@ -232,19 +232,19 @@ export class PromisePoolExecutor {
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
-    private concurrencyLimit: number;
+    private _concurrencyLimit: number;
     /**
      * The number of promises which are active.
      */
-    private activePromiseCount: number = 0;
+    private _activePromiseCount: number = 0;
     /**
      * All tasks which are active or waiting.
      */
-    private tasks: InternalTaskDefinition<any>[] = [];
+    private _tasks: InternalTaskDefinition<any>[] = [];
     /**
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
-    private taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
+    private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -252,10 +252,10 @@ export class PromisePoolExecutor {
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
     constructor(concurrencyLimit?: number) {
-        this.concurrencyLimit = concurrencyLimit || Infinity;
+        this._concurrencyLimit = concurrencyLimit || Infinity;
 
-        if (typeof this.concurrencyLimit !== "number" || this.concurrencyLimit <= 0) {
-            throw new Error("Invalid concurrency limit: " + this.concurrencyLimit);
+        if (typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
+            throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
         }
     }
 
@@ -263,7 +263,7 @@ export class PromisePoolExecutor {
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
     get freeSlots(): number {
-        return this.concurrencyLimit - this.activePromiseCount;
+        return this._concurrencyLimit - this._activePromiseCount;
     }
 
     /**
@@ -272,7 +272,7 @@ export class PromisePoolExecutor {
      * @param id Unique value used to identify the task.
      */
     public getTaskStatus(id: any): TaskStatus {
-        let task: InternalTaskDefinition<any> = this.taskMap.get(id);
+        let task: InternalTaskDefinition<any> = this._taskMap.get(id);
         if (!task) {
             return;
         }
@@ -295,7 +295,7 @@ export class PromisePoolExecutor {
      * @param taskId 
      */
     public stopTask(id: any): boolean {
-        let task: InternalTaskDefinition<any> = this.taskMap.get(id);
+        let task: InternalTaskDefinition<any> = this._taskMap.get(id);
         if (!task) {
             return false;
         }
@@ -320,7 +320,7 @@ export class PromisePoolExecutor {
             invocationLimit: params.invocationLimit || Infinity,
             returnReady: false,
         }
-        if (this.taskMap.has(task.id)) {
+        if (this._taskMap.has(task.id)) {
             return Promise.reject("The id used for this task already exists.");
         }
         if (typeof task.invocationLimit !== "number") {
@@ -342,8 +342,8 @@ export class PromisePoolExecutor {
             task.returnReady = true;
         }, 1);
 
-        this.tasks.push(task);
-        this.taskMap.set(task.id, task);
+        this._tasks.push(task);
+        this._taskMap.set(task.id, task);
         triggerPromises.call(this);
         return promise;
     }
