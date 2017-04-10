@@ -260,6 +260,19 @@ export class PromisePoolExecutor {
     }
 
     /**
+     * Stops a running task.
+     * @param taskId 
+     */
+    public stopTask(id: any): boolean {
+        let task: InternalTaskDefinition<any> = this.taskMap.get(id);
+        if (!task) {
+            return false;
+        }
+        task.exhausted = true;
+        return true;
+    }
+
+    /**
      * General-purpose function for adding a task.
      * 
      * @param params Parameters used to define the task.
