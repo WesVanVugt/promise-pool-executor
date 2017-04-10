@@ -229,13 +229,7 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
 }
 
 export class PromisePoolExecutor {
-    /**
-     * The maximum number of promises which are allowed to run at one time.
-     */
     private _concurrencyLimit: number;
-    /**
-     * The number of promises which are active.
-     */
     private _activePromiseCount: number = 0;
     /**
      * All tasks which are active or waiting.
@@ -260,9 +254,21 @@ export class PromisePoolExecutor {
     }
 
     /**
+     * The maximum number of promises which are allowed to run at one time.
+     */
+    public get concurrencyLimit(): number {
+        return this._concurrencyLimit;
+    }
+    /**
+     * The number of promises which are active.
+     */
+    public get activePromiseCount(): number {
+        return this._activePromiseCount;
+    }
+    /**
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
-    get freeSlots(): number {
+    public get freeSlots(): number {
         return this._concurrencyLimit - this._activePromiseCount;
     }
 
