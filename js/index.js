@@ -5,7 +5,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * @param task The task to start.
  */
 function startPromise(task) {
-    let promise = task.generator(task.invocations);
+    let promise;
+    try {
+        promise = task.generator(task.invocations);
+    }
+    catch (err) {
+        errorTask(task, err);
+        return;
+    }
     if (!promise) {
         task.exhausted = true;
         // Remove the task if needed and start the next task
@@ -24,11 +31,7 @@ function startPromise(task) {
             task.exhausted = true;
         }
         promise.catch((err) => {
-            if (!task.errored) {
-                task.errored = true;
-                task.exhausted = true;
-                task.reject(err);
-            }
+            errorTask(task, err);
             // Resolve
         }).then((result) => {
             this.activePromiseCount--;
@@ -37,6 +40,25 @@ function startPromise(task) {
             // Remove the task if needed and start the next task
             nextPromise.call(this, task);
         });
+    }
+}
+/**
+ * Private Method: Registers an error for a task.
+ */
+function errorTask(task, err) {
+    if (!task.errored) {
+        task.errored = true;
+        task.exhausted = true;
+        if (task.returnReady) {
+            task.reject(err);
+        }
+        else {
+            // If the error is thrown immediately after task generation,
+            // a delay must be added for the promise rejection to work.
+            setTimeout(() => {
+                task.reject(err);
+            }, 1);
+        }
     }
 }
 /**
@@ -62,7 +84,16 @@ function triggerPromises() {
 function nextPromise(task) {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
-            task.resolve(task.result);
+            if (task.returnReady) {
+                task.resolve(task.result);
+            }
+            else {
+                // Although a resolution this fast should be impossible, the time restriction
+                // for rejected promises likely applies to resolved ones too.
+                setTimeout(() => {
+                    task.resolve(task.result);
+                }, 1);
+            }
         }
         this.tasks.splice(this.tasks.indexOf(task), 1);
         this.taskMap.delete(task.identifier);
@@ -119,6 +150,18 @@ class PromisePoolExecutor {
         };
     }
     /**
+     * Stops a running task.
+     * @param taskId
+     */
+    stopTask(id) {
+        let task = this.taskMap.get(id);
+        if (!task) {
+            return false;
+        }
+        task.exhausted = true;
+        return true;
+    }
+    /**
      * General-purpose function for adding a task.
      *
      * @param params Parameters used to define the task.
@@ -133,6 +176,7 @@ class PromisePoolExecutor {
             result: [],
             concurrencyLimit: params.concurrencyLimit || Infinity,
             invocationLimit: params.invocationLimit || Infinity,
+            returnReady: false,
         };
         if (this.taskMap.has(task.identifier)) {
             return Promise.reject("The identifier used for this task already exists.");
@@ -150,6 +194,9 @@ class PromisePoolExecutor {
             task.resolve = resolve;
             task.reject = reject;
         });
+        setTimeout(() => {
+            task.returnReady = true;
+        }, 1);
         this.tasks.push(task);
         this.taskMap.set(task.identifier, task);
         triggerPromises.call(this);

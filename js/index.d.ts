@@ -136,6 +136,11 @@ export declare class PromisePoolExecutor {
      */
     getTaskStatus(taskIdentifier: Symbol): TaskStatus;
     /**
+     * Stops a running task.
+     * @param taskId
+     */
+    stopTask(id: any): boolean;
+    /**
      * General-purpose function for adding a task.
      *
      * @param params Parameters used to define the task.

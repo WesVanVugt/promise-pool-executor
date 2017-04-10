@@ -93,6 +93,7 @@ interface InternalTaskDefinition<R> {
     result: R[];
     exhausted?: boolean;
     errored?: boolean;
+    returnReady: boolean;
     resolve?: (result: R[]) => void;
     reject?: (reason?: any) => void;
 }
@@ -130,7 +131,13 @@ export interface TaskStatus {
  * @param task The task to start.
  */
 function startPromise(task: InternalTaskDefinition<any>): void {
-    let promise: Promise<any> = task.generator(task.invocations);
+    let promise: Promise<any>;
+    try {
+        promise = task.generator(task.invocations);
+    } catch (err) {
+        errorTask(task, err);
+        return;
+    }
     if (!promise) {
         task.exhausted = true;
         // Remove the task if needed and start the next task
@@ -150,11 +157,7 @@ function startPromise(task: InternalTaskDefinition<any>): void {
         }
 
         promise.catch((err) => {
-            if (!task.errored) {
-                task.errored = true;
-                task.exhausted = true;
-                task.reject(err);
-            }
+            errorTask(task, err);
             // Resolve
         }).then((result: any) => {
             this.activePromiseCount--;
@@ -163,6 +166,25 @@ function startPromise(task: InternalTaskDefinition<any>): void {
             // Remove the task if needed and start the next task
             nextPromise.call(this, task);
         });
+    }
+}
+
+/**
+ * Private Method: Registers an error for a task.
+ */
+function errorTask(task: InternalTaskDefinition<any>, err: any) {
+    if (!task.errored) {
+        task.errored = true;
+        task.exhausted = true;
+        if (task.returnReady) {
+            task.reject(err);
+        } else {
+            // If the error is thrown immediately after task generation,
+            // a delay must be added for the promise rejection to work.
+            setTimeout(() => {
+                task.reject(err);
+            }, 1);
+        }
     }
 }
 
@@ -189,7 +211,15 @@ function triggerPromises() {
 function nextPromise(task: InternalTaskDefinition<any>): void {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
-            task.resolve(task.result);
+            if (task.returnReady) {
+                task.resolve(task.result);
+            } else {
+                // Although a resolution this fast should be impossible, the time restriction
+                // for rejected promises likely applies to resolved ones too.
+                setTimeout(() => {
+                    task.resolve(task.result);
+                }, 1);
+            }
         }
         this.tasks.splice(this.tasks.indexOf(task), 1);
         this.taskMap.delete(task.identifier);
@@ -287,6 +317,7 @@ export class PromisePoolExecutor {
             result: [],
             concurrencyLimit: params.concurrencyLimit || Infinity,
             invocationLimit: params.invocationLimit || Infinity,
+            returnReady: false,
         }
         if (this.taskMap.has(task.identifier)) {
             return Promise.reject("The identifier used for this task already exists.");
@@ -305,6 +336,10 @@ export class PromisePoolExecutor {
             task.resolve = resolve;
             task.reject = reject;
         });
+
+        setTimeout(() => {
+            task.returnReady = true;
+        }, 1);
 
         this.tasks.push(task);
         this.taskMap.set(task.identifier, task);
