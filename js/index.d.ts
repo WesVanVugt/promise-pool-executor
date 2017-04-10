@@ -88,6 +88,11 @@ export interface TaskStatus {
      * The maximum number of times the task can be invoked.
      */
     invocationLimit: number;
+    /**
+     * The number of times the task can be invoked before reaching the invocation limit,
+     * or the local or global concurrency limit.
+     */
+    freeSlots: number;
 }
 export declare class PromisePoolExecutor {
     /**

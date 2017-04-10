@@ -109,6 +109,11 @@ export interface TaskStatus {
      * The maximum number of times the task can be invoked.
      */
     invocationLimit: number;
+    /**
+     * The number of times the task can be invoked before reaching the invocation limit,
+     * or the local or global concurrency limit.
+     */
+    freeSlots: number;
 }
 
 export class PromisePoolExecutor {
@@ -238,6 +243,11 @@ export class PromisePoolExecutor {
             concurrencyLimit: task.concurrencyLimit,
             invocations: task.invocations,
             invocationLimit: task.invocationLimit,
+            freeSlots: Math.min(
+                this.freeSlots,
+                task.concurrencyLimit - task.activeCount,
+                task.invocationLimit - task.invocations
+            )
         };
     }
 
@@ -326,7 +336,7 @@ export class PromisePoolExecutor {
                     let status: TaskStatus = this.getTaskStatus(identifier);
                     let batchSize: number = params.batchSize(
                         params.data.length - oldIndex,
-                        Math.min(this.freeSlots, status.concurrencyLimit - status.activeCount)
+                        status.freeSlots
                     );
                     // Unacceptable values: NaN, <=0, type not number
                     if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {

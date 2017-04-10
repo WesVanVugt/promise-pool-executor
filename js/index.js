@@ -116,6 +116,7 @@ class PromisePoolExecutor {
             concurrencyLimit: task.concurrencyLimit,
             invocations: task.invocations,
             invocationLimit: task.invocationLimit,
+            freeSlots: Math.min(this.freeSlots, task.concurrencyLimit - task.activeCount, task.invocationLimit - task.invocations)
         };
     }
     /**
@@ -193,7 +194,7 @@ class PromisePoolExecutor {
                 let oldIndex = index;
                 if (typeof params.batchSize === "function") {
                     let status = this.getTaskStatus(identifier);
-                    let batchSize = params.batchSize(params.data.length - oldIndex, Math.min(this.freeSlots, status.concurrencyLimit - status.activeCount));
+                    let batchSize = params.batchSize(params.data.length - oldIndex, status.freeSlots);
                     // Unacceptable values: NaN, <=0, type not number
                     if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
                         return Promise.reject(new Error("Invalid batch size: " + batchSize));
