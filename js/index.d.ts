@@ -17,7 +17,7 @@ export interface InvocationLimit {
      */
     invocationLimit?: number;
 }
-export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -25,7 +25,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
      */
     generator: (invocation?: number) => Promise<R> | null;
 }
-export interface SingleTaskParameters<T, R> extends Identifier {
+export interface SingleTaskParams<T, R> extends Identifier {
     /**
      * A function used for creating promises to run.
      */
@@ -35,14 +35,14 @@ export interface SingleTaskParameters<T, R> extends Identifier {
      */
     data?: T;
 }
-export interface LinearTaskParameters<T, R> extends Identifier, InvocationLimit {
+export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
     generator: (invocation?: number) => Promise<R>;
 }
-export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      *
@@ -114,6 +114,7 @@ export declare class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap;
+    private _idlePromises;
     /**
      * Construct a new PromisePoolExecutor object.
      *
@@ -149,28 +150,28 @@ export declare class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    addGenericTask<R>(params: GenericTaskParameters<R>): Promise<R[]>;
+    addGenericTask<R>(params: GenericTaskParams<R>): Promise<R[]>;
     /**
      * Runs a task once while obeying the concurrency limit set for the pool.
      *
      * @param params Parameters used to define the task.
      * @return A promise which resolves to the result of the task.
      */
-    addSingleTask<T, R>(params: SingleTaskParameters<T, R>): Promise<R>;
+    addSingleTask<T, R>(params: SingleTaskParams<T, R>): Promise<R>;
     /**
      * Runs a task with a concurrency limit of 1.
      *
      * @param params
      * @return A promise which resolves to an array containing the results of the task.
      */
-    addLinearTask<T, R>(params: LinearTaskParameters<T, R>): Promise<R[]>;
+    addLinearTask<T, R>(params: LinearTaskParams<T, R>): Promise<R[]>;
     /**
      * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
      *
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the results of the task. Each element in the array corresponds to one invocation.
      */
-    addBatchTask<T, R>(params: BatchTaskParameters<T, R>): Promise<R[]>;
+    addBatchTask<T, R>(params: BatchTaskParams<T, R>): Promise<R[]>;
     /**
      * Runs a task for each element in an array.
      *

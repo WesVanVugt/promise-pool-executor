@@ -95,8 +95,7 @@ interface InternalTaskDefinition<R> {
     exhausted?: boolean;
     errored?: boolean;
     returnReady: boolean;
-    resolve?: (result: R[]) => void;
-    reject?: (reason?: any) => void;
+    promise?: ExternalPromise<R[]>;
 }
 
 export interface TaskStatus {
@@ -178,12 +177,12 @@ function errorTask(task: InternalTaskDefinition<any>, err: any) {
         task.errored = true;
         task.exhausted = true;
         if (task.returnReady) {
-            task.reject(err);
+            task.promise.rejectInstance(err);
         } else {
             // If the error is thrown immediately after task generation,
             // a delay must be added for the promise rejection to work.
             setTimeout(() => {
-                task.reject(err);
+                task.promise.rejectInstance(err);
             }, 1);
         }
     }
@@ -213,12 +212,12 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
             if (task.returnReady) {
-                task.resolve(task.result);
+                task.promise.resolveInstance(task.result);
             } else {
                 // Although a resolution this fast should be impossible, the time restriction
                 // for rejected promises likely applies to resolved ones too.
                 setTimeout(() => {
-                    task.resolve(task.result);
+                    task.promise.resolveInstance(task.result);
                 }, 1);
             }
         }
@@ -226,6 +225,24 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
         this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
+}
+
+interface ExternalPromise<T> extends Promise<T> {
+    resolveInstance: (result: T) => void;
+    rejectInstance: (err: any) => void;
+}
+
+function createExternalPromise<T>(): ExternalPromise<T> {
+    let resolveInstance: (result: T) => void;
+    let rejectInstance: (err: any) => void;
+
+    let promise: ExternalPromise<T> = new Promise((resolve, reject) => {
+        resolveInstance = resolve;
+        rejectInstance = reject;
+    }) as any;
+    promise.resolveInstance = resolveInstance;
+    promise.rejectInstance = rejectInstance;
+    return promise;
 }
 
 export class PromisePoolExecutor {
@@ -239,6 +256,8 @@ export class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
+
+    private _idlePromises: Array<Promise<any>> = [];
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -339,10 +358,7 @@ export class PromisePoolExecutor {
             return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
-        let promise: Promise<R[]> = new Promise<R[]>((resolve, reject) => {
-            task.resolve = resolve;
-            task.reject = reject;
-        });
+        task.promise = createExternalPromise();
 
         setTimeout(() => {
             task.returnReady = true;
@@ -351,7 +367,7 @@ export class PromisePoolExecutor {
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
         triggerPromises.call(this);
-        return promise;
+        return task.promise;
     }
 
     /**

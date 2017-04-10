@@ -50,13 +50,13 @@ function errorTask(task, err) {
         task.errored = true;
         task.exhausted = true;
         if (task.returnReady) {
-            task.reject(err);
+            task.promise.rejectInstance(err);
         }
         else {
             // If the error is thrown immediately after task generation,
             // a delay must be added for the promise rejection to work.
             setTimeout(() => {
-                task.reject(err);
+                task.promise.rejectInstance(err);
             }, 1);
         }
     }
@@ -85,13 +85,13 @@ function nextPromise(task) {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
             if (task.returnReady) {
-                task.resolve(task.result);
+                task.promise.resolveInstance(task.result);
             }
             else {
                 // Although a resolution this fast should be impossible, the time restriction
                 // for rejected promises likely applies to resolved ones too.
                 setTimeout(() => {
-                    task.resolve(task.result);
+                    task.promise.resolveInstance(task.result);
                 }, 1);
             }
         }
@@ -99,6 +99,17 @@ function nextPromise(task) {
         this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
+}
+function createExternalPromise() {
+    let resolveInstance;
+    let rejectInstance;
+    let promise = new Promise((resolve, reject) => {
+        resolveInstance = resolve;
+        rejectInstance = reject;
+    });
+    promise.resolveInstance = resolveInstance;
+    promise.rejectInstance = rejectInstance;
+    return promise;
 }
 class PromisePoolExecutor {
     /**
@@ -116,6 +127,7 @@ class PromisePoolExecutor {
          * A map containing all tasks which are active or waiting, indexed by their ids.
          */
         this._taskMap = new Map();
+        this._idlePromises = [];
         this._concurrencyLimit = concurrencyLimit || Infinity;
         if (typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
             throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
@@ -199,17 +211,14 @@ class PromisePoolExecutor {
         if (typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
             return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
-        let promise = new Promise((resolve, reject) => {
-            task.resolve = resolve;
-            task.reject = reject;
-        });
+        task.promise = createExternalPromise();
         setTimeout(() => {
             task.returnReady = true;
         }, 1);
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
         triggerPromises.call(this);
-        return promise;
+        return task.promise;
     }
     /**
      * Runs a task once while obeying the concurrency limit set for the pool.
