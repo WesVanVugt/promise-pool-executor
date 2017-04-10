@@ -95,7 +95,7 @@ interface InternalTaskDefinition<R> {
     exhausted?: boolean;
     errored?: boolean;
     returnReady: boolean;
-    promise?: ExternalPromise<R[]>;
+    promise?: PromiseResolver<R[]>;
 }
 
 export interface TaskStatus {
@@ -227,22 +227,16 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
     triggerPromises.call(this);
 }
 
-interface ExternalPromise<T> extends Promise<T> {
-    resolveInstance: (result: T) => void;
-    rejectInstance: (err: any) => void;
+interface PromiseResolver<T> {
+    resolveInstance?: (result: T) => void;
+    rejectInstance?: (err: any) => void;
 }
 
-function createExternalPromise<T>(): ExternalPromise<T> {
-    let resolveInstance: (result: T) => void;
-    let rejectInstance: (err: any) => void;
-
-    let promise: ExternalPromise<T> = new Promise((resolve, reject) => {
-        resolveInstance = resolve;
-        rejectInstance = reject;
-    }) as any;
-    promise.resolveInstance = resolveInstance;
-    promise.rejectInstance = rejectInstance;
-    return promise;
+function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+        resolver.resolveInstance = resolve;
+        resolver.rejectInstance = reject;
+    });
 }
 
 export class PromisePoolExecutor {
@@ -257,7 +251,7 @@ export class PromisePoolExecutor {
      */
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
 
-    private _idlePromises: Array<Promise<any>> = [];
+    private _idlePromises: Array<PromiseResolver<void>> = [];
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -358,7 +352,8 @@ export class PromisePoolExecutor {
             return Promise.reject(new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
-        task.promise = createExternalPromise();
+        task.promise = {};
+        let promise: Promise<R[]> = createResolvablePromise(task.promise);
 
         setTimeout(() => {
             task.returnReady = true;
@@ -367,7 +362,7 @@ export class PromisePoolExecutor {
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
         triggerPromises.call(this);
-        return task.promise;
+        return promise;
     }
 
     /**
