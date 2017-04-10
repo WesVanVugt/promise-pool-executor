@@ -85,6 +85,72 @@ describe("Concurrency", () => {
     });
 });
 
+describe("Exception Handling", () => {
+    it("Generator Function", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let error: Error = new Error();
+        let caught: boolean = false;
+        pool.addGenericTask({
+            generator: () => {
+                throw error;
+            }
+        }).catch((err) => {
+            expect(err).to.equal(error);
+            caught = true;
+        }).then((results) => {
+            expect(caught).to.equal(true, "Must throw an error");
+            done();
+        }).catch(done);
+    })
+
+    it("Promise Rejection", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let error: Error = new Error();
+        let caught: boolean = false;
+        pool.addGenericTask({
+            generator: () => {
+                return wait(1).then(() => {
+                    throw error;
+                });
+            },
+            invocationLimit: 1
+        }).catch((err) => {
+            expect(err).to.equal(error);
+            caught = true;
+        }).then((results) => {
+            expect(caught).to.equal(true, "Must throw an error");
+            done();
+        }).catch(done);
+    })
+});
+
+describe("Miscellaneous Features", () => {
+    it("Stop Task", (done) => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let start: number = Date.now();
+        let id: Symbol = Symbol();
+        pool.addGenericTask({
+            identifier: id,
+            generator: (index) => {
+                if (index >= 2) {
+                    expect(pool.stopTask(id)).to.equal(true, "Stop task must succede");
+                }
+                return wait(tick)
+                    .then(() => {
+                        return Date.now() - start;
+                    });
+            }
+        }).then((results) => {
+            // The task must return the expected non-array result
+            expectTimes(results, [1, 1, 1], "Timing Results");
+            done();
+        }).catch(done);
+    })
+});
+
 describe("Task Secializations", () => {
     it("Single Task", (done) => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
