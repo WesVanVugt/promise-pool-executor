@@ -1,6 +1,6 @@
 {
   "name": "promise-pool-executor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A TypeScript module for managing ES6 promise concurrency.",
   "author": "Wes van Vugt <baudzila@gmail.com>",
   "scripts": {
