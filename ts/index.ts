@@ -99,7 +99,7 @@ interface InternalTaskDefinition<R> {
     result: R[];
     exhausted?: boolean;
     errored?: boolean;
-    returnReady: boolean;
+    init: boolean;
     promise?: PromiseResolver<R[]>;
 }
 
@@ -181,7 +181,7 @@ function errorTask(task: InternalTaskDefinition<any>, err: any): void {
     if (!task.errored) {
         task.errored = true;
         task.exhausted = true;
-        if (task.returnReady) {
+        if (!task.init) {
             task.promise.rejectInstance(err);
         } else {
             // If the error is thrown immediately after task generation,
@@ -191,11 +191,29 @@ function errorTask(task: InternalTaskDefinition<any>, err: any): void {
             }, 1);
         }
     }
+    if (this._tasksInit === 0) {
+        errorIdle.call(this, err);
+    } else {
+        setTimeout(() => {
+            errorIdle.call(this, err);
+        }, 1);
+    }
+}
+
+function errorIdle(err: any) {
     this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
         resolver.rejectInstance(err);
     });
     this._idlePromises.length = 0;
 }
+
+function resolveIdle() {
+    this._idlePromises.forEach((resolver: any) => {
+        resolver.resolveInstance();
+    });
+    this._idlePromises.length = 0;
+}
+
 
 /**
  * Private Method: Triggers promises to start.
@@ -220,7 +238,7 @@ function triggerPromises() {
 function nextPromise(task: InternalTaskDefinition<any>): void {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
-            if (task.returnReady) {
+            if (task.init) {
                 task.promise.resolveInstance(task.result);
             } else {
                 // Although a resolution this fast should be impossible, the time restriction
@@ -235,11 +253,16 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
     }
     triggerPromises.call(this);
 
-    if (this._activePromiseCount === 0 && this._tasks.length === 0) {
-        this._idlePromises.forEach((resolver: any) => {
-            resolver.resolveInstance();
-        });
-        this._idlePromises.length = 0;
+    if (this.idling) {
+        if (this._tasksInit === 0) {
+            resolveIdle.call(this);
+        } else {
+            setTimeout(() => {
+                if (this.idling) {
+                    resolveIdle.call(this);
+                }
+            }, 1);
+        }
     }
 }
 
@@ -268,6 +291,10 @@ export class PromisePoolExecutor {
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
 
     private _idlePromises: Array<PromiseResolver<void>> = [];
+    /**
+     * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
+     */
+    private _tasksInit: number = 0;
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -299,6 +326,12 @@ export class PromisePoolExecutor {
      */
     public get freeSlots(): number {
         return this._concurrencyLimit - this._activePromiseCount;
+    }
+    /**
+     * Returns true if the pool is idling (no active or queued promises).
+     */
+    public get idling(): boolean {
+        return this._activePromiseCount === 0 && this._tasks.length === 0;
     }
 
     /**
@@ -353,7 +386,7 @@ export class PromisePoolExecutor {
             result: [],
             concurrencyLimit: params.concurrencyLimit || Infinity,
             invocationLimit: params.invocationLimit || Infinity,
-            returnReady: false,
+            init: true,
         }
         if (this._taskMap.has(task.id)) {
             return Promise.reject("The id used for this task already exists.");
@@ -371,8 +404,10 @@ export class PromisePoolExecutor {
         task.promise = {};
         let promise: Promise<R[]> = createResolvablePromise(task.promise);
 
+        this._tasksInit++;
         setTimeout(() => {
-            task.returnReady = true;
+            this._tasksInit--;
+            task.init = false;
         }, 1);
 
         this._tasks.push(task);
@@ -489,6 +524,9 @@ export class PromisePoolExecutor {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     public waitForIdle(): Promise<void> {
+        if (this.idling) {
+            return Promise.resolve();
+        }
         let resolver: PromiseResolver<void> = {};
         this._idlePromises.push(resolver);
         return createResolvablePromise(resolver);

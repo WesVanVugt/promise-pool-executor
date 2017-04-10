@@ -234,6 +234,16 @@ describe("Miscellaneous Features", () => {
                     done();
                 }).catch(done);
         });
+
+        it("No Task", (done) => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            pool.waitForIdle()
+                .then(() => {
+                    done();
+                }).catch(done);
+        });
     });
 });
 

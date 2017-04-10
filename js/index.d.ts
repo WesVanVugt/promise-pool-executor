@@ -4,6 +4,11 @@ export interface Identifier {
      * Symbols are a good option to use since they are always unique.
      */
     id?: any;
+    /**
+     * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
+     * to the completion of a larger task.
+     */
+    groupsIds?: any[];
 }
 export interface ConcurrencyLimit {
     /**
@@ -32,7 +37,7 @@ export interface SingleTaskParams<T, R> extends Identifier {
     generator: (data?: T) => Promise<R>;
     /**
      * Optional data to pass to the generator function as a parameter.
-     */
+    */
     data?: T;
 }
 export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
@@ -116,6 +121,10 @@ export declare class PromisePoolExecutor {
     private _taskMap;
     private _idlePromises;
     /**
+     * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
+     */
+    private _tasksInit;
+    /**
      * Construct a new PromisePoolExecutor object.
      *
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
@@ -133,6 +142,10 @@ export declare class PromisePoolExecutor {
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
     readonly freeSlots: number;
+    /**
+     * Returns true if the pool is idling (no active or queued promises).
+     */
+    readonly idling: boolean;
     /**
      * Gets the current status of a task.
      *

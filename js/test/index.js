@@ -214,6 +214,14 @@ describe("Miscellaneous Features", () => {
                 done();
             }).catch(done);
         });
+        it("No Task", (done) => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            pool.waitForIdle()
+                .then(() => {
+                done();
+            }).catch(done);
+        });
     });
 });
 describe("Task Secializations", () => {

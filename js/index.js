@@ -10,7 +10,7 @@ function startPromise(task) {
         promise = task.generator(task.invocations);
     }
     catch (err) {
-        errorTask(task, err);
+        errorTask.call(this, task, err);
         return;
     }
     if (!promise) {
@@ -31,7 +31,7 @@ function startPromise(task) {
             task.exhausted = true;
         }
         promise.catch((err) => {
-            errorTask(task, err);
+            errorTask.call(this, task, err);
             // Resolve
         }).then((result) => {
             this._activePromiseCount--;
@@ -49,7 +49,7 @@ function errorTask(task, err) {
     if (!task.errored) {
         task.errored = true;
         task.exhausted = true;
-        if (task.returnReady) {
+        if (!task.init) {
             task.promise.rejectInstance(err);
         }
         else {
@@ -60,6 +60,26 @@ function errorTask(task, err) {
             }, 1);
         }
     }
+    if (this._tasksInit === 0) {
+        errorIdle.call(this, err);
+    }
+    else {
+        setTimeout(() => {
+            errorIdle.call(this, err);
+        }, 1);
+    }
+}
+function errorIdle(err) {
+    this._idlePromises.forEach((resolver) => {
+        resolver.rejectInstance(err);
+    });
+    this._idlePromises.length = 0;
+}
+function resolveIdle() {
+    this._idlePromises.forEach((resolver) => {
+        resolver.resolveInstance();
+    });
+    this._idlePromises.length = 0;
 }
 /**
  * Private Method: Triggers promises to start.
@@ -84,7 +104,7 @@ function triggerPromises() {
 function nextPromise(task) {
     if (task.exhausted && task.activeCount <= 0) {
         if (!task.errored) {
-            if (task.returnReady) {
+            if (task.init) {
                 task.promise.resolveInstance(task.result);
             }
             else {
@@ -99,11 +119,17 @@ function nextPromise(task) {
         this._taskMap.delete(task.id);
     }
     triggerPromises.call(this);
-    if (this._activePromiseCount === 0 && this._tasks.length === 0) {
-        this._idlePromises.forEach((resolver) => {
-            resolver.resolveInstance();
-        });
-        this._idlePromises.length = 0;
+    if (this.idling) {
+        if (this._tasksInit === 0) {
+            resolveIdle.call(this);
+        }
+        else {
+            setTimeout(() => {
+                if (this.idling) {
+                    resolveIdle.call(this);
+                }
+            }, 1);
+        }
     }
 }
 function createResolvablePromise(resolver) {
@@ -129,6 +155,10 @@ class PromisePoolExecutor {
          */
         this._taskMap = new Map();
         this._idlePromises = [];
+        /**
+         * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
+         */
+        this._tasksInit = 0;
         this._concurrencyLimit = concurrencyLimit || Infinity;
         if (typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
             throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
@@ -151,6 +181,12 @@ class PromisePoolExecutor {
      */
     get freeSlots() {
         return this._concurrencyLimit - this._activePromiseCount;
+    }
+    /**
+     * Returns true if the pool is idling (no active or queued promises).
+     */
+    get idling() {
+        return this._activePromiseCount === 0 && this._tasks.length === 0;
     }
     /**
      * Gets the current status of a task.
@@ -198,7 +234,7 @@ class PromisePoolExecutor {
             result: [],
             concurrencyLimit: params.concurrencyLimit || Infinity,
             invocationLimit: params.invocationLimit || Infinity,
-            returnReady: false,
+            init: true,
         };
         if (this._taskMap.has(task.id)) {
             return Promise.reject("The id used for this task already exists.");
@@ -214,8 +250,10 @@ class PromisePoolExecutor {
         }
         task.promise = {};
         let promise = createResolvablePromise(task.promise);
+        this._tasksInit++;
         setTimeout(() => {
-            task.returnReady = true;
+            this._tasksInit--;
+            task.init = false;
         }, 1);
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
@@ -318,6 +356,9 @@ class PromisePoolExecutor {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     waitForIdle() {
+        if (this.idling) {
+            return Promise.resolve();
+        }
         let resolver = {};
         this._idlePromises.push(resolver);
         return createResolvablePromise(resolver);
