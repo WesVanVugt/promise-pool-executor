@@ -20,7 +20,7 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface GenericTaskParams<R> extends Identifier, ConcurrencyLimit, InvocationLimit {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -29,7 +29,7 @@ export interface GenericTaskParameters<R> extends Identifier, ConcurrencyLimit, 
     generator: (invocation?: number) => Promise<R> | null,
 }
 
-export interface SingleTaskParameters<T, R> extends Identifier {
+export interface SingleTaskParams<T, R> extends Identifier {
     /**
      * A function used for creating promises to run.
      */
@@ -40,7 +40,7 @@ export interface SingleTaskParameters<T, R> extends Identifier {
     data?: T;
 }
 
-export interface LinearTaskParameters<T, R> extends Identifier, InvocationLimit {
+export interface LinearTaskParams<T, R> extends Identifier, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -48,7 +48,7 @@ export interface LinearTaskParameters<T, R> extends Identifier, InvocationLimit 
     generator: (invocation?: number) => Promise<R>;
 }
 
-export interface BatchTaskParameters<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
+export interface BatchTaskParams<T, R> extends Identifier, ConcurrencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
@@ -315,7 +315,7 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    public addGenericTask<R>(params: GenericTaskParameters<R>): Promise<R[]> {
+    public addGenericTask<R>(params: GenericTaskParams<R>): Promise<R[]> {
         let task: InternalTaskDefinition<R> = {
             id: params.id || Symbol(),
             generator: params.generator,
@@ -360,7 +360,7 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to the result of the task.
      */
-    public addSingleTask<T, R>(params: SingleTaskParameters<T, R>): Promise<R> {
+    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): Promise<R> {
         return this.addGenericTask({
             id: params.id,
             generator: () => {
@@ -378,7 +378,7 @@ export class PromisePoolExecutor {
      * @param params 
      * @return A promise which resolves to an array containing the results of the task.
      */
-    public addLinearTask<T, R>(params: LinearTaskParameters<T, R>): Promise<R[]> {
+    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): Promise<R[]> {
         return this.addGenericTask({
             generator: params.generator,
             id: params.id,
@@ -393,7 +393,7 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the results of the task. Each element in the array corresponds to one invocation.
      */
-    public addBatchTask<T, R>(params: BatchTaskParameters<T, R>): Promise<R[]> {
+    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): Promise<R[]> {
         let index: number = 0;
 
         // Unacceptable values: NaN, <=0, type not number/function
