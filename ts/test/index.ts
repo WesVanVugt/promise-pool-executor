@@ -233,25 +233,25 @@ describe("Miscellaneous Features", () => {
         let start: number = Date.now();
         let id: Symbol = Symbol();
 
-        //TODO: Update this
         return pool.addGenericTask({
             id: id,
             generator: (index) => {
                 return wait(tick)
                     .then(() => {
-                        let status: Pool.TaskStatus = pool.getTaskStatus(id);
-                        expect(status).to.deep.equal({
-                            id: id,
-                            activeCount: 1,
-                            concurrencyLimit: 5,
-                            invocations: 1,
-                            invocationLimit: 1,
-                            freeSlots: 0,
-                        } as Pool.TaskStatus);
+                        return pool.getTaskStatus(id);
                     });
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
+        }).then((status) => {
+            expect(status[0]).to.deep.equal({
+                id: id,
+                activeCount: 1,
+                concurrencyLimit: 5,
+                invocations: 1,
+                invocationLimit: 1,
+                freeSlots: 0,
+            } as Pool.TaskStatus);
         });
     });
 
