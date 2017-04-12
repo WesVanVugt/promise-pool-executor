@@ -202,6 +202,81 @@ describe("Exception Handling", () => {
             });
         });
     });
+
+    describe("waitForGroupIdle", () => {
+        it("Generator Function (synchronous)", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            let caught: boolean = false;
+            let groupId: any = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    throw error;
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId
+            ).catch((err) => {
+                expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+
+        it("Promise Rejection", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            let caught: boolean = false;
+            let groupId: any = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId
+            ).catch((err) => {
+                expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+
+        it("Invalid Parameters", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            let caught: boolean = false;
+            let groupId: any = Symbol();
+            console.log("Test Start");
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0, // invalid
+                noPromise: true,
+            });
+            console.log("Wait for idle");
+            return pool.waitForGroupIdle(groupId
+            ).catch((err) => {
+                caught = true;
+            }).then((results) => {
+                expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+
+    });
 });
 
 describe("Miscellaneous Features", () => {

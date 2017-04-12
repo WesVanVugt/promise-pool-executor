@@ -197,7 +197,7 @@ function errorTask(task: InternalTaskDefinition<any>, err: any): void {
             }
         }
     }
-    errorGroups.call(this, err, []);
+    errorGroups.call(this, err, task.groupIds);
 }
 
 function errorGroups(err: any, groupsIds: any[]): void {
@@ -218,19 +218,21 @@ function errorGroups(err: any, groupsIds: any[]): void {
 
 function errorGroup(err: any, groupId: any): void {
     let status: InternalGroupStatus = this._groupMap.get(groupId);
+    console.log("ErrorGroup start ", status);
     if (!status) {
         status = {
             activeCount: 0,
             promises: [],
         }
         this._groupMap.set(groupId, status);
+        console.log("Added");
     }
     if (!status.errored) {
         status.errored = true;
         status.error = err;
-        let promise: PromiseResolver<void>;
         let promises: Array<PromiseResolver<void>> = status.promises;
         status.promises = [];
+        let promise: PromiseResolver<void>;
         for (promise of promises) {
             promise.rejectInstance(err);
         }
@@ -238,6 +240,7 @@ function errorGroup(err: any, groupId: any): void {
             setTimeout(() => {
                 status = this._groupMap.get(groupId);
                 if (status && status.activeCount < 1) {
+                    console.log("Delayed removal");
                     this._groupMap.delete(groupId);
                 }
             }, 1);
@@ -303,11 +306,20 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
             console.assert(status, "Task must have group status");
             status.activeCount--;
             if (status.activeCount < 1) {
-                this._groupMap.delete(groupId);
-                let promise: PromiseResolver<void>;
-                for (promise of status.promises) {
-                    // TypeScript is finicky about this line
-                    (promise.resolveInstance as any)();
+                if (!task.errored) {
+                    this._groupMap.delete(groupId);
+                    let promise: PromiseResolver<void>;
+                    for (promise of status.promises) {
+                        // TypeScript is finicky about this line
+                        (promise.resolveInstance as any)();
+                    }
+                } else {
+                    setTimeout(() => {
+                        status = this._groupMap.get(groupId);
+                        if (status && status.activeCount < 1) {
+                            this._groupMap.delete(groupId);
+                        }
+                    }, 1);
                 }
             }
         }
@@ -572,6 +584,7 @@ export class PromisePoolExecutor {
         if (!params.batchSize || typeof params.batchSize !== "function"
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
 
+            // TODO: Fix these params
             return instantReject.call(this, params, new Error("Invalid batch size: " + params.batchSize));
         }
 
