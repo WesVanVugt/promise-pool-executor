@@ -296,14 +296,12 @@ export class PromisePoolExecutor {
 
     private _errorGroup(err: any, groupId: any): void {
         let status: InternalGroupStatus = this._groupMap.get(groupId);
-        console.log("ErrorGroup start ", status);
         if (!status) {
             status = {
                 activeCount: 0,
                 promises: [],
             }
             this._groupMap.set(groupId, status);
-            console.log("Added");
         }
         if (!status.errored) {
             status.errored = true;
@@ -318,7 +316,6 @@ export class PromisePoolExecutor {
                 setTimeout(() => {
                     status = this._groupMap.get(groupId);
                     if (status && status.activeCount < 1) {
-                        console.log("Delayed removal");
                         this._groupMap.delete(groupId);
                     }
                 }, 1);

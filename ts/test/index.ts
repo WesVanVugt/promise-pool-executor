@@ -185,7 +185,6 @@ describe("Exception Handling", () => {
 
             let error: Error = new Error();
             let caught: boolean = false;
-            console.log("Test Start");
             pool.addGenericTask({
                 generator: () => {
                     return Promise.resolve();
@@ -193,7 +192,6 @@ describe("Exception Handling", () => {
                 concurrencyLimit: 0, // invalid
                 noPromise: true,
             });
-            console.log("Wait for idle");
             return pool.waitForIdle(
             ).catch((err) => {
                 caught = true;
@@ -258,7 +256,6 @@ describe("Exception Handling", () => {
             let error: Error = new Error();
             let caught: boolean = false;
             let groupId: any = Symbol();
-            console.log("Test Start");
             pool.addGenericTask({
                 groupIds: [groupId],
                 generator: () => {
@@ -267,7 +264,6 @@ describe("Exception Handling", () => {
                 concurrencyLimit: 0, // invalid
                 noPromise: true,
             });
-            console.log("Wait for idle");
             return pool.waitForGroupIdle(groupId
             ).catch((err) => {
                 caught = true;
