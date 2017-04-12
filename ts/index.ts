@@ -416,14 +416,20 @@ export class PromisePoolExecutor {
         }
     }
 
+    /**
+     * Instantly resolves a promise, while respecting the parameters passed.
+     */
     private _instantResolve<T>(params: TaskGeneral, data: T): Promise<T> {
         if (!params.noPromise) {
             return Promise.resolve(data);
         }
     }
 
+    /**
+     * Instantly rejects a promise with the specified error, while respecting the parameters passed.
+     */
     private _instantReject(params: TaskGeneral, err: any): Promise<any> {
-        this._errorGroups(err, params.groupIds);
+        this._errorGroups(err, params.groupIds || []);
         if (!params.noPromise) {
             return Promise.reject(err);
         }
@@ -495,16 +501,16 @@ export class PromisePoolExecutor {
         }, 1);
 
         if (this._taskMap.has(task.id)) {
-            return this._instantReject(task, new Error("The id used for this task already exists."));
+            return this._instantReject(params, new Error("The id used for this task already exists."));
         }
         if (typeof task.invocationLimit !== "number") {
-            return this._instantReject(task, new Error("Invalid invocation limit: " + task.invocationLimit));
+            return this._instantReject(params, new Error("Invalid invocation limit: " + task.invocationLimit));
         }
         if (task.invocationLimit <= 0) {
-            return this._instantResolve(task, task.result);
+            return this._instantResolve(params, task.result);
         }
         if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return this._instantReject(task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+            return this._instantReject(params, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
         let promise: Promise<R[]> = null;
@@ -582,7 +588,6 @@ export class PromisePoolExecutor {
         if (!params.batchSize || typeof params.batchSize !== "function"
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
 
-            // TODO: Fix these params
             return this._instantReject(params, new Error("Invalid batch size: " + params.batchSize));
         }
 
