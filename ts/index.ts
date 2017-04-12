@@ -218,17 +218,17 @@ export class PromisePoolExecutor {
      * Private Method: Starts a promise. * 
      * @param task The task to start.
      */
-    private startPromise(task: InternalTaskDefinition<any>): void {
+    private _startPromise(task: InternalTaskDefinition<any>): void {
         let promise: Promise<any>;
         try {
             promise = task.generator(task.invocations);
         } catch (err) {
-            this.errorTask(task, err);
+            this._errorTask(task, err);
         }
         if (!promise) {
             task.exhausted = true;
             // Remove the task if needed and start the next task
-            this.nextPromise(task);
+            this._nextPromise(task);
         } else {
             if (!(promise instanceof Promise)) {
                 // In case what is returned is not a promise, make it one
@@ -244,14 +244,14 @@ export class PromisePoolExecutor {
             }
 
             promise.catch((err) => {
-                this.errorTask(task, err);
+                this._errorTask(task, err);
                 // Resolve
             }).then((result: any) => {
                 this._activePromiseCount--;
                 task.activeCount--;
                 task.result[resultIndex] = result;
                 // Remove the task if needed and start the next task
-                this.nextPromise(task);
+                this._nextPromise(task);
             });
         }
     }
@@ -259,7 +259,7 @@ export class PromisePoolExecutor {
     /**
      * Private Method: Registers an error for a task.
      */
-    private errorTask(task: InternalTaskDefinition<any>, err: any): void {
+    private _errorTask(task: InternalTaskDefinition<any>, err: any): void {
         if (!task.errored) {
             task.errored = true;
             task.exhausted = true;
@@ -275,26 +275,26 @@ export class PromisePoolExecutor {
                 }
             }
         }
-        this.errorGroups(err, task.groupIds);
+        this._errorGroups(err, task.groupIds);
     }
 
-    private errorGroups(err: any, groupsIds: any[]): void {
+    private _errorGroups(err: any, groupsIds: any[]): void {
         if (this._tasksInit === 0) {
-            this.errorIdle(err);
+            this._errorIdle(err);
         } else {
             this._erroring++;
             setTimeout(() => {
                 this._erroring--;
-                this.errorIdle(err);
+                this._errorIdle(err);
             }, 1);
         }
         let groupId: number;
         for (groupId of groupsIds) {
-            this.errorGroup(err, groupId);
+            this._errorGroup(err, groupId);
         }
     }
 
-    private errorGroup(err: any, groupId: any): void {
+    private _errorGroup(err: any, groupId: any): void {
         let status: InternalGroupStatus = this._groupMap.get(groupId);
         console.log("ErrorGroup start ", status);
         if (!status) {
@@ -326,31 +326,30 @@ export class PromisePoolExecutor {
         }
     }
 
-    private errorIdle(err: any) {
+    private _errorIdle(err: any) {
         this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
             resolver.rejectInstance(err);
         });
         this._idlePromises.length = 0;
     }
 
-    private resolveIdle() {
+    private _resolveIdle() {
         this._idlePromises.forEach((resolver: any) => {
             resolver.resolveInstance();
         });
         this._idlePromises.length = 0;
     }
 
-
     /**
      * Private Method: Triggers promises to start.
      */
-    private triggerPromises() {
+    private _triggerPromises() {
         let taskIndex: number = 0;
         let task: InternalTaskDefinition<any>;
         while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
-                this.startPromise(task);
+                this._startPromise(task);
             } else {
                 taskIndex++;
             }
@@ -361,7 +360,7 @@ export class PromisePoolExecutor {
      * Private Method: Continues execution to the next task.
      * Resolves and removes the specified task if it is exhausted and has no active invocations.
      */
-    private nextPromise(task: InternalTaskDefinition<any>): void {
+    private _nextPromise(task: InternalTaskDefinition<any>): void {
         if (task.exhausted && task.activeCount <= 0) {
             this._tasks.splice(this._tasks.indexOf(task), 1);
             this._taskMap.delete(task.id);
@@ -402,29 +401,29 @@ export class PromisePoolExecutor {
                 }
             }
         }
-        this.triggerPromises();
+        this._triggerPromises();
 
         if (this.idling) {
             if (this._tasksInit === 0) {
-                this.resolveIdle();
+                this._resolveIdle();
             } else {
                 setTimeout(() => {
                     if (this.idling) {
-                        this.resolveIdle();
+                        this._resolveIdle();
                     }
                 }, 1);
             }
         }
     }
 
-    private instantResolve<T>(params: TaskGeneral, data: T): Promise<T> {
+    private _instantResolve<T>(params: TaskGeneral, data: T): Promise<T> {
         if (!params.noPromise) {
             return Promise.resolve(data);
         }
     }
 
-    private instantReject(params: TaskGeneral, err: any): Promise<any> {
-        this.errorGroups(err, params.groupIds);
+    private _instantReject(params: TaskGeneral, err: any): Promise<any> {
+        this._errorGroups(err, params.groupIds);
         if (!params.noPromise) {
             return Promise.reject(err);
         }
@@ -496,16 +495,16 @@ export class PromisePoolExecutor {
         }, 1);
 
         if (this._taskMap.has(task.id)) {
-            return this.instantReject(task, new Error("The id used for this task already exists."));
+            return this._instantReject(task, new Error("The id used for this task already exists."));
         }
         if (typeof task.invocationLimit !== "number") {
-            return this.instantReject(task, new Error("Invalid invocation limit: " + task.invocationLimit));
+            return this._instantReject(task, new Error("Invalid invocation limit: " + task.invocationLimit));
         }
         if (task.invocationLimit <= 0) {
-            return this.instantResolve(task, task.result);
+            return this._instantResolve(task, task.result);
         }
         if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return this.instantReject(task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+            return this._instantReject(task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
         let promise: Promise<R[]> = null;
@@ -530,7 +529,7 @@ export class PromisePoolExecutor {
 
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
-        this.triggerPromises();
+        this._triggerPromises();
         return promise;
     }
 
@@ -584,7 +583,7 @@ export class PromisePoolExecutor {
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
 
             // TODO: Fix these params
-            return this.instantReject(params, new Error("Invalid batch size: " + params.batchSize));
+            return this._instantReject(params, new Error("Invalid batch size: " + params.batchSize));
         }
 
         let id: any = params.id || Symbol();
