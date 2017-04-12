@@ -136,209 +136,6 @@ export interface TaskStatus {
     freeSlots: number;
 }
 
-/**
- * Private Method: Starts a promise. * 
- * @param task The task to start.
- */
-function startPromise(task: InternalTaskDefinition<any>): void {
-    let promise: Promise<any>;
-    try {
-        promise = task.generator(task.invocations);
-    } catch (err) {
-        errorTask.call(this, task, err);
-    }
-    if (!promise) {
-        task.exhausted = true;
-        // Remove the task if needed and start the next task
-        nextPromise.call(this, task);
-    } else {
-        if (!(promise instanceof Promise)) {
-            // In case what is returned is not a promise, make it one
-            promise = Promise.resolve(promise);
-        }
-
-        this._activePromiseCount++;
-        task.activeCount++;
-        let resultIndex: number = task.invocations;
-        task.invocations++;
-        if (task.invocations >= task.invocationLimit) {
-            task.exhausted = true;
-        }
-
-        promise.catch((err) => {
-            errorTask.call(this, task, err);
-            // Resolve
-        }).then((result: any) => {
-            this._activePromiseCount--;
-            task.activeCount--;
-            task.result[resultIndex] = result;
-            // Remove the task if needed and start the next task
-            nextPromise.call(this, task);
-        });
-    }
-}
-
-/**
- * Private Method: Registers an error for a task.
- */
-function errorTask(task: InternalTaskDefinition<any>, err: any): void {
-    if (!task.errored) {
-        task.errored = true;
-        task.exhausted = true;
-        if (task.promise) {
-            if (!task.init) {
-                task.promise.rejectInstance(err);
-            } else {
-                // If the error is thrown immediately after task generation,
-                // a delay must be added for the promise rejection to work.
-                setTimeout(() => {
-                    task.promise.rejectInstance(err);
-                }, 1);
-            }
-        }
-    }
-    errorGroups.call(this, err, task.groupIds);
-}
-
-function errorGroups(err: any, groupsIds: any[]): void {
-    if (this._tasksInit === 0) {
-        errorIdle.call(this, err);
-    } else {
-        this._erroring++;
-        setTimeout(() => {
-            this._erroring--;
-            errorIdle.call(this, err);
-        }, 1);
-    }
-    let groupId: number;
-    for (groupId of groupsIds) {
-        errorGroup.call(this, err, groupId);
-    }
-}
-
-function errorGroup(err: any, groupId: any): void {
-    let status: InternalGroupStatus = this._groupMap.get(groupId);
-    console.log("ErrorGroup start ", status);
-    if (!status) {
-        status = {
-            activeCount: 0,
-            promises: [],
-        }
-        this._groupMap.set(groupId, status);
-        console.log("Added");
-    }
-    if (!status.errored) {
-        status.errored = true;
-        status.error = err;
-        let promises: Array<PromiseResolver<void>> = status.promises;
-        status.promises = [];
-        let promise: PromiseResolver<void>;
-        for (promise of promises) {
-            promise.rejectInstance(err);
-        }
-        if (status.activeCount < 1) {
-            setTimeout(() => {
-                status = this._groupMap.get(groupId);
-                if (status && status.activeCount < 1) {
-                    console.log("Delayed removal");
-                    this._groupMap.delete(groupId);
-                }
-            }, 1);
-        }
-    }
-}
-
-function errorIdle(err: any) {
-    this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
-        resolver.rejectInstance(err);
-    });
-    this._idlePromises.length = 0;
-}
-
-function resolveIdle() {
-    this._idlePromises.forEach((resolver: any) => {
-        resolver.resolveInstance();
-    });
-    this._idlePromises.length = 0;
-}
-
-
-/**
- * Private Method: Triggers promises to start.
- */
-function triggerPromises() {
-    let taskIndex: number = 0;
-    let task: InternalTaskDefinition<any>;
-    while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
-        task = this._tasks[taskIndex];
-        if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
-            startPromise.call(this, task);
-        } else {
-            taskIndex++;
-        }
-    }
-}
-
-/**
- * Private Method: Continues execution to the next task.
- * Resolves and removes the specified task if it is exhausted and has no active invocations.
- */
-function nextPromise(task: InternalTaskDefinition<any>): void {
-    if (task.exhausted && task.activeCount <= 0) {
-        this._tasks.splice(this._tasks.indexOf(task), 1);
-        this._taskMap.delete(task.id);
-
-        if (!task.errored && task.promise) {
-            if (task.init) {
-                task.promise.resolveInstance(task.result);
-            } else {
-                // Although a resolution this fast should be impossible, the time restriction
-                // for rejected promises likely applies to resolved ones too.
-                setTimeout(() => {
-                    task.promise.resolveInstance(task.result);
-                }, 1);
-            }
-        }
-
-        let groupId: any;
-        for (groupId of task.groupIds) {
-            let status: InternalGroupStatus = this._groupMap.get(groupId);
-            console.assert(status, "Task must have group status");
-            status.activeCount--;
-            if (status.activeCount < 1) {
-                if (!task.errored) {
-                    this._groupMap.delete(groupId);
-                    let promise: PromiseResolver<void>;
-                    for (promise of status.promises) {
-                        // TypeScript is finicky about this line
-                        (promise.resolveInstance as any)();
-                    }
-                } else {
-                    setTimeout(() => {
-                        status = this._groupMap.get(groupId);
-                        if (status && status.activeCount < 1) {
-                            this._groupMap.delete(groupId);
-                        }
-                    }, 1);
-                }
-            }
-        }
-    }
-    triggerPromises.call(this);
-
-    if (this.idling) {
-        if (this._tasksInit === 0) {
-            resolveIdle.call(this);
-        } else {
-            setTimeout(() => {
-                if (this.idling) {
-                    resolveIdle.call(this);
-                }
-            }, 1);
-        }
-    }
-}
-
 interface PromiseResolver<T> {
     resolveInstance?: (result: T) => void;
     rejectInstance?: (err: any) => void;
@@ -349,19 +146,6 @@ function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
         resolver.resolveInstance = resolve;
         resolver.rejectInstance = reject;
     });
-}
-
-function instantResolve<T>(task: InternalTaskDefinition<T>, data: T): Promise<T> {
-    if (task.promise) {
-        return Promise.resolve(data);
-    }
-}
-
-function instantReject(task: InternalTaskDefinition<any>, err: any): Promise<any> {
-    errorGroups.call(this, err, task.groupIds);
-    if (task.promise) {
-        return Promise.reject(err);
-    }
 }
 
 interface InternalGroupStatus {
@@ -431,8 +215,223 @@ export class PromisePoolExecutor {
     }
 
     /**
+     * Private Method: Starts a promise. * 
+     * @param task The task to start.
+     */
+    private startPromise(task: InternalTaskDefinition<any>): void {
+        let promise: Promise<any>;
+        try {
+            promise = task.generator(task.invocations);
+        } catch (err) {
+            this.errorTask(task, err);
+        }
+        if (!promise) {
+            task.exhausted = true;
+            // Remove the task if needed and start the next task
+            this.nextPromise(task);
+        } else {
+            if (!(promise instanceof Promise)) {
+                // In case what is returned is not a promise, make it one
+                promise = Promise.resolve(promise);
+            }
+
+            this._activePromiseCount++;
+            task.activeCount++;
+            let resultIndex: number = task.invocations;
+            task.invocations++;
+            if (task.invocations >= task.invocationLimit) {
+                task.exhausted = true;
+            }
+
+            promise.catch((err) => {
+                this.errorTask(task, err);
+                // Resolve
+            }).then((result: any) => {
+                this._activePromiseCount--;
+                task.activeCount--;
+                task.result[resultIndex] = result;
+                // Remove the task if needed and start the next task
+                this.nextPromise(task);
+            });
+        }
+    }
+
+    /**
+     * Private Method: Registers an error for a task.
+     */
+    private errorTask(task: InternalTaskDefinition<any>, err: any): void {
+        if (!task.errored) {
+            task.errored = true;
+            task.exhausted = true;
+            if (task.promise) {
+                if (!task.init) {
+                    task.promise.rejectInstance(err);
+                } else {
+                    // If the error is thrown immediately after task generation,
+                    // a delay must be added for the promise rejection to work.
+                    setTimeout(() => {
+                        task.promise.rejectInstance(err);
+                    }, 1);
+                }
+            }
+        }
+        this.errorGroups(err, task.groupIds);
+    }
+
+    private errorGroups(err: any, groupsIds: any[]): void {
+        if (this._tasksInit === 0) {
+            this.errorIdle(err);
+        } else {
+            this._erroring++;
+            setTimeout(() => {
+                this._erroring--;
+                this.errorIdle(err);
+            }, 1);
+        }
+        let groupId: number;
+        for (groupId of groupsIds) {
+            this.errorGroup(err, groupId);
+        }
+    }
+
+    private errorGroup(err: any, groupId: any): void {
+        let status: InternalGroupStatus = this._groupMap.get(groupId);
+        console.log("ErrorGroup start ", status);
+        if (!status) {
+            status = {
+                activeCount: 0,
+                promises: [],
+            }
+            this._groupMap.set(groupId, status);
+            console.log("Added");
+        }
+        if (!status.errored) {
+            status.errored = true;
+            status.error = err;
+            let promises: Array<PromiseResolver<void>> = status.promises;
+            status.promises = [];
+            let promise: PromiseResolver<void>;
+            for (promise of promises) {
+                promise.rejectInstance(err);
+            }
+            if (status.activeCount < 1) {
+                setTimeout(() => {
+                    status = this._groupMap.get(groupId);
+                    if (status && status.activeCount < 1) {
+                        console.log("Delayed removal");
+                        this._groupMap.delete(groupId);
+                    }
+                }, 1);
+            }
+        }
+    }
+
+    private errorIdle(err: any) {
+        this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
+            resolver.rejectInstance(err);
+        });
+        this._idlePromises.length = 0;
+    }
+
+    private resolveIdle() {
+        this._idlePromises.forEach((resolver: any) => {
+            resolver.resolveInstance();
+        });
+        this._idlePromises.length = 0;
+    }
+
+
+    /**
+     * Private Method: Triggers promises to start.
+     */
+    private triggerPromises() {
+        let taskIndex: number = 0;
+        let task: InternalTaskDefinition<any>;
+        while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
+            task = this._tasks[taskIndex];
+            if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
+                this.startPromise(task);
+            } else {
+                taskIndex++;
+            }
+        }
+    }
+
+    /**
+     * Private Method: Continues execution to the next task.
+     * Resolves and removes the specified task if it is exhausted and has no active invocations.
+     */
+    private nextPromise(task: InternalTaskDefinition<any>): void {
+        if (task.exhausted && task.activeCount <= 0) {
+            this._tasks.splice(this._tasks.indexOf(task), 1);
+            this._taskMap.delete(task.id);
+
+            if (!task.errored && task.promise) {
+                if (task.init) {
+                    task.promise.resolveInstance(task.result);
+                } else {
+                    // Although a resolution this fast should be impossible, the time restriction
+                    // for rejected promises likely applies to resolved ones too.
+                    setTimeout(() => {
+                        task.promise.resolveInstance(task.result);
+                    }, 1);
+                }
+            }
+
+            let groupId: any;
+            for (groupId of task.groupIds) {
+                let status: InternalGroupStatus = this._groupMap.get(groupId);
+                console.assert(status, "Task must have group status");
+                status.activeCount--;
+                if (status.activeCount < 1) {
+                    if (!task.errored) {
+                        this._groupMap.delete(groupId);
+                        let promise: PromiseResolver<void>;
+                        for (promise of status.promises) {
+                            // TypeScript is finicky about this line
+                            (promise.resolveInstance as any)();
+                        }
+                    } else {
+                        setTimeout(() => {
+                            status = this._groupMap.get(groupId);
+                            if (status && status.activeCount < 1) {
+                                this._groupMap.delete(groupId);
+                            }
+                        }, 1);
+                    }
+                }
+            }
+        }
+        this.triggerPromises();
+
+        if (this.idling) {
+            if (this._tasksInit === 0) {
+                this.resolveIdle();
+            } else {
+                setTimeout(() => {
+                    if (this.idling) {
+                        this.resolveIdle();
+                    }
+                }, 1);
+            }
+        }
+    }
+
+    private instantResolve<T>(params: TaskGeneral, data: T): Promise<T> {
+        if (!params.noPromise) {
+            return Promise.resolve(data);
+        }
+    }
+
+    private instantReject(params: TaskGeneral, err: any): Promise<any> {
+        this.errorGroups(err, params.groupIds);
+        if (!params.noPromise) {
+            return Promise.reject(err);
+        }
+    }
+
+    /**
      * Gets the current status of a task.
-     * 
      * @param id Unique value used to identify the task.
      */
     public getTaskStatus(id: any): TaskStatus {
@@ -497,16 +496,16 @@ export class PromisePoolExecutor {
         }, 1);
 
         if (this._taskMap.has(task.id)) {
-            return instantReject.call(this, task, new Error("The id used for this task already exists."));
+            return this.instantReject(task, new Error("The id used for this task already exists."));
         }
         if (typeof task.invocationLimit !== "number") {
-            return instantReject.call(this, task, new Error("Invalid invocation limit: " + task.invocationLimit));
+            return this.instantReject(task, new Error("Invalid invocation limit: " + task.invocationLimit));
         }
         if (task.invocationLimit <= 0) {
-            return instantResolve.call(this, task, task.result);
+            return this.instantResolve(task, task.result);
         }
         if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return instantReject.call(this, task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+            return this.instantReject(task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
         let promise: Promise<R[]> = null;
@@ -531,7 +530,7 @@ export class PromisePoolExecutor {
 
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
-        triggerPromises.call(this);
+        this.triggerPromises();
         return promise;
     }
 
@@ -585,7 +584,7 @@ export class PromisePoolExecutor {
             && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
 
             // TODO: Fix these params
-            return instantReject.call(this, params, new Error("Invalid batch size: " + params.batchSize));
+            return this.instantReject(params, new Error("Invalid batch size: " + params.batchSize));
         }
 
         let id: any = params.id || Symbol();
