@@ -670,6 +670,9 @@ export class PromisePoolExecutor {
             return Promise.resolve();
         }
         if (status.errored) {
+            if (status.activeCount < 1) {
+                this._groupMap.delete(id);
+            }
             return Promise.reject(status.error);
         }
         let resolver: PromiseResolver<void> = {};

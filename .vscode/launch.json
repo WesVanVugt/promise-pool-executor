@@ -10,7 +10,7 @@
             "preLaunchTask": "tsc",
             "console": "internalConsole",
             "program": "${workspaceRoot}/node_modules/mocha/bin/_mocha",
-            "args": ["js/test/*.js", "--reporter", "spec"],
+            "args": ["js/test/*.js", "--reporter", "spec", "--colors"],
             "outFiles": [
                 "${workspaceRoot}/js/**/*.js"
             ]
