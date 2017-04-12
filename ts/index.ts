@@ -8,7 +8,7 @@ export interface TaskGeneral {
      * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
      * to the completion of a larger task.
      */
-    groupsIds?: any[];
+    groupIds?: any[];
     /**
      * If this is set to true, no promise will be returned.
      */
@@ -94,7 +94,8 @@ export interface EachTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, Inv
 }
 
 interface InternalTaskDefinition<R> {
-    id: any,
+    id: any;
+    groupIds: any[];
     generator: (invocation?: number) => Promise<R> | null;
     activeCount: number;
     concurrencyLimit: number;
@@ -209,6 +210,39 @@ function errorGroups(err: any, groupsIds: any[]): void {
             errorIdle.call(this, err);
         }, 1);
     }
+    let groupId: number;
+    for (groupId of groupsIds) {
+        errorGroup.call(this, err, groupId);
+    }
+}
+
+function errorGroup(err: any, groupId: any): void {
+    let status: InternalGroupStatus = this._groupMap.get(groupId);
+    if (!status) {
+        status = {
+            activeCount: 0,
+            promises: [],
+        }
+        this._groupMap.set(groupId, status);
+    }
+    if (!status.errored) {
+        status.errored = true;
+        status.error = err;
+        let promise: PromiseResolver<void>;
+        let promises: Array<PromiseResolver<void>> = status.promises;
+        status.promises = [];
+        for (promise of promises) {
+            promise.rejectInstance(err);
+        }
+        if (status.activeCount < 1) {
+            setTimeout(() => {
+                status = this._groupMap.get(groupId);
+                if (status && status.activeCount < 1) {
+                    this._groupMap.delete(groupId);
+                }
+            }, 1);
+        }
+    }
 }
 
 function errorIdle(err: any) {
@@ -248,6 +282,9 @@ function triggerPromises() {
  */
 function nextPromise(task: InternalTaskDefinition<any>): void {
     if (task.exhausted && task.activeCount <= 0) {
+        this._tasks.splice(this._tasks.indexOf(task), 1);
+        this._taskMap.delete(task.id);
+
         if (!task.errored && task.promise) {
             if (task.init) {
                 task.promise.resolveInstance(task.result);
@@ -259,8 +296,21 @@ function nextPromise(task: InternalTaskDefinition<any>): void {
                 }, 1);
             }
         }
-        this._tasks.splice(this._tasks.indexOf(task), 1);
-        this._taskMap.delete(task.id);
+
+        let groupId: any;
+        for (groupId of task.groupIds) {
+            let status: InternalGroupStatus = this._groupMap.get(groupId);
+            console.assert(status, "Task must have group status");
+            status.activeCount--;
+            if (status.activeCount < 1) {
+                this._groupMap.delete(groupId);
+                let promise: PromiseResolver<void>;
+                for (promise of status.promises) {
+                    // TypeScript is finicky about this line
+                    (promise.resolveInstance as any)();
+                }
+            }
+        }
     }
     triggerPromises.call(this);
 
@@ -289,17 +339,24 @@ function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
     });
 }
 
-function instantResolve<T>(task: TaskGeneral, data: T): Promise<T> {
-    if (!task.noPromise) {
+function instantResolve<T>(task: InternalTaskDefinition<T>, data: T): Promise<T> {
+    if (task.promise) {
         return Promise.resolve(data);
     }
 }
 
-function instantReject(task: TaskGeneral, err: any): Promise<any> {
-    errorGroups.call(this, err, task.groupsIds);
-    if (!task.noPromise) {
+function instantReject(task: InternalTaskDefinition<any>, err: any): Promise<any> {
+    errorGroups.call(this, err, task.groupIds);
+    if (task.promise) {
         return Promise.reject(err);
     }
+}
+
+interface InternalGroupStatus {
+    activeCount: number;
+    promises: Array<PromiseResolver<void>>;
+    error?: any;
+    errored?: boolean;
 }
 
 export class PromisePoolExecutor {
@@ -313,8 +370,7 @@ export class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
-    private _groupActiveCountMap: Map<any, number> = new Map();
-    private _groupPromisesMap: Map<any, PromiseResolver<void>> = new Map();
+    private _groupMap: Map<any, InternalGroupStatus> = new Map();
 
     private _idlePromises: Array<PromiseResolver<void>> = [];
     /**
@@ -408,6 +464,7 @@ export class PromisePoolExecutor {
     public addGenericTask<R>(params: GenericTaskParams<R>): Promise<R[]> {
         let task: InternalTaskDefinition<R> = {
             id: params.id || Symbol(),
+            groupIds: params.groupIds || [],
             generator: params.generator,
             activeCount: 0,
             invocations: 0,
@@ -417,6 +474,7 @@ export class PromisePoolExecutor {
             invocationLimit: params.invocationLimit !== undefined
                 && params.invocationLimit !== null ? params.invocationLimit : Infinity,
             init: true,
+            promise: params.noPromise ? null : {},
         }
 
         // This must be done before any errors are thrown
@@ -427,22 +485,36 @@ export class PromisePoolExecutor {
         }, 1);
 
         if (this._taskMap.has(task.id)) {
-            return instantReject.call(this, params, new Error("The id used for this task already exists."));
+            return instantReject.call(this, task, new Error("The id used for this task already exists."));
         }
         if (typeof task.invocationLimit !== "number") {
-            return instantReject.call(this, params, new Error("Invalid invocation limit: " + task.invocationLimit));
+            return instantReject.call(this, task, new Error("Invalid invocation limit: " + task.invocationLimit));
         }
         if (task.invocationLimit <= 0) {
-            return instantResolve.call(this, params, task.result);
+            return instantResolve.call(this, task, task.result);
         }
         if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return instantReject.call(this, params, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+            return instantReject.call(this, task, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
         }
 
         let promise: Promise<R[]> = null;
         if (!params.noPromise) {
             task.promise = {};
             promise = createResolvablePromise(task.promise);
+        }
+
+        let groupId: number;
+        let status: InternalGroupStatus;
+        for (groupId of task.groupIds) {
+            status = this._groupMap.get(groupId);
+            if (!status) {
+                status = {
+                    activeCount: 0,
+                    promises: [],
+                };
+                this._groupMap.set(groupId, status);
+            }
+            status.activeCount++;
         }
 
         this._tasks.push(task);
@@ -460,6 +532,7 @@ export class PromisePoolExecutor {
     public addSingleTask<T, R>(params: SingleTaskParams<T, R>): Promise<R> {
         return this.addGenericTask({
             id: params.id,
+            groupIds: params.groupIds,
             generator: () => {
                 return params.generator(params.data);
             },
@@ -477,8 +550,9 @@ export class PromisePoolExecutor {
      */
     public addLinearTask<T, R>(params: LinearTaskParams<T, R>): Promise<R[]> {
         return this.addGenericTask({
-            generator: params.generator,
             id: params.id,
+            groupIds: params.groupIds,
+            generator: params.generator,
             invocationLimit: params.invocationLimit,
             concurrencyLimit: 1,
             noPromise: params.noPromise,
@@ -504,6 +578,8 @@ export class PromisePoolExecutor {
         let id: any = params.id || Symbol();
 
         let promise: Promise<R[]> = this.addGenericTask({
+            id: id,
+            groupIds: params.groupIds,
             generator: (invocation) => {
                 if (index >= params.data.length) {
                     return null;
@@ -526,7 +602,6 @@ export class PromisePoolExecutor {
 
                 return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
-            id: id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
             noPromise: params.noPromise,
@@ -543,6 +618,8 @@ export class PromisePoolExecutor {
      */
     public addEachTask<T, R>(params: EachTaskParams<T, R>): Promise<R[]> {
         return this.addGenericTask({
+            id: params.id,
+            groupIds: params.groupIds,
             generator: (index) => {
                 if (index >= params.data.length) {
                     return null;
@@ -551,7 +628,6 @@ export class PromisePoolExecutor {
                 index++;
                 return params.generator(params.data[oldIndex], oldIndex);
             },
-            id: params.id,
             concurrencyLimit: params.concurrencyLimit,
             invocationLimit: params.invocationLimit,
             noPromise: params.noPromise,
@@ -567,6 +643,22 @@ export class PromisePoolExecutor {
         }
         let resolver: PromiseResolver<void> = {};
         this._idlePromises.push(resolver);
+        return createResolvablePromise(resolver);
+    }
+
+    /**
+     * Returns a promise which resolves when there are no more tasks in a group queued to run.
+     */
+    public waitForGroupIdle(id: any): Promise<void> {
+        let status: InternalGroupStatus = this._groupMap.get(id);
+        if (!status) {
+            return Promise.resolve();
+        }
+        if (status.errored) {
+            return Promise.reject(status.error);
+        }
+        let resolver: PromiseResolver<void> = {};
+        status.promises.push(resolver);
         return createResolvablePromise(resolver);
     }
 }

@@ -303,6 +303,60 @@ describe("Miscellaneous Features", () => {
             return pool.waitForIdle();
         });
     });
+
+    describe("waitForGroupIdle", () => {
+        it("Simple", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            let groupId: any = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(tick);
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId)
+                .then(() => {
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                });
+        });
+
+        it("Chained", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            let groupId: any = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            groupIds: [groupId],
+                            generator: () => {
+                                return wait(tick);
+                            },
+                            invocationLimit: 1,
+                        });
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId)
+                .then(() => {
+                    expectTimes([Date.now() - start], [2], "Timing Results");
+                });
+        });
+
+        it("No Task", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            return pool.waitForGroupIdle(Symbol());
+        });
+    });
 });
 
 describe("Task Secializations", () => {
