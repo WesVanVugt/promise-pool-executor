@@ -41,10 +41,10 @@ function sum(nums) {
     return total;
 }
 describe("Concurrency", () => {
-    it("No Limit", (done) => {
+    it("No Limit", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: () => {
                 return wait(tick)
                     .then(() => {
@@ -54,13 +54,12 @@ describe("Concurrency", () => {
             invocationLimit: 3,
         }).then((results) => {
             expectTimes(results, [1, 1, 1], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
-    it("Global Limit", (done) => {
+    it("Global Limit", () => {
         let pool = new Pool.PromisePoolExecutor(2);
         let start = Date.now();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: () => {
                 return wait(tick)
                     .then(() => {
@@ -70,13 +69,12 @@ describe("Concurrency", () => {
             invocationLimit: 3,
         }).then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
-    it("Task Limit", (done) => {
+    it("Task Limit", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: () => {
                 return wait(tick)
                     .then(() => {
@@ -87,16 +85,15 @@ describe("Concurrency", () => {
             concurrencyLimit: 2,
         }).then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
 });
 describe("Exception Handling", () => {
-    it("Generator Function (synchronous)", (done) => {
+    it("Generator Function (synchronous)", () => {
         let pool = new Pool.PromisePoolExecutor();
         let error = new Error();
         let caught = false;
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: () => {
                 throw error;
             }
@@ -105,14 +102,13 @@ describe("Exception Handling", () => {
             caught = true;
         }).then((results) => {
             chai_1.expect(caught).to.equal(true, "Must throw an error");
-            done();
-        }).catch(done);
+        });
     });
-    it("Promise Rejection", (done) => {
+    it("Promise Rejection", () => {
         let pool = new Pool.PromisePoolExecutor();
         let error = new Error();
         let caught = false;
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: () => {
                 return wait(1).then(() => {
                     throw error;
@@ -124,11 +120,10 @@ describe("Exception Handling", () => {
             caught = true;
         }).then((results) => {
             chai_1.expect(caught).to.equal(true, "Must throw an error");
-            done();
-        }).catch(done);
+        });
     });
     describe("waitForIdle", () => {
-        it("Generator Function (synchronous)", (done) => {
+        it("Generator Function (synchronous)", () => {
             let pool = new Pool.PromisePoolExecutor();
             let error = new Error();
             let caught = false;
@@ -139,15 +134,14 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
                 noPromise: true,
             });
-            pool.waitForIdle().catch((err) => {
+            return pool.waitForIdle().catch((err) => {
                 chai_1.expect(err).to.equal(error);
                 caught = true;
             }).then((results) => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
-                done();
-            }).catch(done);
+            });
         });
-        it("Promise Rejection", (done) => {
+        it("Promise Rejection", () => {
             let pool = new Pool.PromisePoolExecutor();
             let error = new Error();
             let caught = false;
@@ -160,19 +154,17 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
                 noPromise: true,
             });
-            pool.waitForIdle().catch((err) => {
+            return pool.waitForIdle().catch((err) => {
                 chai_1.expect(err).to.equal(error);
                 caught = true;
             }).then((results) => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
-                done();
-            }).catch(done);
+            });
         });
-        it("Invalid Parameters", (done) => {
+        it("Invalid Parameters", () => {
             let pool = new Pool.PromisePoolExecutor();
             let error = new Error();
             let caught = false;
-            console.log("Test Start");
             pool.addGenericTask({
                 generator: () => {
                     return Promise.resolve();
@@ -180,22 +172,83 @@ describe("Exception Handling", () => {
                 concurrencyLimit: 0,
                 noPromise: true,
             });
-            console.log("Wait for idle");
-            pool.waitForIdle().catch((err) => {
+            return pool.waitForIdle().catch((err) => {
                 caught = true;
             }).then((results) => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
-                done();
-            }).catch(done);
+            });
+        });
+    });
+    describe("waitForGroupIdle", () => {
+        it("Generator Function (synchronous)", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            let groupId = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    throw error;
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId).catch((err) => {
+                chai_1.expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+        it("Promise Rejection", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            let groupId = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId).catch((err) => {
+                chai_1.expect(err).to.equal(error);
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+        it("Invalid Parameters", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let error = new Error();
+            let caught = false;
+            let groupId = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId).catch((err) => {
+                caught = true;
+            }).then((results) => {
+                chai_1.expect(caught).to.equal(true, "Must throw an error");
+            });
         });
     });
 });
 describe("Miscellaneous Features", () => {
-    it("Stop Task", (done) => {
+    it("Stop Task", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
         let id = Symbol();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             id: id,
             generator: (index) => {
                 if (index >= 2) {
@@ -209,37 +262,35 @@ describe("Miscellaneous Features", () => {
         }).then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
-    it("Get Task Status", (done) => {
+    it("Get Task Status", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
         let id = Symbol();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             id: id,
             generator: (index) => {
                 return wait(tick)
                     .then(() => {
-                    let status = pool.getTaskStatus(id);
-                    chai_1.expect(status).to.deep.equal({
-                        id: id,
-                        activeCount: 1,
-                        concurrencyLimit: 5,
-                        invocations: 1,
-                        invocationLimit: 1,
-                        freeSlots: 0,
-                    });
+                    return pool.getTaskStatus(id);
                 });
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
-        }).then(() => {
-            done();
-        }).catch(done);
+        }).then((status) => {
+            chai_1.expect(status[0]).to.deep.equal({
+                id: id,
+                activeCount: 1,
+                concurrencyLimit: 5,
+                invocations: 1,
+                invocationLimit: 1,
+                freeSlots: 0,
+            });
+        });
     });
     describe("waitForIdle", () => {
-        it("Simple", (done) => {
+        it("Simple", () => {
             let pool = new Pool.PromisePoolExecutor();
             let start = Date.now();
             pool.addGenericTask({
@@ -249,13 +300,12 @@ describe("Miscellaneous Features", () => {
                 invocationLimit: 1,
                 noPromise: true,
             });
-            pool.waitForIdle()
+            return pool.waitForIdle()
                 .then(() => {
                 expectTimes([Date.now() - start], [1], "Timing Results");
-                done();
-            }).catch(done);
+            });
         });
-        it("Chained", (done) => {
+        it("Chained", () => {
             let pool = new Pool.PromisePoolExecutor();
             let start = Date.now();
             pool.addGenericTask({
@@ -272,28 +322,71 @@ describe("Miscellaneous Features", () => {
                 invocationLimit: 1,
                 noPromise: true,
             });
-            pool.waitForIdle()
+            return pool.waitForIdle()
                 .then(() => {
                 expectTimes([Date.now() - start], [2], "Timing Results");
-                done();
-            }).catch(done);
+            });
         });
-        it("No Task", (done) => {
+        it("No Task", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            return pool.waitForIdle();
+        });
+    });
+    describe("waitForGroupIdle", () => {
+        it("Simple", () => {
             let pool = new Pool.PromisePoolExecutor();
             let start = Date.now();
-            pool.waitForIdle()
+            let groupId = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(tick);
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId)
                 .then(() => {
-                done();
-            }).catch(done);
+                expectTimes([Date.now() - start], [1], "Timing Results");
+            });
+        });
+        it("Chained", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            let groupId = Symbol();
+            pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            groupIds: [groupId],
+                            generator: () => {
+                                return wait(tick);
+                            },
+                            invocationLimit: 1,
+                        });
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return pool.waitForGroupIdle(groupId)
+                .then(() => {
+                expectTimes([Date.now() - start], [2], "Timing Results");
+            });
+        });
+        it("No Task", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            return pool.waitForGroupIdle(Symbol());
         });
     });
 });
 describe("Task Secializations", () => {
-    it("Single Task", (done) => {
+    it("Single Task", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
         let iteration = 0;
-        pool.addSingleTask({
+        return pool.addSingleTask({
             data: "test",
             generator: (data) => {
                 chai_1.expect(data).to.equal("test");
@@ -307,13 +400,12 @@ describe("Task Secializations", () => {
         }).then((result) => {
             // The task must return the expected non-array result
             expectTimes([result], [1], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
-    it("Linear Task", (done) => {
+    it("Linear Task", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
-        pool.addLinearTask({
+        return pool.addLinearTask({
             generator: (element) => {
                 return wait(tick)
                     .then(() => {
@@ -323,13 +415,12 @@ describe("Task Secializations", () => {
             invocationLimit: 3
         }).then((results) => {
             expectTimes(results, [1, 2, 3], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
-    it("Each Task", (done) => {
+    it("Each Task", () => {
         let pool = new Pool.PromisePoolExecutor();
         let start = Date.now();
-        pool.addEachTask({
+        return pool.addEachTask({
             data: [3, 2, 1],
             generator: (element) => {
                 return wait(tick * element)
@@ -340,14 +431,13 @@ describe("Task Secializations", () => {
             concurrencyLimit: Infinity,
         }).then((results) => {
             expectTimes(results, [3, 2, 1], "Timing Results");
-            done();
-        }).catch(done);
+        });
     });
     describe("Batch Task", () => {
-        it("Static Batch Size", (done) => {
+        it("Static Batch Size", () => {
             let pool = new Pool.PromisePoolExecutor();
             let start = Date.now();
-            pool.addBatchTask({
+            return pool.addBatchTask({
                 data: [3, 1, 2],
                 // Groups the data as [[3, 1], [2]]
                 batchSize: 2,
@@ -359,13 +449,12 @@ describe("Task Secializations", () => {
                 }
             }).then((results) => {
                 expectTimes(results, [4, 2], "Timing Results");
-                done();
-            }).catch(done);
+            });
         });
-        it("Dynamic Batch Size", (done) => {
+        it("Dynamic Batch Size", () => {
             let pool = new Pool.PromisePoolExecutor();
             let start = Date.now();
-            pool.addBatchTask({
+            return pool.addBatchTask({
                 data: [2, 1, 3],
                 batchSize: (elements, freeSlots) => {
                     // Groups the data as [[2], [1, 3]]
@@ -380,8 +469,7 @@ describe("Task Secializations", () => {
                 concurrencyLimit: 2
             }).then((results) => {
                 expectTimes(results, [2, 4], "Timing Results");
-                done();
-            }).catch(done);
+            });
         });
     });
 });

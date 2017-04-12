@@ -155,6 +155,8 @@ interface InternalGroupStatus {
     errored?: boolean;
 }
 
+const globalGroupId: any = Symbol();
+
 export class PromisePoolExecutor {
     private _concurrencyLimit: number;
     private _activePromiseCount: number = 0;

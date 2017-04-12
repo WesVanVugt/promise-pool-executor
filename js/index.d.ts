@@ -8,7 +8,7 @@ export interface TaskGeneral {
      * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
      * to the completion of a larger task.
      */
-    groupsIds?: any[];
+    groupIds?: any[];
     /**
      * If this is set to true, no promise will be returned.
      */
@@ -123,8 +123,7 @@ export declare class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap;
-    private _groupActiveCountMap;
-    private _groupPromisesMap;
+    private _groupMap;
     private _idlePromises;
     /**
      * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
@@ -154,8 +153,37 @@ export declare class PromisePoolExecutor {
      */
     readonly idling: boolean;
     /**
+     * Private Method: Starts a promise. *
+     * @param task The task to start.
+     */
+    private _startPromise(task);
+    /**
+     * Private Method: Registers an error for a task.
+     */
+    private _errorTask(task, err);
+    private _errorGroups(err, groupsIds);
+    private _errorGroup(err, groupId);
+    private _errorIdle(err);
+    private _resolveIdle();
+    /**
+     * Private Method: Triggers promises to start.
+     */
+    private _triggerPromises();
+    /**
+     * Private Method: Continues execution to the next task.
+     * Resolves and removes the specified task if it is exhausted and has no active invocations.
+     */
+    private _nextPromise(task);
+    /**
+     * Instantly resolves a promise, while respecting the parameters passed.
+     */
+    private _instantResolve<T>(params, data);
+    /**
+     * Instantly rejects a promise with the specified error, while respecting the parameters passed.
+     */
+    private _instantReject(params, err);
+    /**
      * Gets the current status of a task.
-     *
      * @param id Unique value used to identify the task.
      */
     getTaskStatus(id: any): TaskStatus;
@@ -203,4 +231,8 @@ export declare class PromisePoolExecutor {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     waitForIdle(): Promise<void>;
+    /**
+     * Returns a promise which resolves when there are no more tasks in a group queued to run.
+     */
+    waitForGroupIdle(id: any): Promise<void>;
 }
