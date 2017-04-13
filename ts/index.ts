@@ -271,9 +271,9 @@ export class PromisePoolExecutor {
                 } else {
                     // If the error is thrown immediately after task generation,
                     // a delay must be added for the promise rejection to work.
-                    setTimeout(() => {
+                    process.nextTick(() => {
                         task.promise.rejectInstance(err);
-                    }, 1);
+                    });
                 }
             }
         }
@@ -285,10 +285,10 @@ export class PromisePoolExecutor {
             this._errorIdle(err);
         } else {
             this._erroring++;
-            setTimeout(() => {
+            process.nextTick(() => {
                 this._erroring--;
                 this._errorIdle(err);
-            }, 1);
+            });
         }
         let groupId: number;
         for (groupId of groupsIds) {
@@ -315,12 +315,12 @@ export class PromisePoolExecutor {
                 promise.rejectInstance(err);
             }
             if (status.activeCount < 1) {
-                setTimeout(() => {
+                process.nextTick(() => {
                     status = this._groupMap.get(groupId);
                     if (status && status.activeCount < 1) {
                         this._groupMap.delete(groupId);
                     }
-                }, 1);
+                });
             }
         }
     }
@@ -370,9 +370,9 @@ export class PromisePoolExecutor {
                 } else {
                     // Although a resolution this fast should be impossible, the time restriction
                     // for rejected promises likely applies to resolved ones too.
-                    setTimeout(() => {
+                    process.nextTick(() => {
                         task.promise.resolveInstance(task.result);
-                    }, 1);
+                    });
                 }
             }
 
@@ -390,12 +390,12 @@ export class PromisePoolExecutor {
                             (promise.resolveInstance as any)();
                         }
                     } else {
-                        setTimeout(() => {
+                        process.nextTick(() => {
                             status = this._groupMap.get(groupId);
                             if (status && status.activeCount < 1) {
                                 this._groupMap.delete(groupId);
                             }
-                        }, 1);
+                        });
                     }
                 }
             }
@@ -406,11 +406,11 @@ export class PromisePoolExecutor {
             if (this._tasksInit === 0) {
                 this._resolveIdle();
             } else {
-                setTimeout(() => {
+                process.nextTick(() => {
                     if (this.idling) {
                         this._resolveIdle();
                     }
-                }, 1);
+                });
             }
         }
     }
@@ -494,10 +494,10 @@ export class PromisePoolExecutor {
 
         // This must be done before any errors are thrown
         this._tasksInit++;
-        setTimeout(() => {
+        process.nextTick(() => {
             this._tasksInit--;
             task.init = false;
-        }, 1);
+        });
 
         if (this._taskMap.has(task.id)) {
             return this._instantReject(params, new Error("The id used for this task already exists."));
