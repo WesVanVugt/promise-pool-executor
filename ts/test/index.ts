@@ -344,7 +344,7 @@ describe("Miscellaneous Features", () => {
                 });
         });
 
-        it("Chained", () => {
+        it("Child Task", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
@@ -356,6 +356,7 @@ describe("Miscellaneous Features", () => {
                                 return wait(tick);
                             },
                             invocationLimit: 1,
+                            noPromise: true,
                         });
                     });
                 },
@@ -395,7 +396,7 @@ describe("Miscellaneous Features", () => {
                 });
         });
 
-        it("Chained", () => {
+        it("Child Task", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
@@ -410,6 +411,7 @@ describe("Miscellaneous Features", () => {
                                 return wait(tick);
                             },
                             invocationLimit: 1,
+                            noPromise: true,
                         });
                     });
                 },
