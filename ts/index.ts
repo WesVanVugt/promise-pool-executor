@@ -155,6 +155,9 @@ interface InternalGroupStatus {
     errored?: boolean;
 }
 
+/**
+ * Internal symbol used to represent the entire pool as a group
+ */
 const globalGroupId: any = Symbol();
 
 export class PromisePoolExecutor {
@@ -169,13 +172,6 @@ export class PromisePoolExecutor {
      */
     private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
     private _groupMap: Map<any, InternalGroupStatus> = new Map();
-
-    private _idlePromises: Array<PromiseResolver<void>> = [];
-    /**
-     * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
-     */
-    private _tasksInit: number = 0;
-    private _erroring: number = 0;
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -281,15 +277,6 @@ export class PromisePoolExecutor {
     }
 
     private _errorGroups(err: any, groupsIds: any[]): void {
-        if (this._tasksInit === 0) {
-            this._errorIdle(err);
-        } else {
-            this._erroring++;
-            process.nextTick(() => {
-                this._erroring--;
-                this._errorIdle(err);
-            });
-        }
         let groupId: number;
         for (groupId of groupsIds) {
             this._errorGroup(err, groupId);
@@ -323,20 +310,6 @@ export class PromisePoolExecutor {
                 });
             }
         }
-    }
-
-    private _errorIdle(err: any) {
-        this._idlePromises.forEach((resolver: PromiseResolver<void>) => {
-            resolver.rejectInstance(err);
-        });
-        this._idlePromises.length = 0;
-    }
-
-    private _resolveIdle() {
-        this._idlePromises.forEach((resolver: any) => {
-            resolver.resolveInstance();
-        });
-        this._idlePromises.length = 0;
     }
 
     /**
@@ -401,18 +374,6 @@ export class PromisePoolExecutor {
             }
         }
         this._triggerPromises();
-
-        if (this.idling) {
-            if (this._tasksInit === 0) {
-                this._resolveIdle();
-            } else {
-                process.nextTick(() => {
-                    if (this.idling) {
-                        this._resolveIdle();
-                    }
-                });
-            }
-        }
     }
 
     /**
@@ -428,7 +389,7 @@ export class PromisePoolExecutor {
      * Instantly rejects a promise with the specified error, while respecting the parameters passed.
      */
     private _instantReject(params: TaskGeneral, err: any): Promise<any> {
-        this._errorGroups(err, params.groupIds || []);
+        this._errorGroups(err, params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId]);
         if (!params.noPromise) {
             return Promise.reject(err);
         }
@@ -479,7 +440,7 @@ export class PromisePoolExecutor {
     public addGenericTask<R>(params: GenericTaskParams<R>): Promise<R[]> {
         let task: InternalTaskDefinition<R> = {
             id: params.id || Symbol(),
-            groupIds: params.groupIds || [],
+            groupIds: params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId],
             generator: params.generator,
             activeCount: 0,
             invocations: 0,
@@ -491,13 +452,6 @@ export class PromisePoolExecutor {
             init: true,
             promise: params.noPromise ? null : {},
         }
-
-        // This must be done before any errors are thrown
-        this._tasksInit++;
-        process.nextTick(() => {
-            this._tasksInit--;
-            task.init = false;
-        });
 
         if (this._taskMap.has(task.id)) {
             return this._instantReject(params, new Error("The id used for this task already exists."));
@@ -653,12 +607,7 @@ export class PromisePoolExecutor {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     public waitForIdle(): Promise<void> {
-        if (this.idling && this._erroring === 0) {
-            return Promise.resolve();
-        }
-        let resolver: PromiseResolver<void> = {};
-        this._idlePromises.push(resolver);
-        return createResolvablePromise(resolver);
+        return this.waitForGroupIdle(globalGroupId);
     }
 
     /**
@@ -670,10 +619,10 @@ export class PromisePoolExecutor {
             return Promise.resolve();
         }
         if (status.errored) {
-            if (status.activeCount < 1) {
-                this._groupMap.delete(id);
-            }
             return Promise.reject(status.error);
+        }
+        if (status.activeCount <= 0) {
+            return Promise.resolve();
         }
         let resolver: PromiseResolver<void> = {};
         status.promises.push(resolver);
