@@ -16,7 +16,7 @@ This type of task creates a promise for each element in an array.
 ```
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a concurrency limit of 2
-let pool: PromisePool.PromisePoolExecutor = new PromisePool.PromisePoolExecutor(2);
+let pool = new PromisePool.PromisePoolExecutor(2);
 pool.addEachTask({
     data: [1, 2, 3],
     generator: (element, i) => {
@@ -33,10 +33,10 @@ This type of task creates a single promise.
 ```
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a no concurrency limit
-let pool: PromisePool.PromisePoolExecutor = new PromisePool.PromisePoolExecutor();
+let pool = new PromisePool.PromisePoolExecutor();
 pool.addSingleTask({
     generator: () => {
-        return Promise.resolve("finished");
+        return Promise.resolve('finished');
     }
 }).then((result) => {
     console.log(result); // finished
@@ -49,8 +49,8 @@ Add a general-purpose task.
 ```
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a no concurrency limit
-let pool: PromisePool.PromisePoolExecutor = new PromisePool.PromisePoolExecutor();
-pool.addSingleTask({
+let pool = new PromisePool.PromisePoolExecutor();
+pool.addGenericTask({
     generator: (i) => {
         if (i > 3) {
             return null; // end the task
