@@ -20,7 +20,6 @@ function wait(time) {
         }, time);
     });
 }
-console.log([1, 2]);
 /**
  * Expects an array of result times (ms) to be within the tolerance range of the specified numbers of target ticks.
  */
