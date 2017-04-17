@@ -65,7 +65,7 @@ pool.addSingleTask({
 
 ## API Reference
 
-### Poperties
+### Properties
 
 * pool.**activePromiseCount** - The number of active promises *(read-only)*.
 * pool.**concurrencyLimit** - The maximum number of promises which are allowed to run at one time.
@@ -110,7 +110,7 @@ pool.addSingleTask({
   * params.**groupIds** - An array of values, each of which identifies a group the task belongs to. These groups can be used to respond to the completion of a larger task via pool.waitForGroupIdle *(optional)*.
   * params.**id** - A unique value used for identifyingthea task, such as a Symbol *(optional)*.
   * params.**noPromise** - A boolean which, when true, causes pool.addSingleTask to return null. This should only be used when the completion of the task is handled via pool.waitForIdle or pool.waitForGroupIdle *(optional)*.
-* pool.**getTaskStatus(id)** - Returns an object represnting the status of the specified task. The returned status object has the following properties:
+* pool.**getTaskStatus(id)** - Returns an object representing the status of the specified task. The returned status object has the following properties:
   * status.**id** - A unique value used for identifying the task (such as a Symbol).
   * status.**activeCount** - The current number of active invocations for the task.
   * status.**concurrencyLimit** - The maximum number of promises that can be active simultaneously for the task.
