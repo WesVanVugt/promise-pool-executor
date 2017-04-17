@@ -35,7 +35,7 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
  * Expects an unhandled promise rejection.
  * @param expectedError The error expected to be received with the rejection (optional).
  */
-function expectUnhandledRejection(expectedError?: any): Promise<void> {
+function expectUnhandledRejection(expectedError?: any, delay?: number): Promise<void> {
     process.removeListener("unhandledRejection", unhandledRejectionListener);
 
     let reAdded: boolean = false;
@@ -49,7 +49,7 @@ function expectUnhandledRejection(expectedError?: any): Promise<void> {
         }
     });
 
-    return wait(tick).then(() => {
+    return wait(delay || tick).then(() => {
         if (!reAdded) {
             process.addListener("unhandledRejection", unhandledRejectionListener);
             reAdded = true;
@@ -218,6 +218,28 @@ describe("Exception Handling", () => {
                 noPromise: true,
             });
             return expectUnhandledRejection();
+        });
+
+        it("Multi-rejection", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let errors: Error[] = [new Error("First"), new Error("Second")];
+            let caught: Error;
+            pool.addGenericTask({
+                generator: (i) => {
+                    return wait(i ? tick : 1).then(() => {
+                        throw errors[i];
+                    });
+                },
+                invocationLimit: 2,
+            }).catch((err) => {
+                caught = err;
+            });
+            return expectUnhandledRejection(
+                errors[1], tick * 2,
+            ).then(() => {
+                expect(caught).to.equal(errors[0]);
+            });
         });
     })
 

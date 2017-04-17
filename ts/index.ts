@@ -262,7 +262,10 @@ export class PromisePoolExecutor {
      * Private Method: Registers an error for a task.
      */
     private _errorTask(task: InternalTaskDefinition<any>, err: any): void {
-        if (!task.errored) {
+        if (task.errored) {
+            // Perform an unhandled promise rejection, like the behavior of multiple rejections with Promise.all
+            Promise.reject(err);
+        } else {
             task.errored = true;
             task.exhausted = true;
             if (task.promise) {
