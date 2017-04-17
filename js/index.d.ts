@@ -133,7 +133,7 @@ export declare class PromisePoolExecutor {
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
-    readonly concurrencyLimit: number;
+    concurrencyLimit: number;
     /**
      * The number of promises which are active.
      */

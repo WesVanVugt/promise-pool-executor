@@ -20,6 +20,7 @@ function wait(time) {
         }, time);
     });
 }
+console.log([1, 2]);
 /**
  * Expects an array of result times (ms) to be within the tolerance range of the specified numbers of target ticks.
  */
@@ -398,6 +399,12 @@ describe("Miscellaneous Features", () => {
                 .then(() => {
                 expectTimes([Date.now() - start], [1], "Timing Results");
             });
+        });
+        it("Set concurrencyLimit", () => {
+            let pool = new Pool.PromisePoolExecutor(1);
+            chai_1.expect(pool.concurrencyLimit).to.equal(1);
+            pool.concurrencyLimit = 2;
+            chai_1.expect(pool.concurrencyLimit).to.equal(2);
         });
         it("Child Task", () => {
             let pool = new Pool.PromisePoolExecutor();
