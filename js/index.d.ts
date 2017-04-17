@@ -124,12 +124,6 @@ export declare class PromisePoolExecutor {
      */
     private _taskMap;
     private _groupMap;
-    private _idlePromises;
-    /**
-     * The number of tasks initializing. Each task increments this number, then decrements it 1ms later.
-     */
-    private _tasksInit;
-    private _erroring;
     /**
      * Construct a new PromisePoolExecutor object.
      *
@@ -163,8 +157,6 @@ export declare class PromisePoolExecutor {
     private _errorTask(task, err);
     private _errorGroups(err, groupsIds);
     private _errorGroup(err, groupId);
-    private _errorIdle(err);
-    private _resolveIdle();
     /**
      * Private Method: Triggers promises to start.
      */
