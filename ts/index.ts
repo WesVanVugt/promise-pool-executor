@@ -197,6 +197,10 @@ export class PromisePoolExecutor {
     public get concurrencyLimit(): number {
         return this._concurrencyLimit;
     }
+
+    public set concurrencyLimit(value: number) {
+        this._concurrencyLimit = value;
+    }
     /**
      * The number of promises which are active.
      */

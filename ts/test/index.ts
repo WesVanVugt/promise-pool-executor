@@ -451,6 +451,14 @@ describe("Miscellaneous Features", () => {
                 });
         });
 
+        it("Set concurrencyLimit", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor(1);
+
+            expect(pool.concurrencyLimit).to.equal(1);
+            pool.concurrencyLimit = 2;
+            expect(pool.concurrencyLimit).to.equal(2);
+        });
+
         it("Child Task", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
