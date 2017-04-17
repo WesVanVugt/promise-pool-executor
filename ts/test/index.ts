@@ -32,6 +32,38 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
 }
 
 /**
+ * Expects an unhandled promise rejection.
+ * @param expectedError The error expected to be received with the rejection (optional).
+ */
+function expectUnhandledRejection(expectedError?: any): Promise<void> {
+    process.removeListener("unhandledRejection", unhandledRejectionListener);
+
+    let reAdded: boolean = false;
+    let error: any;
+    process.prependOnceListener("unhandledRejection", (err: any) => {
+        if (!reAdded) {
+            error = err;
+            // Catch any extra unhandled rejections which could occur before
+            process.addListener("unhandledRejection", unhandledRejectionListener);
+            reAdded = true;
+        }
+    });
+
+    return wait(tick).then(() => {
+        if (!reAdded) {
+            process.addListener("unhandledRejection", unhandledRejectionListener);
+            reAdded = true;
+            throw new Error("Expected unhandledRejection to be thrown.");
+        }
+        if (expectedError) {
+            expect(error).to.equal(expectedError);
+        } else {
+            expect(error).to.be.instanceof(Error);
+        }
+    });
+}
+
+/**
  * Returns the sum of an array of numbers.
  */
 function sum(nums: number[]): number {
@@ -42,6 +74,15 @@ function sum(nums: number[]): number {
     }
     return total;
 }
+
+function unhandledRejectionListener(err: any) {
+    // Fail the test
+    throw new Error("UnhandledPromiseRejection: " + err.message);
+}
+
+before(() => {
+    process.addListener("unhandledRejection", unhandledRejectionListener);
+});
 
 describe("Concurrency", () => {
     it("No Limit", () => {
@@ -134,6 +175,51 @@ describe("Exception Handling", () => {
             expect(caught).to.equal(true, "Must throw an error");
         });
     });
+
+    describe("Unhandled Rejection", () => {
+        it("Generator Function (synchronous)", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            pool.addGenericTask({
+                generator: () => {
+                    throw error;
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return expectUnhandledRejection(error);
+        });
+
+        it("Promise Rejection", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let error: Error = new Error();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+                noPromise: true,
+            });
+            return expectUnhandledRejection(error);
+        });
+
+        it("Invalid Parameters", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0, // invalid
+                noPromise: true,
+            });
+            return expectUnhandledRejection();
+        });
+    })
 
     describe("waitForIdle", () => {
         it("Generator Function (synchronous)", () => {
@@ -271,7 +357,6 @@ describe("Exception Handling", () => {
                 expect(caught).to.equal(true, "Must throw an error");
             });
         });
-
     });
 });
 

@@ -137,7 +137,7 @@ export interface TaskStatus {
 }
 
 interface PromiseResolver<T> {
-    resolveInstance?: (result: T) => void;
+    resolveInstance?: (result?: T) => void;
     rejectInstance?: (err: any) => void;
 }
 
@@ -151,8 +151,12 @@ function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
 interface InternalGroupStatus {
     activeCount: number;
     promises: Array<PromiseResolver<void>>;
-    error?: any;
-    errored?: boolean;
+    rejection?: TaskError;
+}
+
+interface TaskError {
+    error: any;
+    handled: any;
 }
 
 /**
@@ -272,18 +276,32 @@ export class PromisePoolExecutor {
                     });
                 }
             }
+            this._errorGroups(
+                {
+                    error: err,
+                    handled: !!task.promise,
+                },
+                task.groupIds
+            );
         }
-        this._errorGroups(err, task.groupIds);
     }
 
-    private _errorGroups(err: any, groupsIds: any[]): void {
-        let groupId: number;
+    private _errorGroups(err: TaskError, groupsIds: any[]): void {
+        let groupId: any;
         for (groupId of groupsIds) {
             this._errorGroup(err, groupId);
         }
+        if (!err.handled) {
+            process.nextTick(() => {
+                if (!err.handled) {
+                    // Unhandled promise rejection
+                    Promise.reject(err.error);
+                }
+            });
+        }
     }
 
-    private _errorGroup(err: any, groupId: any): void {
+    private _errorGroup(err: TaskError, groupId: any): void {
         let status: InternalGroupStatus = this._groupMap.get(groupId);
         if (!status) {
             status = {
@@ -292,14 +310,16 @@ export class PromisePoolExecutor {
             }
             this._groupMap.set(groupId, status);
         }
-        if (!status.errored) {
-            status.errored = true;
-            status.error = err;
+        if (!status.rejection) {
+            status.rejection = err;
             let promises: Array<PromiseResolver<void>> = status.promises;
             status.promises = [];
             let promise: PromiseResolver<void>;
+            if (promises.length > 0) {
+                err.handled = true;
+            }
             for (promise of promises) {
-                promise.rejectInstance(err);
+                promise.rejectInstance(err.error);
             }
             if (status.activeCount < 1) {
                 process.nextTick(() => {
@@ -359,8 +379,7 @@ export class PromisePoolExecutor {
                         this._groupMap.delete(groupId);
                         let promise: PromiseResolver<void>;
                         for (promise of status.promises) {
-                            // TypeScript is finicky about this line
-                            (promise.resolveInstance as any)();
+                            promise.resolveInstance();
                         }
                     } else {
                         process.nextTick(() => {
@@ -389,7 +408,13 @@ export class PromisePoolExecutor {
      * Instantly rejects a promise with the specified error, while respecting the parameters passed.
      */
     private _instantReject(params: TaskGeneral, err: any): Promise<any> {
-        this._errorGroups(err, params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId]);
+        this._errorGroups(
+            {
+                error: err,
+                handled: !params.noPromise,
+            },
+            params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId]
+        );
         if (!params.noPromise) {
             return Promise.reject(err);
         }
@@ -618,8 +643,9 @@ export class PromisePoolExecutor {
         if (!status) {
             return Promise.resolve();
         }
-        if (status.errored) {
-            return Promise.reject(status.error);
+        if (status.rejection) {
+            status.rejection.handled = true;
+            return Promise.reject(status.rejection.error);
         }
         if (status.activeCount <= 0) {
             return Promise.resolve();
