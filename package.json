@@ -13,7 +13,9 @@
   },
   "main": "js/index.js",
   "typings": "js/index",
-  "dependencies": {},
+  "dependencies": {
+    "next-tick": "^1.0.0"
+  },
   "devDependencies": {
     "@types/chai": "3.4.35",
     "@types/mocha": "2.2.40",
