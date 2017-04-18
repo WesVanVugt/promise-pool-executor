@@ -108,7 +108,7 @@ pool.addGenericTask({
   * params.**generator** - A function which returns a promise.
   * params.**data** - A variable which gets passed as the first argument to the generator function *(optional)*.
   * params.**groupIds** - An array of values, each of which identifies a group the task belongs to. These groups can be used to respond to the completion of a larger task via pool.waitForGroupIdle *(optional)*.
-  * params.**id** - A unique value used for identifyingthea task, such as a Symbol *(optional)*.
+  * params.**id** - A unique value used for identifying the task, such as a Symbol *(optional)*.
   * params.**noPromise** - A boolean which, when true, causes pool.addSingleTask to return null. This should only be used when the completion of the task is handled via pool.waitForIdle or pool.waitForGroupIdle *(optional)*.
 * pool.**getTaskStatus(id)** - Returns an object representing the status of the specified task. The returned status object has the following properties:
   * status.**id** - A unique value used for identifying the task (such as a Symbol).
