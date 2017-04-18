@@ -37,7 +37,7 @@ function expectUnhandledRejection(expectedError, delay) {
     process.removeListener("unhandledRejection", unhandledRejectionListener);
     let reAdded = false;
     let error;
-    process.prependOnceListener("unhandledRejection", (err) => {
+    process.prependOnceListener("unhandledRejection", (err, test, test2) => {
         if (!reAdded) {
             error = err;
             // Catch any extra unhandled rejections which could occur before

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const nextTick = require("next-tick");
 function createResolvablePromise(resolver) {
     return new Promise((resolve, reject) => {
         resolver.resolveInstance = resolve;
@@ -119,7 +120,7 @@ class PromisePoolExecutor {
                 else {
                     // If the error is thrown immediately after task generation,
                     // a delay must be added for the promise rejection to work.
-                    process.nextTick(() => {
+                    nextTick(() => {
                         task.promise.rejectInstance(err);
                     });
                 }
@@ -136,7 +137,7 @@ class PromisePoolExecutor {
             this._errorGroup(err, groupId);
         }
         if (!err.handled) {
-            process.nextTick(() => {
+            nextTick(() => {
                 if (!err.handled) {
                     // Unhandled promise rejection
                     Promise.reject(err.error);
@@ -165,7 +166,7 @@ class PromisePoolExecutor {
                 promise.rejectInstance(err.error);
             }
             if (status.activeCount < 1) {
-                process.nextTick(() => {
+                nextTick(() => {
                     status = this._groupMap.get(groupId);
                     if (status && status.activeCount < 1) {
                         this._groupMap.delete(groupId);
@@ -205,7 +206,7 @@ class PromisePoolExecutor {
                 else {
                     // Although a resolution this fast should be impossible, the time restriction
                     // for rejected promises likely applies to resolved ones too.
-                    process.nextTick(() => {
+                    nextTick(() => {
                         task.promise.resolveInstance(task.result);
                     });
                 }
@@ -224,7 +225,7 @@ class PromisePoolExecutor {
                         }
                     }
                     else {
-                        process.nextTick(() => {
+                        nextTick(() => {
                             status = this._groupMap.get(groupId);
                             if (status && status.activeCount < 1) {
                                 this._groupMap.delete(groupId);
