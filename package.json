@@ -2,6 +2,11 @@
   "name": "promise-pool-executor",
   "version": "0.3.1",
   "description": "A module for managing ES6 promise concurrency.",
+  "keywords": ["promise", "promises", "concurrency", "es6", "async", "await", "pool", "queue", "throttle", "frequency"],
+  "bugs": {
+    "url": "https://github.com/baudzilla/promise-pool-executor/issues",
+    "email": "baudzila@gmail.com"
+  },
   "author": "Wes van Vugt <baudzila@gmail.com>",
   "repository": {
     "type": "git",
@@ -13,6 +18,9 @@
   },
   "main": "js/index.js",
   "typings": "js/index",
+  "engines": {
+    "node": ">=5.0.0"
+  },
   "dependencies": {
     "next-tick": "^1.0.0"
   },
