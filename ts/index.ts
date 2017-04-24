@@ -22,6 +22,17 @@ export interface ConcurrencyLimit {
      * Limits the number of instances of a promise which can be run in parallel.
      */
     concurrencyLimit?: number;
+    /**
+     * The number of times a promise can be invoked within the time specified by {frequencyWindow}.
+     */
+    frequencyLimit?: number;
+    /**
+     * The time window in milliseconds to use for {frequencyLimit}.
+     */
+    frequencyWindow?: number;
+}
+
+export interface PoolConstructParams extends ConcurrencyLimit {
 }
 
 export interface InvocationLimit {
@@ -167,8 +178,13 @@ interface TaskError {
 const globalGroupId: any = Symbol();
 
 export class PromisePoolExecutor {
-    private _concurrencyLimit: number;
+    private _concurrencyLimit: number = Infinity;
     private _activePromiseCount: number = 0;
+    private _frequencyLimit: number = Infinity;
+    private _frequencyWindow: number = Infinity;
+    private _frequencyStarts: number[] = [];
+    private _nextTriggerTime: number;
+    private _nextTriggerTimeout: number;
     /**
      * All tasks which are active or waiting.
      */
@@ -184,12 +200,35 @@ export class PromisePoolExecutor {
      * 
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
-    constructor(concurrencyLimit?: number) {
-        this._concurrencyLimit = concurrencyLimit !== undefined
-            && concurrencyLimit !== null ? concurrencyLimit : Infinity;
+    constructor(params?: PoolConstructParams);
+    constructor(concurrencyLimit?: number);
+    constructor(params?: PoolConstructParams | number) {
+        if (params !== undefined && params !== null) {
+            if (typeof params === "object") {
+                if (params.concurrencyLimit !== undefined) {
+                    this.concurrencyLimit = params.concurrencyLimit;
+                }
+                if (params.frequencyLimit !== undefined || params.frequencyWindow !== undefined) {
+                    if (params.frequencyLimit === undefined || params.frequencyWindow === undefined) {
+                        throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
+                    }
+                    this._frequencyLimit = params.frequencyLimit;
+                    this._frequencyWindow = params.frequencyWindow;
+                }
+            } else {
+                this.concurrencyLimit = params;
+            }
 
-        if (!this._concurrencyLimit || typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
-            throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
+            if (!this._concurrencyLimit || typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
+                throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
+            }
+            if (!this._frequencyLimit || typeof this._frequencyLimit !== "number" || this._frequencyLimit <= 0) {
+                throw new Error("Invalid frequency limit: " + this._frequencyLimit);
+            }
+            if (!this._frequencyWindow || typeof this._frequencyWindow !== "number" || this._frequencyWindow <= 0) {
+                throw new Error("Invalid frequency window: " + this._frequencyWindow);
+            }
+
         }
     }
 
@@ -201,8 +240,12 @@ export class PromisePoolExecutor {
     }
 
     public set concurrencyLimit(value: number) {
+        if (!value || typeof value !== "number" || value <= 0) {
+            throw new Error("Invalid concurrency limit: " + value);
+        }
         this._concurrencyLimit = value;
     }
+
     /**
      * The number of promises which are active.
      */
@@ -249,6 +292,9 @@ export class PromisePoolExecutor {
             task.invocations++;
             if (task.invocations >= task.invocationLimit) {
                 task.exhausted = true;
+            }
+            if (this._frequencyLimit !== Infinity) {
+                this._frequencyStarts.push(Date.now());
             }
 
             promise.catch((err) => {
@@ -347,7 +393,33 @@ export class PromisePoolExecutor {
     private _triggerPromises() {
         let taskIndex: number = 0;
         let task: InternalTaskDefinition<any>;
-        while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
+
+        // Remove the frequencyStarts entries which are outside of the window
+        if (this._frequencyLimit !== Infinity) {
+            let i: number = 0;
+            let time: number = Date.now() - this._frequencyWindow;
+            for (; i < this._frequencyStarts.length; i++) {
+                if (this._frequencyStarts[i] > time) {
+                    break;
+                }
+            }
+            if (i > 0) {
+                this._frequencyStarts.splice(0, i);
+            }
+        }
+
+        let queued: boolean = false;
+        while (
+            this._activePromiseCount < this._concurrencyLimit
+            && taskIndex < this._tasks.length
+        ) {
+            if (this._frequencyStarts.length >= this._frequencyLimit) {
+                setTimeout(() => {
+                    this._triggerPromises();
+                }, this._frequencyStarts[0] + this._frequencyWindow - Date.now());
+                break;
+            }
+
             task = this._tasks[taskIndex];
             if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
                 this._startPromise(task);
@@ -355,6 +427,7 @@ export class PromisePoolExecutor {
                 taskIndex++;
             }
         }
+
     }
 
     /**
