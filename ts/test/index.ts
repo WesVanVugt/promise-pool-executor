@@ -306,7 +306,7 @@ describe("Exception Handling", () => {
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -329,7 +329,7 @@ describe("Exception Handling", () => {
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -349,8 +349,55 @@ describe("Exception Handling", () => {
             return pool.waitForIdle(
             ).catch((err) => {
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+
+        describe("Clearing After Delay", () => {
+            it("Promise Rejection", function () {
+                let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let error: Error = new Error();
+                let caught: boolean = false;
+                pool.addGenericTask({
+                    generator: () => {
+                        return wait(1).then(() => {
+                            throw error;
+                        });
+                    },
+                    invocationLimit: 1,
+                }).catch((err) => {
+                    expect(err).to.equal(error);
+                    caught = true;
+                });
+                return wait(tick).then(() => {
+                    return pool.waitForIdle();
+                }).catch(() => {
+                    throw new Error("Error did not clear");
+                }).then(() => {
+                    expect(caught).to.equal(true, "Must throw an error");
+                });
+            });
+
+            it("Invalid Parameters", function () {
+                let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let caught: boolean = false;
+                pool.addGenericTask({
+                    generator: () => {
+                        return null;
+                    },
+                    concurrencyLimit: 0, // Invalid
+                }).catch((err) => {
+                    expect(err).to.be.instanceof(Error);
+                    caught = true;
+                });
+                return wait(tick).then(() => {
+                    return pool.waitForIdle();
+                }).catch(() => {
+                    throw new Error("Error did not clear");
+                }).then(() => {
+                    expect(caught).to.equal(true, "Must throw an error");
+                });
             });
         });
     });
