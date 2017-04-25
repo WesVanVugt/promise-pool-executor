@@ -203,7 +203,7 @@ const globalGroupId: any = Symbol();
 
 export class PromisePoolExecutor {
     private _nextTriggerTime: number;
-    private _nextTriggerTimeout: number;
+    private _nextTriggerTimeout: any;
     /**
      * All tasks which are active or waiting.
      */
@@ -451,15 +451,22 @@ export class PromisePoolExecutor {
         }
 
         if (soonest !== Infinity) {
-            time = soonest - Date.now();
-            if (time <= 0) {
+            time = Date.now();
+            if (time >= soonest) {
                 return this._triggerPromises();
             }
 
-            // TODO: Cancel this if needed
-            setTimeout(() => {
-                this._triggerPromises();
-            }, time);
+            if (!this._nextTriggerTime || soonest < this._nextTriggerTime) {
+                if (this._nextTriggerTime) {
+                    clearTimeout(this._nextTriggerTimeout);
+                    this._nextTriggerTimeout;
+                }
+                this._nextTriggerTime = soonest;
+                this._nextTriggerTimeout = setTimeout(() => {
+                    this._nextTriggerTime = 0;
+                    this._triggerPromises();
+                }, soonest - time);
+            }
         }
     }
 
