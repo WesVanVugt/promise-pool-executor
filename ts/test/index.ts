@@ -136,6 +136,29 @@ describe("Concurrency", () => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
+
+    it("Group Limit", () => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+        let groupId: any = Symbol();
+        pool.configureGroup({
+            groupId: groupId,
+            concurrencyLimit: 2,
+        });
+
+        let start: number = Date.now();
+        return pool.addGenericTask({
+            generator: () => {
+                return wait(tick)
+                    .then(() => {
+                        return Date.now() - start;
+                    });
+            },
+            groupIds: [groupId],
+            invocationLimit: 3,
+        }).then((results) => {
+            expectTimes(results, [1, 1, 2], "Timing Results");
+        });
+    });
 });
 
 describe("Frequency", () => {
@@ -180,6 +203,27 @@ describe("Frequency", () => {
             });
         }).then((results) => {
             expectTimes(results, [3, 3, 4], "Timing Results 2");
+        });
+    });
+
+    it("Group Limit", () => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+        let groupId: any = Symbol();
+        pool.configureGroup({
+            groupId: groupId,
+            frequencyLimit: 2,
+            frequencyWindow: tick,
+        });
+
+        let start: number = Date.now();
+        return pool.addGenericTask({
+            generator: () => {
+                return Promise.resolve(Date.now() - start);
+            },
+            groupIds: [groupId],
+            invocationLimit: 3,
+        }).then((results) => {
+            expectTimes(results, [0, 0, 1], "Timing Results");
         });
     });
 });
