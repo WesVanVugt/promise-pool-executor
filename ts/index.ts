@@ -616,6 +616,10 @@ export class PromisePoolExecutor {
             group.frequencyLimit = Infinity;
             group.frequencyWindow = Infinity;
         }
+
+        if (group.activePromiseCount > 0) {
+            this._triggerPromises();
+        }
     }
 
     public deleteGroupConfiguration(groupId: any): boolean {
