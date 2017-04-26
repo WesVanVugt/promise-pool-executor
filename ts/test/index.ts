@@ -702,6 +702,62 @@ describe("Miscellaneous Features", () => {
             return pool.waitForGroupIdle(Symbol());
         });
     });
+
+    describe("configureGroup", () => {
+        it("triggerPromises", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            let groupId: any = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            wait(tick).then(() => {
+                pool.configureGroup({
+                    groupId: groupId,
+                    frequencyLimit: 1,
+                    frequencyWindow: 1,
+                });
+            });
+            return pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 2,
+            }).then((results) => {
+                expectTimes(results, [0, 1], "Timing Results");
+            });
+        });
+    });
+
+    describe("deleteGroupConfiguration", () => {
+        it("triggerPromises", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let start: number = Date.now();
+            let groupId: any = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            wait(tick).then(() => {
+                pool.deleteGroupConfiguration(groupId);
+            });
+            return pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 2,
+            }).then((results) => {
+                expectTimes(results, [0, 1], "Timing Results");
+            });
+        });
+    });
 });
 
 describe("Task Secializations", () => {
