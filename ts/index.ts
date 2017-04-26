@@ -110,8 +110,7 @@ interface InternalTaskDefinition<R> {
     id: any;
     groups: InternalGroupStatus[];
     generator: (invocation?: number) => Promise<R> | null;
-    activeCount: number;
-    concurrencyLimit: number;
+    taskGroup?: InternalGroupStatus;
     invocations: number;
     invocationLimit: number;
     result: R[];
@@ -299,7 +298,6 @@ export class PromisePoolExecutor {
                     group.frequencyStarts.push(Date.now());
                 }
             });
-            task.activeCount++;
             let resultIndex: number = task.invocations;
             task.invocations++;
             if (task.invocations >= task.invocationLimit) {
@@ -313,7 +311,6 @@ export class PromisePoolExecutor {
                 task.groups.forEach((group) => {
                     group.activePromiseCount--;
                 });
-                task.activeCount--;
                 task.result[resultIndex] = result;
                 // Remove the task if needed and start the next task
                 this._nextPromise(task);
@@ -442,7 +439,7 @@ export class PromisePoolExecutor {
                     soonest = taskTime;
                 }
                 taskIndex++;
-            } else if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
+            } else if (!task.exhausted) {
                 this._startPromise(task);
             } else {
                 taskIndex++;
@@ -473,7 +470,7 @@ export class PromisePoolExecutor {
      * Resolves and removes the specified task if it is exhausted and has no active invocations.
      */
     private _nextPromise(task: InternalTaskDefinition<any>): void {
-        if (task.exhausted && task.activeCount <= 0) {
+        if (task.exhausted && task.taskGroup.activePromiseCount <= 0) {
             this._tasks.splice(this._tasks.indexOf(task), 1);
             this._taskMap.delete(task.id);
 
@@ -566,19 +563,23 @@ export class PromisePoolExecutor {
     public getTaskStatus(id: any): TaskStatus {
         let task: InternalTaskDefinition<any> = this._taskMap.get(id);
         if (!task) {
-            return;
+            return null;
         }
+        let freeSlots: number = task.invocationLimit - task.invocations;
+        task.groups.forEach((group) => {
+            let slots = group.concurrencyLimit - group.activePromiseCount;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+        });
+
         return {
             id: task.id,
-            activeCount: task.activeCount,
-            concurrencyLimit: task.concurrencyLimit,
+            activeCount: task.taskGroup.activePromiseCount,
+            concurrencyLimit: task.taskGroup.concurrencyLimit,
             invocations: task.invocations,
             invocationLimit: task.invocationLimit,
-            freeSlots: Math.min(
-                this.freeSlots,
-                task.concurrencyLimit - task.activeCount,
-                task.invocationLimit - task.invocations
-            )
+            freeSlots: freeSlots,
         };
     }
 
@@ -661,11 +662,8 @@ export class PromisePoolExecutor {
             id: params.id || Symbol(),
             groups: [this._globalGroup],
             generator: params.generator,
-            activeCount: 0,
             invocations: 0,
             result: [],
-            concurrencyLimit: params.concurrencyLimit !== undefined
-                && params.concurrencyLimit !== null ? params.concurrencyLimit : Infinity,
             invocationLimit: params.invocationLimit !== undefined
                 && params.invocationLimit !== null ? params.invocationLimit : Infinity,
             init: true,
@@ -681,9 +679,20 @@ export class PromisePoolExecutor {
         if (task.invocationLimit <= 0) {
             return this._instantResolve(params, task.result);
         }
-        if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return this._instantReject(params, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+        let groupId: any = Symbol();
+        try {
+            this.configureGroup({
+                groupId: groupId,
+                concurrencyLimit: params.concurrencyLimit,
+                frequencyLimit: params.frequencyLimit,
+                frequencyWindow: params.frequencyWindow,
+            });
+        } catch (err) {
+            return this._instantReject(params, err);
         }
+        task.taskGroup = this._groupMap.get(groupId);
+        task.taskGroup.save = false;
+        task.groups.push(task.taskGroup);
 
         let promise: Promise<R[]> = null;
         if (!params.noPromise) {

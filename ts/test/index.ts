@@ -786,7 +786,8 @@ describe("Miscellaneous Features", () => {
             generator: () => wait(1),
             invocationLimit: 1,
         }).then(() => {
-            expect((pool as any)._groupMap.size).to.equal(groupCount - 1);
+            // 2 groups are used - 1 for the task, another for groupId
+            expect((pool as any)._groupMap.size).to.equal(groupCount - 2);
         });
     });
 });
