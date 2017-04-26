@@ -757,6 +757,37 @@ describe("Miscellaneous Features", () => {
                 expectTimes(results, [0, 1], "Timing Results");
             });
         });
+
+        it("Forget Inactive Group", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            let groupId: any = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            let groupCount: number = (pool as any)._groupMap.size;
+            pool.deleteGroupConfiguration(groupId);
+            expect((pool as any)._groupMap.size).to.equal(groupCount - 1);
+        });
+    });
+
+    it("Forget Unconfigured Group", () => {
+        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        let groupId: any = Symbol();
+        let groupCount: number;
+        process.nextTick(() => {
+            groupCount = (pool as any)._groupMap.size;
+        });
+        return pool.addGenericTask({
+            groupIds: [groupId],
+            generator: () => wait(1),
+            invocationLimit: 1,
+        }).then(() => {
+            expect((pool as any)._groupMap.size).to.equal(groupCount - 1);
+        });
     });
 });
 
