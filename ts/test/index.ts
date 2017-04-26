@@ -162,47 +162,67 @@ describe("Concurrency", () => {
 });
 
 describe("Frequency", () => {
-    it("Global Limit - Steady Work", () => {
-        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
-            frequencyLimit: 2,
-            frequencyWindow: tick,
+    describe("Global Limit", () => {
+        it("Steady Work", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
+                frequencyLimit: 2,
+                frequencyWindow: tick,
+            });
+
+            let start: number = Date.now();
+            return pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 3,
+            }).then((results) => {
+                expectTimes(results, [0, 0, 1], "Timing Results");
+            });
         });
 
-        let start: number = Date.now();
-        return pool.addGenericTask({
-            generator: () => {
-                return Promise.resolve(Date.now() - start);
-            },
-            invocationLimit: 3,
-        }).then((results) => {
-            expectTimes(results, [0, 0, 1], "Timing Results");
-        });
-    });
+        it("Offset Calls", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
+                concurrencyLimit: 1,
+                frequencyLimit: 2,
+                frequencyWindow: tick * 3,
+            });
 
-    it("Global Limit - Work Gap", () => {
-        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
-            frequencyLimit: 2,
-            frequencyWindow: tick,
+            let start: number = Date.now();
+            return pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => Date.now() - start);
+                },
+                invocationLimit: 4,
+            }).then((results) => {
+                expectTimes(results, [1, 2, 4, 5], "Timing Results");
+            });
         });
 
-        let start: number = Date.now();
-        return pool.addGenericTask({
-            generator: (i) => {
-                return Promise.resolve(Date.now() - start);
-            },
-            invocationLimit: 3,
-        }).then((results) => {
-            expectTimes(results, [0, 0, 1], "Timing Results 1");
-            return wait(tick * 2);
-        }).then(() => {
+        it("Work Gap", () => {
+            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
+                frequencyLimit: 2,
+                frequencyWindow: tick,
+            });
+
+            let start: number = Date.now();
             return pool.addGenericTask({
                 generator: (i) => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
+            }).then((results) => {
+                expectTimes(results, [0, 0, 1], "Timing Results 1");
+                return wait(tick * 2);
+            }).then(() => {
+                return pool.addGenericTask({
+                    generator: (i) => {
+                        return Promise.resolve(Date.now() - start);
+                    },
+                    invocationLimit: 3,
+                });
+            }).then((results) => {
+                expectTimes(results, [3, 3, 4], "Timing Results 2");
             });
-        }).then((results) => {
-            expectTimes(results, [3, 3, 4], "Timing Results 2");
         });
     });
 
