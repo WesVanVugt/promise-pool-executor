@@ -427,8 +427,7 @@ export class PromisePoolExecutor {
             task.groups.forEach((group) => {
                 if (group.activePromiseCount >= group.concurrencyLimit) {
                     blocked = true;
-                }
-                else if (group.frequencyLimit && group.frequencyStarts.length >= group.frequencyLimit) {
+                } else if (group.frequencyLimit && group.frequencyStarts.length >= group.frequencyLimit) {
                     time = group.frequencyStarts[0] + group.frequencyWindow;
                     if (time > taskTime) {
                         taskTime = time;
@@ -459,7 +458,6 @@ export class PromisePoolExecutor {
             if (!this._nextTriggerTime || soonest < this._nextTriggerTime) {
                 if (this._nextTriggerTime) {
                     clearTimeout(this._nextTriggerTimeout);
-                    this._nextTriggerTimeout;
                 }
                 this._nextTriggerTime = soonest;
                 this._nextTriggerTimeout = setTimeout(() => {
@@ -617,7 +615,7 @@ export class PromisePoolExecutor {
             group.frequencyWindow = Infinity;
         }
 
-        if (group.activePromiseCount > 0) {
+        if (group.activeTaskCount > 0) {
             this._triggerPromises();
         }
     }
@@ -634,6 +632,7 @@ export class PromisePoolExecutor {
             group.frequencyLimit = Infinity;
             group.frequencyWindow = Infinity;
             delete group.save;
+            this._triggerPromises();
         }
         return true;
     }
