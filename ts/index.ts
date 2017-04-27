@@ -180,7 +180,7 @@ function newGroupStatus(groupId: any): InternalGroupStatus {
         activePromiseCount: 0,
         concurrencyLimit: Infinity,
         frequencyLimit: Infinity,
-        frequencyWindow: Infinity,
+        frequencyWindow: 0,
         frequencyStarts: [],
         promises: [],
     }
@@ -594,20 +594,17 @@ export class PromisePoolExecutor {
     }
 
     public configureGroup(params: ConfigureGroupParams): void {
-        let group = this._groupMap.get(params.groupId);
-        if (!group) {
-            group = newGroupStatus(params.groupId);
-            this._groupMap.set(params.groupId, group);
-        }
-        group.save = true;
+        let concurrencyLimit: number;
+        let frequencyLimit: number;
+        let frequencyWindow: number;
 
         if (params.concurrencyLimit !== undefined && params.concurrencyLimit !== null) {
             if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
                 throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
             }
-            group.concurrencyLimit = params.concurrencyLimit;
+            concurrencyLimit = params.concurrencyLimit;
         } else {
-            group.concurrencyLimit = Infinity;
+            concurrencyLimit = Infinity;
         }
         if (params.frequencyLimit !== undefined || params.frequencyWindow !== undefined) {
             if (params.frequencyLimit === undefined || params.frequencyWindow === undefined) {
@@ -619,12 +616,22 @@ export class PromisePoolExecutor {
             if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
                 throw new Error("Invalid frequency window: " + params.frequencyWindow);
             }
-            group.frequencyLimit = params.frequencyLimit;
-            group.frequencyWindow = params.frequencyWindow;
+            frequencyLimit = params.frequencyLimit;
+            frequencyWindow = params.frequencyWindow;
         } else {
-            group.frequencyLimit = Infinity;
-            group.frequencyWindow = Infinity;
+            frequencyLimit = Infinity;
+            frequencyWindow = 0;
         }
+
+        let group = this._groupMap.get(params.groupId);
+        if (!group) {
+            group = newGroupStatus(params.groupId);
+            this._groupMap.set(params.groupId, group);
+        }
+        group.concurrencyLimit = concurrencyLimit;
+        group.frequencyLimit = frequencyLimit;
+        group.frequencyWindow = frequencyWindow;
+        group.save = true;
 
         if (group.activeTaskCount > 0) {
             this._triggerPromises();
@@ -641,7 +648,7 @@ export class PromisePoolExecutor {
         } else {
             group.concurrencyLimit = Infinity;
             group.frequencyLimit = Infinity;
-            group.frequencyWindow = Infinity;
+            group.frequencyWindow = 0;
             delete group.save;
             this._triggerPromises();
         }
