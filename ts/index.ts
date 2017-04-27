@@ -247,7 +247,9 @@ export class PromisePoolExecutor {
     }
 
     public set concurrencyLimit(value: number) {
-        if (!value || typeof value !== "number" || value <= 0) {
+        if (value === undefined || value === null) {
+            value = Infinity;
+        } else if (!value || typeof value !== "number" || value <= 0) {
             throw new Error("Invalid concurrency limit: " + value);
         }
         this._globalGroup.concurrencyLimit = value;
