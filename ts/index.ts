@@ -817,6 +817,8 @@ export class PromisePoolExecutor {
                 return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
             },
             concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
             invocationLimit: params.invocationLimit,
             noPromise: params.noPromise,
         });
@@ -843,6 +845,8 @@ export class PromisePoolExecutor {
                 return params.generator(params.data[oldIndex], oldIndex);
             },
             concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
             invocationLimit: params.invocationLimit,
             noPromise: params.noPromise,
         });
