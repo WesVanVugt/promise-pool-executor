@@ -389,10 +389,7 @@ export class PromisePoolExecutor {
         }
     }
 
-    /**
-     * Private Method: Triggers promises to start.
-     */
-    private _triggerPromises(): void {
+    private _updateFrequencyStarts() {
         // Remove the frequencyStarts entries which are outside of the window
         this._groupMap.forEach((group) => {
             if (group.frequencyStarts.length > 0) {
@@ -408,6 +405,18 @@ export class PromisePoolExecutor {
                 }
             }
         });
+    }
+
+    /**
+     * Private Method: Triggers promises to start.
+     */
+    private _triggerPromises(): void {
+        this._updateFrequencyStarts();
+
+        if (this._nextTriggerTimeout) {
+            clearTimeout(this._nextTriggerTimeout);
+            this._nextTriggerTimeout = null;
+        }
 
         let taskIndex: number = 0;
         let task: InternalTaskDefinition<any>;
@@ -452,16 +461,12 @@ export class PromisePoolExecutor {
                 return this._triggerPromises();
             }
 
-            if (!this._nextTriggerTime || soonest < this._nextTriggerTime) {
-                if (this._nextTriggerTime) {
-                    clearTimeout(this._nextTriggerTimeout);
-                }
-                this._nextTriggerTime = soonest;
-                this._nextTriggerTimeout = setTimeout(() => {
-                    this._nextTriggerTime = 0;
-                    this._triggerPromises();
-                }, soonest - time);
-            }
+            this._nextTriggerTime = soonest;
+            this._nextTriggerTimeout = setTimeout(() => {
+                this._nextTriggerTimeout = null;
+                this._nextTriggerTime = 0;
+                this._triggerPromises();
+            }, soonest - time);
         }
     }
 
@@ -565,9 +570,14 @@ export class PromisePoolExecutor {
         if (!task) {
             return null;
         }
+        this._updateFrequencyStarts();
         let freeSlots: number = task.invocationLimit - task.invocations;
         task.groups.forEach((group) => {
             let slots = group.concurrencyLimit - group.activePromiseCount;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+            slots = group.frequencyLimit - group.frequencyStarts.length;
             if (slots < freeSlots) {
                 freeSlots = slots;
             }
