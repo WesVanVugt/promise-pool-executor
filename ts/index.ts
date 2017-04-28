@@ -253,6 +253,7 @@ export class PromisePoolExecutor {
             throw new Error("Invalid concurrency limit: " + value);
         }
         this._globalGroup.concurrencyLimit = value;
+        this._triggerPromises();
     }
 
     /**
