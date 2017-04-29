@@ -17,22 +17,19 @@ export interface TaskGeneral {
     noPromise?: boolean;
 }
 
-export interface ConcurrencyLimit {
+export interface PromiseLimits {
     /**
      * Limits the number of instances of a promise which can be run in parallel.
      */
-    concurrencyLimit?: number;
+    concurrencyLimit: number;
     /**
      * The number of times a promise can be invoked within the time specified by {frequencyWindow}.
      */
-    frequencyLimit?: number;
+    frequencyLimit: number;
     /**
      * The time window in milliseconds to use for {frequencyLimit}.
      */
-    frequencyWindow?: number;
-}
-
-export interface PoolConstructParams extends ConcurrencyLimit {
+    frequencyWindow: number;
 }
 
 export interface InvocationLimit {
@@ -42,7 +39,7 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface GenericTaskParams<R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
+export interface GenericTaskParams<R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -70,7 +67,7 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, InvocationLimit {
     generator: (invocation?: number) => Promise<R>;
 }
 
-export interface BatchTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
+export interface BatchTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
@@ -92,7 +89,7 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, In
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskParams<T, R> extends TaskGeneral, ConcurrencyLimit, InvocationLimit {
+export interface EachTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
@@ -120,15 +117,11 @@ interface InternalTaskDefinition<R> {
     promise?: PromiseResolver<R[]>;
 }
 
-export interface TaskStatus {
-    /**
-     * A unique value used for identifying a task (such as a Symbol).
-     */
-    id: any,
+export interface GroupStatus {
     /**
      * The current number of active invocations for the task.
      */
-    activeCount: number;
+    activePromiseCount: number;
     /**
      * The concurrency limit for the task.
      */
@@ -146,6 +139,38 @@ export interface TaskStatus {
      * or the pool or task concurrency limit.
      */
     freeSlots: number;
+}
+
+export interface GroupStatus extends PromiseLimits {
+    /**
+     * The current number of active invocations for the task.
+     */
+    activePromiseCount: number;
+    /**
+     * The concurrency limit for the task.
+     */
+    concurrencyLimit: number;
+    /**
+     * The number of times the task can be invoked before reaching the invocation limit,
+     * or the pool or task concurrency limit.
+     */
+    freeSlots: number;
+}
+
+
+export interface TaskStatus extends GroupStatus {
+    /**
+     * A unique value used for identifying a task (such as a Symbol).
+     */
+    id: any,
+    /**
+     * The number of times the task has been invoked.
+     */
+    invocations: number;
+    /**
+     * The maximum number of times the task can be invoked.
+     */
+    invocationLimit: number;
 }
 
 interface PromiseResolver<T> {
@@ -186,7 +211,7 @@ function newGroupStatus(groupId: any): InternalGroupStatus {
     }
 }
 
-export interface ConfigureGroupParams extends ConcurrencyLimit {
+export interface ConfigureGroupParams extends Partial<PromiseLimits> {
     groupId: any;
 }
 
@@ -219,9 +244,9 @@ export class PromisePoolExecutor {
      * 
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
-    constructor(params?: PoolConstructParams);
+    constructor(params?: Partial<PromiseLimits>);
     constructor(concurrencyLimit?: number);
-    constructor(params?: PoolConstructParams | number) {
+    constructor(params?: Partial<PromiseLimits> | number) {
         let groupParams: ConfigureGroupParams = {
             groupId: globalGroupId,
         }
@@ -588,8 +613,10 @@ export class PromisePoolExecutor {
 
         return {
             id: task.id,
-            activeCount: task.taskGroup.activePromiseCount,
+            activePromiseCount: task.taskGroup.activePromiseCount,
             concurrencyLimit: task.taskGroup.concurrencyLimit,
+            frequencyLimit: task.taskGroup.frequencyLimit,
+            frequencyWindow: task.taskGroup.frequencyWindow,
             invocations: task.invocations,
             invocationLimit: task.invocationLimit,
             freeSlots: freeSlots,
