@@ -7,18 +7,24 @@ function createResolvablePromise(resolver) {
         resolver.rejectInstance = reject;
     });
 }
+function newGroupStatus(groupId) {
+    return {
+        groupId: groupId,
+        activeTaskCount: 0,
+        activePromiseCount: 0,
+        concurrencyLimit: Infinity,
+        frequencyLimit: Infinity,
+        frequencyWindow: Infinity,
+        frequencyStarts: [],
+        promises: [],
+    };
+}
 /**
  * Internal symbol used to represent the entire pool as a group
  */
 const globalGroupId = Symbol();
 class PromisePoolExecutor {
-    /**
-     * Construct a new PromisePoolExecutor object.
-     *
-     * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
-     */
-    constructor(concurrencyLimit) {
-        this._activePromiseCount = 0;
+    constructor(params) {
         /**
          * All tasks which are active or waiting.
          */
@@ -28,38 +34,51 @@ class PromisePoolExecutor {
          */
         this._taskMap = new Map();
         this._groupMap = new Map();
-        this._concurrencyLimit = concurrencyLimit !== undefined
-            && concurrencyLimit !== null ? concurrencyLimit : Infinity;
-        if (!this._concurrencyLimit || typeof this._concurrencyLimit !== "number" || this._concurrencyLimit <= 0) {
-            throw new Error("Invalid concurrency limit: " + this._concurrencyLimit);
+        let groupParams = {
+            groupId: globalGroupId,
+        };
+        if (params !== undefined && params !== null) {
+            if (typeof params === "object") {
+                groupParams.concurrencyLimit = params.concurrencyLimit;
+                groupParams.frequencyLimit = params.frequencyLimit;
+                groupParams.frequencyWindow = params.frequencyWindow;
+            }
+            else {
+                groupParams.concurrencyLimit = params;
+            }
         }
+        this.configureGroup(groupParams);
+        this._globalGroup = this._groupMap.get(globalGroupId);
     }
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
     get concurrencyLimit() {
-        return this._concurrencyLimit;
+        return this._globalGroup.concurrencyLimit;
     }
     set concurrencyLimit(value) {
-        this._concurrencyLimit = value;
+        if (!value || typeof value !== "number" || value <= 0) {
+            throw new Error("Invalid concurrency limit: " + value);
+        }
+        this._globalGroup.concurrencyLimit = value;
     }
     /**
      * The number of promises which are active.
      */
     get activePromiseCount() {
-        return this._activePromiseCount;
+        return this._globalGroup.activeTaskCount;
     }
     /**
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
     get freeSlots() {
-        return this._concurrencyLimit - this._activePromiseCount;
+        return this._globalGroup.concurrencyLimit - this._globalGroup.activePromiseCount;
     }
     /**
      * Returns true if the pool is idling (no active or queued promises).
      */
     get idling() {
-        return this._activePromiseCount === 0 && this._tasks.length === 0;
+        return this._globalGroup.activeTaskCount === 0 && this._tasks.length === 0;
     }
     /**
      * Private Method: Starts a promise. *
@@ -83,8 +102,12 @@ class PromisePoolExecutor {
                 // In case what is returned is not a promise, make it one
                 promise = Promise.resolve(promise);
             }
-            this._activePromiseCount++;
-            task.activeCount++;
+            task.groups.forEach((group) => {
+                group.activePromiseCount++;
+                if (group.frequencyLimit) {
+                    group.frequencyStarts.push(Date.now());
+                }
+            });
             let resultIndex = task.invocations;
             task.invocations++;
             if (task.invocations >= task.invocationLimit) {
@@ -94,8 +117,9 @@ class PromisePoolExecutor {
                 this._errorTask(task, err);
                 // Resolve
             }).then((result) => {
-                this._activePromiseCount--;
-                task.activeCount--;
+                task.groups.forEach((group) => {
+                    group.activePromiseCount--;
+                });
                 task.result[resultIndex] = result;
                 // Remove the task if needed and start the next task
                 this._nextPromise(task);
@@ -128,14 +152,13 @@ class PromisePoolExecutor {
             this._errorGroups({
                 error: err,
                 handled: !!task.promise,
-            }, task.groupIds);
+            }, task.groups);
         }
     }
-    _errorGroups(err, groupsIds) {
-        let groupId;
-        for (groupId of groupsIds) {
-            this._errorGroup(err, groupId);
-        }
+    _errorGroups(err, groups) {
+        groups.forEach((group) => {
+            this._errorGroup(err, group, group.groupId);
+        });
         if (!err.handled) {
             nextTick(() => {
                 if (!err.handled) {
@@ -145,31 +168,27 @@ class PromisePoolExecutor {
             });
         }
     }
-    _errorGroup(err, groupId) {
-        let status = this._groupMap.get(groupId);
-        if (!status) {
-            status = {
-                activeCount: 0,
-                promises: [],
-            };
-            this._groupMap.set(groupId, status);
-        }
-        if (!status.rejection) {
-            status.rejection = err;
-            let promises = status.promises;
-            status.promises = [];
-            let promise;
+    _errorGroup(err, group, groupId) {
+        if (!group.rejection) {
+            group.rejection = err;
+            let promises = group.promises;
             if (promises.length > 0) {
+                group.promises = [];
                 err.handled = true;
+                promises.forEach((promise) => {
+                    promise.rejectInstance(err.error);
+                });
             }
-            for (promise of promises) {
-                promise.rejectInstance(err.error);
-            }
-            if (status.activeCount < 1) {
+            if (group.activeTaskCount < 1) {
                 nextTick(() => {
-                    status = this._groupMap.get(groupId);
-                    if (status && status.activeCount < 1) {
-                        this._groupMap.delete(groupId);
+                    group = this._groupMap.get(groupId);
+                    if (group && group.activeTaskCount < 1) {
+                        if (group.save) {
+                            delete group.rejection;
+                        }
+                        else {
+                            this._groupMap.delete(groupId);
+                        }
                     }
                 });
             }
@@ -179,15 +198,73 @@ class PromisePoolExecutor {
      * Private Method: Triggers promises to start.
      */
     _triggerPromises() {
+        // Remove the frequencyStarts entries which are outside of the window
+        this._groupMap.forEach((group) => {
+            if (group.frequencyStarts.length > 0) {
+                let time = Date.now() - group.frequencyWindow;
+                let i = 0;
+                for (; i < group.frequencyStarts.length; i++) {
+                    if (group.frequencyStarts[i] > time) {
+                        break;
+                    }
+                }
+                if (i > 0) {
+                    group.frequencyStarts.splice(0, i);
+                }
+            }
+        });
         let taskIndex = 0;
         let task;
-        while (this._activePromiseCount < this._concurrencyLimit && taskIndex < this._tasks.length) {
+        let soonest = Infinity;
+        let time;
+        let taskTime;
+        let blocked;
+        while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
-            if (!task.exhausted && task.activeCount < task.concurrencyLimit) {
+            // this._activePromiseCount < this._concurrencyLimit
+            taskTime = 0;
+            blocked = false;
+            task.groups.forEach((group) => {
+                if (group.activePromiseCount >= group.concurrencyLimit) {
+                    blocked = true;
+                }
+                else if (group.frequencyLimit && group.frequencyStarts.length >= group.frequencyLimit) {
+                    time = group.frequencyStarts[0] + group.frequencyWindow;
+                    if (time > taskTime) {
+                        taskTime = time;
+                    }
+                }
+            });
+            if (blocked) {
+                taskIndex++;
+            }
+            else if (taskTime) {
+                if (taskTime < soonest) {
+                    soonest = taskTime;
+                }
+                taskIndex++;
+            }
+            else if (!task.exhausted) {
                 this._startPromise(task);
             }
             else {
                 taskIndex++;
+            }
+        }
+        if (soonest !== Infinity) {
+            time = Date.now();
+            if (time >= soonest) {
+                return this._triggerPromises();
+            }
+            if (!this._nextTriggerTime || soonest < this._nextTriggerTime) {
+                if (this._nextTriggerTime) {
+                    clearTimeout(this._nextTriggerTimeout);
+                }
+                this._nextTriggerTime = soonest;
+                this._nextTriggerTimeout = setTimeout(() => {
+                    this._nextTriggerTime = 0;
+                    this._triggerPromises();
+                }, soonest - time);
             }
         }
     }
@@ -196,7 +273,7 @@ class PromisePoolExecutor {
      * Resolves and removes the specified task if it is exhausted and has no active invocations.
      */
     _nextPromise(task) {
-        if (task.exhausted && task.activeCount <= 0) {
+        if (task.exhausted && task.taskGroup.activePromiseCount <= 0) {
             this._tasks.splice(this._tasks.indexOf(task), 1);
             this._taskMap.delete(task.id);
             if (!task.errored && task.promise) {
@@ -211,29 +288,36 @@ class PromisePoolExecutor {
                     });
                 }
             }
-            let groupId;
-            for (groupId of task.groupIds) {
-                let status = this._groupMap.get(groupId);
-                console.assert(status, "Task must have group status");
-                status.activeCount--;
-                if (status.activeCount < 1) {
+            task.groups.forEach((group) => {
+                group.activeTaskCount--;
+                if (group.activeTaskCount <= 0) {
                     if (!task.errored) {
-                        this._groupMap.delete(groupId);
-                        let promise;
-                        for (promise of status.promises) {
-                            promise.resolveInstance();
+                        if (!group.save) {
+                            this._groupMap.delete(group.groupId);
+                        }
+                        if (group.promises.length) {
+                            let promises = group.promises;
+                            group.promises = [];
+                            promises.forEach((promise) => {
+                                promise.resolveInstance();
+                            });
                         }
                     }
                     else {
                         nextTick(() => {
-                            status = this._groupMap.get(groupId);
-                            if (status && status.activeCount < 1) {
-                                this._groupMap.delete(groupId);
+                            group = this._groupMap.get(group.groupId);
+                            if (group && group.activeTaskCount < 1) {
+                                if (group.save) {
+                                    delete group.rejection;
+                                }
+                                else {
+                                    this._groupMap.delete(group.groupId);
+                                }
                             }
                         });
                     }
                 }
-            }
+            });
         }
         this._triggerPromises();
     }
@@ -249,10 +333,22 @@ class PromisePoolExecutor {
      * Instantly rejects a promise with the specified error, while respecting the parameters passed.
      */
     _instantReject(params, err) {
+        let groups = [this._globalGroup];
+        let group;
+        if (params.groupIds) {
+            params.groupIds.forEach((groupId) => {
+                group = this._groupMap.get(groupId);
+                if (!group) {
+                    group = newGroupStatus(groupId);
+                    this._groupMap.set(groupId, group);
+                }
+                groups.push(group);
+            });
+        }
         this._errorGroups({
             error: err,
             handled: !params.noPromise,
-        }, params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId]);
+        }, groups);
         if (!params.noPromise) {
             return Promise.reject(err);
         }
@@ -264,16 +360,77 @@ class PromisePoolExecutor {
     getTaskStatus(id) {
         let task = this._taskMap.get(id);
         if (!task) {
-            return;
+            return null;
         }
+        let freeSlots = task.invocationLimit - task.invocations;
+        task.groups.forEach((group) => {
+            let slots = group.concurrencyLimit - group.activePromiseCount;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+        });
         return {
             id: task.id,
-            activeCount: task.activeCount,
-            concurrencyLimit: task.concurrencyLimit,
+            activeCount: task.taskGroup.activePromiseCount,
+            concurrencyLimit: task.taskGroup.concurrencyLimit,
             invocations: task.invocations,
             invocationLimit: task.invocationLimit,
-            freeSlots: Math.min(this.freeSlots, task.concurrencyLimit - task.activeCount, task.invocationLimit - task.invocations)
+            freeSlots: freeSlots,
         };
+    }
+    configureGroup(params) {
+        let group = this._groupMap.get(params.groupId);
+        if (!group) {
+            group = newGroupStatus(params.groupId);
+            this._groupMap.set(params.groupId, group);
+        }
+        group.save = true;
+        if (params.concurrencyLimit !== undefined && params.concurrencyLimit !== null) {
+            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
+                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
+            }
+            group.concurrencyLimit = params.concurrencyLimit;
+        }
+        else {
+            group.concurrencyLimit = Infinity;
+        }
+        if (params.frequencyLimit !== undefined || params.frequencyWindow !== undefined) {
+            if (params.frequencyLimit === undefined || params.frequencyWindow === undefined) {
+                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
+            }
+            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
+                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
+            }
+            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
+                throw new Error("Invalid frequency window: " + params.frequencyWindow);
+            }
+            group.frequencyLimit = params.frequencyLimit;
+            group.frequencyWindow = params.frequencyWindow;
+        }
+        else {
+            group.frequencyLimit = Infinity;
+            group.frequencyWindow = Infinity;
+        }
+        if (group.activeTaskCount > 0) {
+            this._triggerPromises();
+        }
+    }
+    deleteGroupConfiguration(groupId) {
+        let group = this._groupMap.get(groupId);
+        if (!group || !group.save) {
+            return false;
+        }
+        if (group.activeTaskCount <= 0 && !group.rejection) {
+            this._groupMap.delete(groupId);
+        }
+        else {
+            group.concurrencyLimit = Infinity;
+            group.frequencyLimit = Infinity;
+            group.frequencyWindow = Infinity;
+            delete group.save;
+            this._triggerPromises();
+        }
+        return true;
     }
     /**
      * Stops a running task.
@@ -296,13 +453,10 @@ class PromisePoolExecutor {
     addGenericTask(params) {
         let task = {
             id: params.id || Symbol(),
-            groupIds: params.groupIds ? [globalGroupId, ...params.groupIds] : [globalGroupId],
+            groups: [this._globalGroup],
             generator: params.generator,
-            activeCount: 0,
             invocations: 0,
             result: [],
-            concurrencyLimit: params.concurrencyLimit !== undefined
-                && params.concurrencyLimit !== null ? params.concurrencyLimit : Infinity,
             invocationLimit: params.invocationLimit !== undefined
                 && params.invocationLimit !== null ? params.invocationLimit : Infinity,
             init: true,
@@ -317,26 +471,38 @@ class PromisePoolExecutor {
         if (task.invocationLimit <= 0) {
             return this._instantResolve(params, task.result);
         }
-        if (!task.concurrencyLimit || typeof task.concurrencyLimit !== "number" || task.concurrencyLimit <= 0) {
-            return this._instantReject(params, new Error("Invalid concurrency limit: " + params.concurrencyLimit));
+        let groupId = Symbol();
+        try {
+            this.configureGroup({
+                groupId: groupId,
+                concurrencyLimit: params.concurrencyLimit,
+                frequencyLimit: params.frequencyLimit,
+                frequencyWindow: params.frequencyWindow,
+            });
         }
+        catch (err) {
+            return this._instantReject(params, err);
+        }
+        task.taskGroup = this._groupMap.get(groupId);
+        task.taskGroup.save = false;
+        task.groups.push(task.taskGroup);
         let promise = null;
         if (!params.noPromise) {
             task.promise = {};
             promise = createResolvablePromise(task.promise);
         }
-        let groupId;
-        let status;
-        for (groupId of task.groupIds) {
-            status = this._groupMap.get(groupId);
-            if (!status) {
-                status = {
-                    activeCount: 0,
-                    promises: [],
-                };
-                this._groupMap.set(groupId, status);
-            }
-            status.activeCount++;
+        this._globalGroup.activeTaskCount++;
+        if (params.groupIds) {
+            let group;
+            params.groupIds.forEach((groupId) => {
+                group = this._groupMap.get(groupId);
+                if (!group) {
+                    group = newGroupStatus(groupId);
+                    this._groupMap.set(groupId, group);
+                }
+                group.activeTaskCount++;
+                task.groups.push(group);
+            });
         }
         this._tasks.push(task);
         this._taskMap.set(task.id, task);
@@ -460,7 +626,7 @@ class PromisePoolExecutor {
             status.rejection.handled = true;
             return Promise.reject(status.rejection.error);
         }
-        if (status.activeCount <= 0) {
+        if (status.activeTaskCount <= 0) {
             return Promise.resolve();
         }
         let resolver = {};

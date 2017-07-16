@@ -19,6 +19,16 @@ export interface ConcurrencyLimit {
      * Limits the number of instances of a promise which can be run in parallel.
      */
     concurrencyLimit?: number;
+    /**
+     * The number of times a promise can be invoked within the time specified by {frequencyWindow}.
+     */
+    frequencyLimit?: number;
+    /**
+     * The time window in milliseconds to use for {frequencyLimit}.
+     */
+    frequencyWindow?: number;
+}
+export interface PoolConstructParams extends ConcurrencyLimit {
 }
 export interface InvocationLimit {
     /**
@@ -112,9 +122,12 @@ export interface TaskStatus {
      */
     freeSlots: number;
 }
+export interface ConfigureGroupParams extends ConcurrencyLimit {
+    groupId: any;
+}
 export declare class PromisePoolExecutor {
-    private _concurrencyLimit;
-    private _activePromiseCount;
+    private _nextTriggerTime;
+    private _nextTriggerTimeout;
     /**
      * All tasks which are active or waiting.
      */
@@ -123,12 +136,14 @@ export declare class PromisePoolExecutor {
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
     private _taskMap;
+    private _globalGroup;
     private _groupMap;
     /**
      * Construct a new PromisePoolExecutor object.
      *
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
+    constructor(params?: PoolConstructParams);
     constructor(concurrencyLimit?: number);
     /**
      * The maximum number of promises which are allowed to run at one time.
@@ -155,8 +170,8 @@ export declare class PromisePoolExecutor {
      * Private Method: Registers an error for a task.
      */
     private _errorTask(task, err);
-    private _errorGroups(err, groupsIds);
-    private _errorGroup(err, groupId);
+    private _errorGroups(err, groups);
+    private _errorGroup(err, group, groupId);
     /**
      * Private Method: Triggers promises to start.
      */
@@ -179,6 +194,8 @@ export declare class PromisePoolExecutor {
      * @param id Unique value used to identify the task.
      */
     getTaskStatus(id: any): TaskStatus;
+    configureGroup(params: ConfigureGroupParams): void;
+    deleteGroupConfiguration(groupId: any): boolean;
     /**
      * Stops a running task.
      * @param taskId

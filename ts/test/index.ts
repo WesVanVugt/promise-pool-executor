@@ -581,7 +581,7 @@ describe("Miscellaneous Features", () => {
         }).then((status) => {
             expect(status[0]).to.deep.equal({
                 id: id,
-                activeCount: 1,
+                activePromiseCount: 1,
                 concurrencyLimit: 5,
                 invocations: 1,
                 invocationLimit: 1,

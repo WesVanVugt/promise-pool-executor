@@ -37,7 +37,7 @@ function expectUnhandledRejection(expectedError, delay) {
     process.removeListener("unhandledRejection", unhandledRejectionListener);
     let reAdded = false;
     let error;
-    process.prependOnceListener("unhandledRejection", (err, test, test2) => {
+    process.prependOnceListener("unhandledRejection", (err) => {
         if (!reAdded) {
             error = err;
             // Catch any extra unhandled rejections which could occur before
@@ -122,6 +122,106 @@ describe("Concurrency", () => {
             concurrencyLimit: 2,
         }).then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
+        });
+    });
+    it("Group Limit", () => {
+        let pool = new Pool.PromisePoolExecutor();
+        let groupId = Symbol();
+        pool.configureGroup({
+            groupId: groupId,
+            concurrencyLimit: 2,
+        });
+        let start = Date.now();
+        return pool.addGenericTask({
+            generator: () => {
+                return wait(tick)
+                    .then(() => {
+                    return Date.now() - start;
+                });
+            },
+            groupIds: [groupId],
+            invocationLimit: 3,
+        }).then((results) => {
+            expectTimes(results, [1, 1, 2], "Timing Results");
+        });
+    });
+});
+describe("Frequency", () => {
+    describe("Global Limit", () => {
+        it("Steady Work", () => {
+            let pool = new Pool.PromisePoolExecutor({
+                frequencyLimit: 2,
+                frequencyWindow: tick,
+            });
+            let start = Date.now();
+            return pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 3,
+            }).then((results) => {
+                expectTimes(results, [0, 0, 1], "Timing Results");
+            });
+        });
+        it("Offset Calls", () => {
+            let pool = new Pool.PromisePoolExecutor({
+                concurrencyLimit: 1,
+                frequencyLimit: 2,
+                frequencyWindow: tick * 3,
+            });
+            let start = Date.now();
+            return pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => Date.now() - start);
+                },
+                invocationLimit: 4,
+            }).then((results) => {
+                expectTimes(results, [1, 2, 4, 5], "Timing Results");
+            });
+        });
+        it("Work Gap", () => {
+            let pool = new Pool.PromisePoolExecutor({
+                frequencyLimit: 2,
+                frequencyWindow: tick,
+            });
+            let start = Date.now();
+            return pool.addGenericTask({
+                generator: (i) => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 3,
+            }).then((results) => {
+                expectTimes(results, [0, 0, 1], "Timing Results 1");
+                return wait(tick * 2);
+            }).then(() => {
+                return pool.addGenericTask({
+                    generator: (i) => {
+                        return Promise.resolve(Date.now() - start);
+                    },
+                    invocationLimit: 3,
+                });
+            }).then((results) => {
+                expectTimes(results, [3, 3, 4], "Timing Results 2");
+            });
+        });
+    });
+    it("Group Limit", () => {
+        let pool = new Pool.PromisePoolExecutor();
+        let groupId = Symbol();
+        pool.configureGroup({
+            groupId: groupId,
+            frequencyLimit: 2,
+            frequencyWindow: tick,
+        });
+        let start = Date.now();
+        return pool.addGenericTask({
+            generator: () => {
+                return Promise.resolve(Date.now() - start);
+            },
+            groupIds: [groupId],
+            invocationLimit: 3,
+        }).then((results) => {
+            expectTimes(results, [0, 0, 1], "Timing Results");
         });
     });
 });
@@ -231,7 +331,7 @@ describe("Exception Handling", () => {
             return pool.waitForIdle().catch((err) => {
                 chai_1.expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -251,7 +351,7 @@ describe("Exception Handling", () => {
             return pool.waitForIdle().catch((err) => {
                 chai_1.expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -268,8 +368,53 @@ describe("Exception Handling", () => {
             });
             return pool.waitForIdle().catch((err) => {
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 chai_1.expect(caught).to.equal(true, "Must throw an error");
+            });
+        });
+        describe("Clearing After Delay", () => {
+            it("Promise Rejection", function () {
+                let pool = new Pool.PromisePoolExecutor();
+                let error = new Error();
+                let caught = false;
+                pool.addGenericTask({
+                    generator: () => {
+                        return wait(1).then(() => {
+                            throw error;
+                        });
+                    },
+                    invocationLimit: 1,
+                }).catch((err) => {
+                    chai_1.expect(err).to.equal(error);
+                    caught = true;
+                });
+                return wait(tick).then(() => {
+                    return pool.waitForIdle();
+                }).catch(() => {
+                    throw new Error("Error did not clear");
+                }).then(() => {
+                    chai_1.expect(caught).to.equal(true, "Must throw an error");
+                });
+            });
+            it("Invalid Parameters", function () {
+                let pool = new Pool.PromisePoolExecutor();
+                let caught = false;
+                pool.addGenericTask({
+                    generator: () => {
+                        return null;
+                    },
+                    concurrencyLimit: 0,
+                }).catch((err) => {
+                    chai_1.expect(err).to.be.instanceof(Error);
+                    caught = true;
+                });
+                return wait(tick).then(() => {
+                    return pool.waitForIdle();
+                }).catch(() => {
+                    throw new Error("Error did not clear");
+                }).then(() => {
+                    chai_1.expect(caught).to.equal(true, "Must throw an error");
+                });
             });
         });
     });
@@ -480,6 +625,85 @@ describe("Miscellaneous Features", () => {
         it("No Task", () => {
             let pool = new Pool.PromisePoolExecutor();
             return pool.waitForGroupIdle(Symbol());
+        });
+    });
+    describe("configureGroup", () => {
+        it("triggerPromises", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            let groupId = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            wait(tick).then(() => {
+                pool.configureGroup({
+                    groupId: groupId,
+                    frequencyLimit: 1,
+                    frequencyWindow: 1,
+                });
+            });
+            return pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 2,
+            }).then((results) => {
+                expectTimes(results, [0, 1], "Timing Results");
+            });
+        });
+    });
+    describe("deleteGroupConfiguration", () => {
+        it("triggerPromises", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let start = Date.now();
+            let groupId = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            wait(tick).then(() => {
+                pool.deleteGroupConfiguration(groupId);
+            });
+            return pool.addGenericTask({
+                groupIds: [groupId],
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 2,
+            }).then((results) => {
+                expectTimes(results, [0, 1], "Timing Results");
+            });
+        });
+        it("Forget Inactive Group", () => {
+            let pool = new Pool.PromisePoolExecutor();
+            let groupId = Symbol();
+            pool.configureGroup({
+                groupId: groupId,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            });
+            let groupCount = pool._groupMap.size;
+            pool.deleteGroupConfiguration(groupId);
+            chai_1.expect(pool._groupMap.size).to.equal(groupCount - 1);
+        });
+    });
+    it("Forget Unconfigured Group", () => {
+        let pool = new Pool.PromisePoolExecutor();
+        let groupId = Symbol();
+        let groupCount;
+        process.nextTick(() => {
+            groupCount = pool._groupMap.size;
+        });
+        return pool.addGenericTask({
+            groupIds: [groupId],
+            generator: () => wait(1),
+            invocationLimit: 1,
+        }).then(() => {
+            chai_1.expect(pool._groupMap.size).to.equal(groupCount - 2);
         });
     });
 });

@@ -215,6 +215,10 @@ export interface ConfigureGroupParams extends Partial<PromiseLimits> {
     groupId: any;
 }
 
+export interface ConfigureTaskParams extends Partial<PromiseLimits> {
+    taskId: any;
+}
+
 interface TaskError {
     error: any;
     handled: any;
@@ -623,6 +627,7 @@ export class PromisePoolExecutor {
         };
     }
 
+    /** Configures the limits set for the specified group. */
     public configureGroup(params: ConfigureGroupParams): void {
         let concurrencyLimit: number;
         let frequencyLimit: number;
@@ -668,6 +673,20 @@ export class PromisePoolExecutor {
         }
     }
 
+    /** Configures the global limits set for the pool. */
+    public configure(params: Partial<PromiseLimits>): void {
+        this.configureGroup(globalGroupId);
+    }
+
+    public configureTask(params: ConfigureTaskParams): void {
+        let task: InternalTaskDefinition<any> = this._taskMap.get(params.taskId);
+        if (!task) {
+            throw new Error("Task not found.");
+        }
+        this.configureGroup(task.taskGroup.groupId);
+    }
+
+    /** Deletes the limits set for the specified group. */
     public deleteGroupConfiguration(groupId: any): boolean {
         let group: InternalGroupStatus = this._groupMap.get(groupId);
         if (!group || !group.save) {
