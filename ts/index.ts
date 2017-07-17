@@ -1,20 +1,13 @@
 const nextTick = require("next-tick");
 
+const TASK_FIXED_GROUPS = 2;
+
 export interface TaskGeneral {
-    /**
-     * A unique value used to identify the task. This can be later used to reference the task while it runs.
-     * Symbols are a good option to use since they are always unique.
-     */
-    id?: any;
     /**
      * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
      * to the completion of a larger task.
      */
-    groupIds?: any[];
-    /**
-     * If this is set to true, no promise will be returned.
-     */
-    noPromise?: boolean;
+    groups?: PromisePoolGroup[];
 }
 
 export interface PromiseLimits {
@@ -46,6 +39,14 @@ export interface GenericTaskParams<R> extends TaskGeneral, Partial<PromiseLimits
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
     generator: (invocation?: number) => Promise<R> | null,
+}
+
+interface PromisePoolTaskParams<R> extends GenericTaskParams<R> {
+    pool: PromisePoolExecutor;
+    globalGroup: PromisePoolGroupInternal;
+    triggerPromises: () => void;
+    remove: () => void;
+    resultConverter?: (result: R[]) => any;
 }
 
 export interface SingleTaskParams<T, R> extends TaskGeneral {
@@ -103,18 +104,370 @@ export interface EachTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits
     data: T[];
 }
 
-interface InternalTaskDefinition<R> {
-    id: any;
-    groups: InternalGroupStatus[];
-    generator: (invocation?: number) => Promise<R> | null;
-    taskGroup?: InternalGroupStatus;
-    invocations: number;
-    invocationLimit: number;
-    result: R[];
-    exhausted?: boolean;
-    errored?: boolean;
-    init: boolean;
-    promise?: PromiseResolver<R[]>;
+export interface PromisePoolGroupConfig extends Partial<PromiseLimits> {
+}
+
+export interface PromisePoolGroup {
+    configure(params: PromisePoolGroupConfig): void;
+    waitForIdle(): Promise<void>;
+}
+
+interface PromisePoolGroupParams extends PromisePoolGroupConfig {
+    pool: PromisePoolExecutor;
+}
+
+class PromisePoolGroupInternal implements PromisePoolGroup {
+    public _pool: PromisePoolExecutor;
+    public _concurrencyLimit: number;
+    public _frequencyLimit: number;
+    public _frequencyWindow: number;
+    public _frequencyStarts: number[];
+    public _promises: Array<ResolvablePromise<void>>;
+    public _rejection?: TaskError;
+    public _activeTaskCount: number;
+    public _activePromiseCount: number;
+
+    constructor(params: PromisePoolGroupParams) {
+        this._pool = params.pool;
+        this.configure(params);
+    }
+
+    public configure(params: PromisePoolGroupConfig): void {
+        let concurrencyLimit: number = Infinity;
+        let frequencyLimit: number = Infinity;
+        let frequencyWindow: number = 0;
+
+        if (!isNull(params.concurrencyLimit)) {
+            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
+                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
+            }
+            concurrencyLimit = params.concurrencyLimit;
+        }
+        if (!isNull(params.frequencyLimit) || !isNull(params.frequencyWindow)) {
+            if (isNull(params.frequencyLimit) || isNull(params.frequencyWindow)) {
+                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
+            }
+            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
+                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
+            }
+            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
+                throw new Error("Invalid frequency window: " + params.frequencyWindow);
+            }
+            frequencyLimit = params.frequencyLimit;
+            frequencyWindow = params.frequencyWindow;
+        }
+
+        this._concurrencyLimit = concurrencyLimit;
+        this._frequencyLimit = frequencyLimit;
+        this._frequencyWindow = frequencyWindow;
+    }
+
+    public _updateFrequencyStarts(): void {
+        // Remove the frequencyStarts entries which are outside of the window
+        if (this._frequencyStarts.length > 0) {
+            let time: number = Date.now() - this._frequencyWindow;
+            let i: number = 0;
+            for (; i < this._frequencyStarts.length; i++) {
+                if (this._frequencyStarts[i] > time) {
+                    break;
+                }
+            }
+            if (i > 0) {
+                this._frequencyStarts.splice(0, i);
+            }
+        }
+    }
+
+    public _busyTime(): boolean | number {
+        if (this._activePromiseCount >= this._concurrencyLimit) {
+            return true;
+        } else if (this._frequencyLimit && this._frequencyStarts.length >= this._frequencyLimit) {
+            return this._frequencyStarts[0] + this._frequencyWindow;
+        }
+        return false;
+    }
+
+    public _resolve(data?: any) {
+        if (arguments.length > 0) {
+            this._promises.forEach((promise) => {
+                promise.resolve(data);
+            });
+        } else {
+            this._promises.forEach((promise) => {
+                promise.resolve();
+            });
+        }
+    }
+
+    public _reject(err: TaskError): void {
+        if (this._rejection) {
+            return;
+        }
+        this._rejection = err;
+        this._promises.forEach((promise) => {
+            promise.reject(err.error);
+        });
+        this._promises.length = 0;
+        nextTick(() => {
+            delete this._rejection;
+        });
+    }
+
+    public waitForIdle(): Promise<void> {
+        if (this._rejection) {
+            this._rejection.handled = true;
+            return Promise.reject(this._rejection.error);
+        }
+        if (this._activePromiseCount === 0) {
+            return Promise.resolve();
+        }
+
+        const promise: ResolvablePromise<void> = new ResolvablePromise();
+        this._promises.push(promise);
+        return promise.promise;
+    }
+}
+
+export interface PromisePoolTask<R> {
+    configure(params: GenericTaskParams<R>): void;
+    promise(): Promise<R[]>;
+    end(): void;
+}
+
+class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
+    private _groups: PromisePoolGroupInternal[];
+    private _generator: (invocation?: number) => Promise<R> | null;
+    private _taskGroup: PromisePoolGroupInternal; // Needed?
+    private _invocations: number = 0;
+    private _invocationLimit: number = Infinity;
+    private _result: R[];
+    private _exhausted?: boolean;
+    private _errored?: boolean;
+    private _init: boolean;
+    private _promises: Array<ResolvablePromise<R[]>> = [];
+    private _pool: PromisePoolExecutor;
+    private _triggerPromises: () => void;
+    private _remove: () => void;
+    private _resultConverter: (result: R[]) => any;
+
+    // addGenericTask
+
+    public constructor(params: PromisePoolTaskParams<R>) {
+        this._pool = params.pool;
+        this._triggerPromises = params.triggerPromises;
+        this._remove = params.remove;
+        this._resultConverter = params.resultConverter;
+
+        if (!isNull(params.invocationLimit)) {
+            if (typeof params.invocationLimit !== "number") {
+                throw new Error("Invalid invocation limit: " + params.invocationLimit);
+            }
+            this._invocationLimit = params.invocationLimit;
+        }
+        this._taskGroup = new PromisePoolGroupInternal(params);
+        this._groups = [params.globalGroup, this._taskGroup];
+        if (params.groups) {
+            this._groups.push(...params.groups as PromisePoolGroupInternal[]);
+        }
+        this._generator = params.generator;
+
+        if (params.invocationLimit <= 0) {
+            this._resolve();
+            return;
+        }
+
+        this._groups.forEach((group) => {
+            group._activeTaskCount++;
+        });
+
+        this._triggerPromises();
+    }
+
+    public _busyTime(): boolean | number {
+        if (this._exhausted) {
+            return true;
+        }
+
+        let time: number = 0;
+        for (let group of this._groups) {
+            const busyTime: boolean | number = group._busyTime();
+            if (typeof busyTime === "number") {
+                if (busyTime > time) {
+                    time = busyTime;
+                }
+            } else if (busyTime) {
+                return true;
+            }
+        }
+        return time ? time : false;
+    }
+
+    public _run(): boolean {
+        let promise: Promise<any>;
+        try {
+            promise = this._generator(this._invocations);
+        } catch (err) {
+            this._reject(err);
+            return false;
+        }
+        if (!promise) {
+            this.end();
+            // Remove the task if needed and start the next task
+            return false;
+        }
+
+        if (!(promise instanceof Promise)) {
+            // In case what is returned is not a promise, make it one
+            promise = Promise.resolve(promise);
+        }
+        this._groups.forEach((group) => {
+            group._activePromiseCount++;
+            if (group._frequencyLimit) {
+                group._frequencyStarts.push(Date.now());
+            }
+        });
+        let resultIndex: number = this._invocations;
+        this._invocations++;
+        if (this._invocations >= this._invocationLimit) {
+            // this._exhausted = true;
+            this.end();
+        }
+
+        promise.catch((err) => {
+            this._reject(err);
+            // Resolve
+        }).then((result: any) => {
+            this._groups.forEach((group) => {
+                group._activePromiseCount--;
+            });
+            this._result[resultIndex] = result;
+            // Remove the task if needed and start the next task
+            this._triggerPromises();
+        });
+        return true;
+    }
+
+    private _resolve(): void {
+        if ()
+    }
+
+    private _reject(err: any) {
+        if (this._exhausted) {
+            return;
+        }
+        this._exhausted = true;
+        const taskError: TaskError = {
+            error: err,
+            handled: false,
+        };
+        if (this._promises.length) {
+            taskError.handled = true;
+            this._promises.forEach((promise) => {
+                promise.reject(taskError.error);
+            });
+            this._promises.length = 0;
+        }
+        this._groups.forEach((group) => {
+            group._reject(taskError);
+        });
+
+        if (!err.handled) {
+            nextTick(() => {
+                if (!err.handled) {
+                    // Unhandled promise rejection
+                    Promise.reject(err.error);
+                }
+            });
+        }
+    }
+
+    public configure(params: GenericTaskParams<R>): void {
+        let invocationLimit: number = Infinity;
+        let concurrencyLimit: number = Infinity;
+        let frequencyLimit: number = Infinity;
+        let frequencyWindow: number = 0;
+
+        if (!isNull(params.invocationLimit)) {
+            if (typeof params.invocationLimit !== "number") {
+                throw new Error("Invalid invocation limit: " + params.invocationLimit);
+            }
+            invocationLimit = params.invocationLimit;
+        }
+        if (!isNull(params.concurrencyLimit)) {
+            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
+                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
+            }
+            concurrencyLimit = params.concurrencyLimit;
+        }
+        if (!isNull(params.frequencyLimit) || !isNull(params.frequencyWindow)) {
+            if (isNull(params.frequencyLimit) || isNull(params.frequencyWindow)) {
+                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
+            }
+            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
+                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
+            }
+            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
+                throw new Error("Invalid frequency window: " + params.frequencyWindow);
+            }
+            frequencyLimit = params.frequencyLimit;
+            frequencyWindow = params.frequencyWindow;
+        }
+
+        if (this._taskGroup._activeTaskCount > 0) {
+            this._run();
+        }
+        if (!isNull(params.invocationLimit) && params.invocationLimit <= 0) {
+            this.end();
+            return;
+        }
+    }
+
+    public promise(): Promise<R[]> {
+        if (this._exhausted) {
+            if (this._errored) {
+                this._taskGroup._rejection.handled = true;
+                return Promise.reject(this._taskGroup._rejection.error);
+            }
+            return Promise.resolve(this._result);
+        }
+
+        const promise: ResolvablePromise<R[]> = new ResolvablePromise();
+        this._promises.push(promise);
+        return promise.promise;
+    }
+
+    public end(): void {
+        if (this._exhausted) {
+            return;
+        }
+        this._exhausted = true;
+        this._remove();
+    }
+
+    public getStatus(): TaskStatus {
+        let freeSlots: number = this._invocationLimit - this._invocations;
+        this._groups.forEach((group) => {
+            let slots = group._concurrencyLimit - group._activePromiseCount;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+            group._updateFrequencyStarts();
+            slots = group._frequencyLimit - group._frequencyStarts.length;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+        });
+
+        return {
+            activePromiseCount: this._taskGroup._activePromiseCount,
+            concurrencyLimit: this._taskGroup._concurrencyLimit,
+            frequencyLimit: this._taskGroup._frequencyLimit,
+            frequencyWindow: this._taskGroup._frequencyWindow,
+            invocations: this._invocations,
+            invocationLimit: this._invocationLimit,
+            freeSlots: freeSlots,
+        };
+    }
 }
 
 export interface GroupStatus {
@@ -160,10 +513,6 @@ export interface GroupStatus extends PromiseLimits {
 
 export interface TaskStatus extends GroupStatus {
     /**
-     * A unique value used for identifying a task (such as a Symbol).
-     */
-    id: any,
-    /**
      * The number of times the task has been invoked.
      */
     invocations: number;
@@ -173,41 +522,16 @@ export interface TaskStatus extends GroupStatus {
     invocationLimit: number;
 }
 
-interface PromiseResolver<T> {
-    resolveInstance?: (result?: T) => void;
-    rejectInstance?: (err: any) => void;
-}
+class ResolvablePromise<T> {
+    public resolve?: (result?: T) => void;
+    public reject?: (err: any) => void;
+    public promise: Promise<T>;
 
-function createResolvablePromise<T>(resolver: PromiseResolver<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-        resolver.resolveInstance = resolve;
-        resolver.rejectInstance = reject;
-    });
-}
-
-interface InternalGroupStatus {
-    groupId: any;
-    save?: boolean;
-    concurrencyLimit: number;
-    frequencyLimit: number;
-    frequencyWindow: number;
-    frequencyStarts: number[];
-    activePromiseCount: number;
-    activeTaskCount: number;
-    promises: Array<PromiseResolver<void>>;
-    rejection?: TaskError;
-}
-
-function newGroupStatus(groupId: any): InternalGroupStatus {
-    return {
-        groupId: groupId,
-        activeTaskCount: 0,
-        activePromiseCount: 0,
-        concurrencyLimit: Infinity,
-        frequencyLimit: Infinity,
-        frequencyWindow: 0,
-        frequencyStarts: [],
-        promises: [],
+    constructor() {
+        this.promise = new Promise((resolve, reject) => {
+            this.resolve = resolve;
+            this.reject = reject;
+        });
     }
 }
 
@@ -224,10 +548,9 @@ interface TaskError {
     handled: any;
 }
 
-/**
- * Internal symbol used to represent the entire pool as a group
- */
-const globalGroupId: any = Symbol();
+function isNull(val: any): boolean {
+    return val === undefined || val === null;
+}
 
 export class PromisePoolExecutor {
     private _nextTriggerTime: number;
@@ -235,13 +558,13 @@ export class PromisePoolExecutor {
     /**
      * All tasks which are active or waiting.
      */
-    private _tasks: InternalTaskDefinition<any>[] = [];
+    private _tasks: PromisePoolTaskInternal<any>[] = [];
     /**
      * A map containing all tasks which are active or waiting, indexed by their ids.
      */
-    private _taskMap: Map<any, InternalTaskDefinition<any>> = new Map();
-    private _globalGroup: InternalGroupStatus;
-    private _groupMap: Map<any, InternalGroupStatus> = new Map();
+    private _taskMap: Map<any, PromisePoolTaskInternal<any>> = new Map(); // Is this needed?
+    private _globalGroup: PromisePoolGroupInternal;
+    private _groupMap: Map<any, PromisePoolGroupInternal> = new Map(); // Is this needed?
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -251,9 +574,9 @@ export class PromisePoolExecutor {
     constructor(params?: Partial<PromiseLimits>);
     constructor(concurrencyLimit?: number);
     constructor(params?: Partial<PromiseLimits> | number) {
-        let groupParams: ConfigureGroupParams = {
-            groupId: globalGroupId,
-        }
+        let groupParams: PromisePoolGroupParams = {
+            pool: this,
+        };
 
         if (params !== undefined && params !== null) {
             if (typeof params === "object") {
@@ -264,15 +587,14 @@ export class PromisePoolExecutor {
                 groupParams.concurrencyLimit = params;
             }
         }
-        this.configureGroup(groupParams);
-        this._globalGroup = this._groupMap.get(globalGroupId);
+        this._globalGroup = new PromisePoolGroupInternal(groupParams);
     }
 
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
     public get concurrencyLimit(): number {
-        return this._globalGroup.concurrencyLimit;
+        return this._globalGroup._concurrencyLimit;
     }
 
     public set concurrencyLimit(value: number) {
@@ -281,7 +603,7 @@ export class PromisePoolExecutor {
         } else if (!value || typeof value !== "number" || value <= 0) {
             throw new Error("Invalid concurrency limit: " + value);
         }
-        this._globalGroup.concurrencyLimit = value;
+        this._globalGroup._concurrencyLimit = value;
         this._triggerPromises();
     }
 
@@ -289,153 +611,25 @@ export class PromisePoolExecutor {
      * The number of promises which are active.
      */
     public get activePromiseCount(): number {
-        return this._globalGroup.activeTaskCount;
+        return this._globalGroup._activeTaskCount;
     }
     /**
      * The number of promises which can be invoked before the concurrency limit is reached.
      */
     public get freeSlots(): number {
-        return this._globalGroup.concurrencyLimit - this._globalGroup.activePromiseCount;
+        return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
     }
     /**
      * Returns true if the pool is idling (no active or queued promises).
      */
     public get idling(): boolean {
-        return this._globalGroup.activeTaskCount === 0 && this._tasks.length === 0;
+        return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
     }
 
-    /**
-     * Private Method: Starts a promise. * 
-     * @param task The task to start.
-     */
-    private _startPromise(task: InternalTaskDefinition<any>): void {
-        let promise: Promise<any>;
-        try {
-            promise = task.generator(task.invocations);
-        } catch (err) {
-            this._errorTask(task, err);
-        }
-        if (!promise) {
-            task.exhausted = true;
-            // Remove the task if needed and start the next task
-            this._nextPromise(task);
-        } else {
-            if (!(promise instanceof Promise)) {
-                // In case what is returned is not a promise, make it one
-                promise = Promise.resolve(promise);
-            }
-            task.groups.forEach((group) => {
-                group.activePromiseCount++;
-                if (group.frequencyLimit) {
-                    group.frequencyStarts.push(Date.now());
-                }
-            });
-            let resultIndex: number = task.invocations;
-            task.invocations++;
-            if (task.invocations >= task.invocationLimit) {
-                task.exhausted = true;
-            }
-
-            promise.catch((err) => {
-                this._errorTask(task, err);
-                // Resolve
-            }).then((result: any) => {
-                task.groups.forEach((group) => {
-                    group.activePromiseCount--;
-                });
-                task.result[resultIndex] = result;
-                // Remove the task if needed and start the next task
-                this._nextPromise(task);
-            });
-        }
-    }
-
-    /**
-     * Private Method: Registers an error for a task.
-     */
-    private _errorTask(task: InternalTaskDefinition<any>, err: any): void {
-        if (task.errored) {
-            // Perform an unhandled promise rejection, like the behavior of multiple rejections with Promise.all
-            Promise.reject(err);
-        } else {
-            task.errored = true;
-            task.exhausted = true;
-            if (task.promise) {
-                if (!task.init) {
-                    task.promise.rejectInstance(err);
-                } else {
-                    // If the error is thrown immediately after task generation,
-                    // a delay must be added for the promise rejection to work.
-                    nextTick(() => {
-                        task.promise.rejectInstance(err);
-                    });
-                }
-            }
-            this._errorGroups(
-                {
-                    error: err,
-                    handled: !!task.promise,
-                },
-                task.groups
-            );
-        }
-    }
-
-    private _errorGroups(err: TaskError, groups: InternalGroupStatus[]): void {
-        groups.forEach((group) => {
-            this._errorGroup(err, group, group.groupId);
-        });
-        if (!err.handled) {
-            nextTick(() => {
-                if (!err.handled) {
-                    // Unhandled promise rejection
-                    Promise.reject(err.error);
-                }
-            });
-        }
-    }
-
-    private _errorGroup(err: TaskError, group: InternalGroupStatus, groupId: any): void {
-        if (!group.rejection) {
-            group.rejection = err;
-            let promises: Array<PromiseResolver<void>> = group.promises;
-            if (promises.length > 0) {
-                group.promises = [];
-                err.handled = true;
-                promises.forEach((promise) => {
-                    promise.rejectInstance(err.error);
-                });
-            }
-            if (group.activeTaskCount < 1) {
-                nextTick(() => {
-                    group = this._groupMap.get(groupId);
-                    if (group && group.activeTaskCount < 1) {
-                        if (group.save) {
-                            delete group.rejection;
-                        } else {
-                            this._groupMap.delete(groupId);
-                        }
-                    }
-                });
-            }
-        }
-    }
-
-    private _updateFrequencyStarts() {
+    private _updateFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
         this._groupMap.forEach((group) => {
-            if (group.frequencyStarts.length > 0) {
-                let time: number = Date.now() - group.frequencyWindow;
-                let i: number = 0;
-                for (; i < group.frequencyStarts.length; i++) {
-                    if (group.frequencyStarts[i] > time) {
-                        break;
-                    }
-                }
-                if (i > 0) {
-                    group.frequencyStarts.splice(0, i);
-                }
-            }
+            group._updateFrequencyStarts();
         });
     }
 
@@ -451,42 +645,28 @@ export class PromisePoolExecutor {
         }
 
         let taskIndex: number = 0;
-        let task: InternalTaskDefinition<any>;
+        let task: PromisePoolTaskInternal<any>;
         let soonest: number = Infinity;
-        let time: number;
-        let taskTime: number;
+        let busyTime: boolean | number;
         let blocked: boolean;
 
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
-            // this._activePromiseCount < this._concurrencyLimit
-            taskTime = 0;
-            blocked = false;
-            task.groups.forEach((group) => {
-                if (group.activePromiseCount >= group.concurrencyLimit) {
-                    blocked = true;
-                } else if (group.frequencyLimit && group.frequencyStarts.length >= group.frequencyLimit) {
-                    time = group.frequencyStarts[0] + group.frequencyWindow;
-                    if (time > taskTime) {
-                        taskTime = time;
-                    }
-                }
-            });
+            busyTime = task._busyTime();
 
-            if (blocked) {
+            if (busyTime === true) {
                 taskIndex++;
-            } else if (taskTime) {
-                if (taskTime < soonest) {
-                    soonest = taskTime;
+            } else if (busyTime && busyTime > Date.now()) {
+                if (busyTime < soonest) {
+                    soonest = busyTime;
                 }
                 taskIndex++;
-            } else if (!task.exhausted) {
-                this._startPromise(task);
             } else {
-                taskIndex++;
+                task._run();
             }
         }
 
+        let time: number;
         if (soonest !== Infinity) {
             time = Date.now();
             if (time >= soonest) {
@@ -502,219 +682,9 @@ export class PromisePoolExecutor {
         }
     }
 
-    /**
-     * Private Method: Continues execution to the next task.
-     * Resolves and removes the specified task if it is exhausted and has no active invocations.
-     */
-    private _nextPromise(task: InternalTaskDefinition<any>): void {
-        if (task.exhausted && task.taskGroup.activePromiseCount <= 0) {
-            this._tasks.splice(this._tasks.indexOf(task), 1);
-            this._taskMap.delete(task.id);
-
-            if (!task.errored && task.promise) {
-                if (task.init) {
-                    task.promise.resolveInstance(task.result);
-                } else {
-                    // Although a resolution this fast should be impossible, the time restriction
-                    // for rejected promises likely applies to resolved ones too.
-                    nextTick(() => {
-                        task.promise.resolveInstance(task.result);
-                    });
-                }
-            }
-
-            task.groups.forEach((group) => {
-                group.activeTaskCount--;
-                if (group.activeTaskCount <= 0) {
-                    if (!task.errored) {
-                        if (!group.save) {
-                            this._groupMap.delete(group.groupId);
-                        }
-                        if (group.promises.length) {
-                            let promises: Array<PromiseResolver<void>> = group.promises;
-                            group.promises = [];
-                            promises.forEach((promise) => {
-                                promise.resolveInstance();
-                            });
-                        }
-                    } else {
-                        nextTick(() => {
-                            group = this._groupMap.get(group.groupId);
-                            if (group && group.activeTaskCount < 1) {
-                                if (group.save) {
-                                    delete group.rejection;
-                                } else {
-                                    this._groupMap.delete(group.groupId);
-                                }
-                            }
-                        });
-                    }
-                }
-            });
-        }
-        this._triggerPromises();
-    }
-
-    /**
-     * Instantly resolves a promise, while respecting the parameters passed.
-     */
-    private _instantResolve<T>(params: TaskGeneral, data: T): Promise<T> {
-        if (!params.noPromise) {
-            return Promise.resolve(data);
-        }
-    }
-
-    /**
-     * Instantly rejects a promise with the specified error, while respecting the parameters passed.
-     */
-    private _instantReject(params: TaskGeneral, err: any): Promise<any> {
-        let groups: InternalGroupStatus[] = [this._globalGroup];
-        let group: InternalGroupStatus;
-        if (params.groupIds) {
-            params.groupIds.forEach((groupId) => {
-                group = this._groupMap.get(groupId);
-                if (!group) {
-                    group = newGroupStatus(groupId);
-                    this._groupMap.set(groupId, group);
-                }
-                groups.push(group);
-            });
-        }
-
-        this._errorGroups(
-            {
-                error: err,
-                handled: !params.noPromise,
-            },
-            groups,
-        );
-        if (!params.noPromise) {
-            return Promise.reject(err);
-        }
-    }
-
-    /**
-     * Gets the current status of a task.
-     * @param id Unique value used to identify the task.
-     */
-    public getTaskStatus(id: any): TaskStatus {
-        let task: InternalTaskDefinition<any> = this._taskMap.get(id);
-        if (!task) {
-            return null;
-        }
-        this._updateFrequencyStarts();
-        let freeSlots: number = task.invocationLimit - task.invocations;
-        task.groups.forEach((group) => {
-            let slots = group.concurrencyLimit - group.activePromiseCount;
-            if (slots < freeSlots) {
-                freeSlots = slots;
-            }
-            slots = group.frequencyLimit - group.frequencyStarts.length;
-            if (slots < freeSlots) {
-                freeSlots = slots;
-            }
-        });
-
-        return {
-            id: task.id,
-            activePromiseCount: task.taskGroup.activePromiseCount,
-            concurrencyLimit: task.taskGroup.concurrencyLimit,
-            frequencyLimit: task.taskGroup.frequencyLimit,
-            frequencyWindow: task.taskGroup.frequencyWindow,
-            invocations: task.invocations,
-            invocationLimit: task.invocationLimit,
-            freeSlots: freeSlots,
-        };
-    }
-
-    /** Configures the limits set for the specified group. */
-    public configureGroup(params: ConfigureGroupParams): void {
-        let concurrencyLimit: number;
-        let frequencyLimit: number;
-        let frequencyWindow: number;
-
-        if (params.concurrencyLimit !== undefined && params.concurrencyLimit !== null) {
-            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
-                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
-            }
-            concurrencyLimit = params.concurrencyLimit;
-        } else {
-            concurrencyLimit = Infinity;
-        }
-        if (params.frequencyLimit !== undefined || params.frequencyWindow !== undefined) {
-            if (params.frequencyLimit === undefined || params.frequencyWindow === undefined) {
-                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
-            }
-            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
-                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
-            }
-            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
-                throw new Error("Invalid frequency window: " + params.frequencyWindow);
-            }
-            frequencyLimit = params.frequencyLimit;
-            frequencyWindow = params.frequencyWindow;
-        } else {
-            frequencyLimit = Infinity;
-            frequencyWindow = 0;
-        }
-
-        let group = this._groupMap.get(params.groupId);
-        if (!group) {
-            group = newGroupStatus(params.groupId);
-            this._groupMap.set(params.groupId, group);
-        }
-        group.concurrencyLimit = concurrencyLimit;
-        group.frequencyLimit = frequencyLimit;
-        group.frequencyWindow = frequencyWindow;
-        group.save = true;
-
-        if (group.activeTaskCount > 0) {
-            this._triggerPromises();
-        }
-    }
-
     /** Configures the global limits set for the pool. */
     public configure(params: Partial<PromiseLimits>): void {
-        this.configureGroup(globalGroupId);
-    }
-
-    public configureTask(params: ConfigureTaskParams): void {
-        let task: InternalTaskDefinition<any> = this._taskMap.get(params.taskId);
-        if (!task) {
-            throw new Error("Task not found.");
-        }
-        this.configureGroup(task.taskGroup.groupId);
-    }
-
-    /** Deletes the limits set for the specified group. */
-    public deleteGroupConfiguration(groupId: any): boolean {
-        let group: InternalGroupStatus = this._groupMap.get(groupId);
-        if (!group || !group.save) {
-            return false;
-        }
-        if (group.activeTaskCount <= 0 && !group.rejection) {
-            this._groupMap.delete(groupId);
-        } else {
-            group.concurrencyLimit = Infinity;
-            group.frequencyLimit = Infinity;
-            group.frequencyWindow = 0;
-            delete group.save;
-            this._triggerPromises();
-        }
-        return true;
-    }
-
-    /**
-     * Stops a running task.
-     * @param taskId 
-     */
-    public stopTask(id: any): boolean {
-        let task: InternalTaskDefinition<any> = this._taskMap.get(id);
-        if (!task) {
-            return false;
-        }
-        task.exhausted = true;
-        return true;
+        this._globalGroup;
     }
 
     /**
@@ -723,67 +693,26 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    public addGenericTask<R>(params: GenericTaskParams<R>): Promise<R[]> {
-        let task: InternalTaskDefinition<R> = {
-            id: params.id || Symbol(),
-            groups: [this._globalGroup],
-            generator: params.generator,
-            invocations: 0,
-            result: [],
-            invocationLimit: params.invocationLimit !== undefined
-                && params.invocationLimit !== null ? params.invocationLimit : Infinity,
-            init: true,
-            promise: params.noPromise ? null : {},
-        }
+    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R> {
+        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal({
+            ...params,
+            pool: this,
+            globalGroup: this._globalGroup,
+            triggerPromises: () => {
+                this._triggerPromises();
+            },
+            remove: () => {
+                this._removeTask(task);
+            }
+        });
+        return task;
+    }
 
-        if (this._taskMap.has(task.id)) {
-            return this._instantReject(params, new Error("The id used for this task already exists."));
+    private _removeTask(task: PromisePoolTaskInternal<any>) {
+        const i: number = this._tasks.indexOf(task);
+        if (i > 0) {
+            this._tasks.splice(i, 1);
         }
-        if (typeof task.invocationLimit !== "number") {
-            return this._instantReject(params, new Error("Invalid invocation limit: " + task.invocationLimit));
-        }
-        if (task.invocationLimit <= 0) {
-            return this._instantResolve(params, task.result);
-        }
-        let groupId: any = Symbol();
-        try {
-            this.configureGroup({
-                groupId: groupId,
-                concurrencyLimit: params.concurrencyLimit,
-                frequencyLimit: params.frequencyLimit,
-                frequencyWindow: params.frequencyWindow,
-            });
-        } catch (err) {
-            return this._instantReject(params, err);
-        }
-        task.taskGroup = this._groupMap.get(groupId);
-        task.taskGroup.save = false;
-        task.groups.push(task.taskGroup);
-
-        let promise: Promise<R[]> = null;
-        if (!params.noPromise) {
-            task.promise = {};
-            promise = createResolvablePromise(task.promise);
-        }
-
-        this._globalGroup.activeTaskCount++;
-        if (params.groupIds) {
-            let group: InternalGroupStatus;
-            params.groupIds.forEach((groupId) => {
-                group = this._groupMap.get(groupId);
-                if (!group) {
-                    group = newGroupStatus(groupId);
-                    this._groupMap.set(groupId, group);
-                }
-                group.activeTaskCount++;
-                task.groups.push(group);
-            });
-        }
-
-        this._tasks.push(task);
-        this._taskMap.set(task.id, task);
-        this._triggerPromises();
-        return promise;
     }
 
     /**
@@ -792,15 +721,16 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to the result of the task.
      */
-    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): Promise<R> {
+    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
         return this.addGenericTask({
-            id: params.id,
-            groupIds: params.groupIds,
+            ...params,
             generator: () => {
                 return params.generator(params.data);
             },
             invocationLimit: 1,
-        }).then((result) => {
+        });
+        
+        .then((result) => {
             return result[0];
         });
     }
