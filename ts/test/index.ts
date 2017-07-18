@@ -217,8 +217,8 @@ describe("Frequency", () => {
                         return Promise.resolve(Date.now() - start);
                     },
                     invocationLimit: 3,
-                });
-            }).promise().then((results) => {
+                }).promise();
+            }).then((results) => {
                 expectTimes(results, [3, 3, 4], "Timing Results 2");
             });
         });
@@ -226,9 +226,7 @@ describe("Frequency", () => {
 
     it("Group Limit", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-        let groupId: any = Symbol();
-        pool.configureGroup({
-            groupId: groupId,
+        let group: Pool.PromisePoolGroup = pool.addGroup({
             frequencyLimit: 2,
             frequencyWindow: tick,
         });
@@ -238,7 +236,7 @@ describe("Frequency", () => {
             generator: () => {
                 return Promise.resolve(Date.now() - start);
             },
-            groupIds: [groupId],
+            groups: [group],
             invocationLimit: 3,
         }).promise().then((results) => {
             expectTimes(results, [0, 0, 1], "Timing Results");
@@ -533,19 +531,19 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        let id: Symbol = Symbol();
-        return pool.addGenericTask({
-            id: id,
+        let task = pool.addGenericTask({
             generator: (index) => {
                 if (index >= 2) {
-                    expect(pool.stopTask(id)).to.equal(true, "Stop task must succede");
+                    // expect(pool.stopTask(id)).to.equal(true, "Stop task must succede");
+                    task.end();
                 }
                 return wait(tick)
                     .then(() => {
                         return Date.now() - start;
                     });
             }
-        }).promise().then((results) => {
+        });
+        task.promise().then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
         });
@@ -555,21 +553,18 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        let id: Symbol = Symbol();
-
-        return pool.addGenericTask({
-            id: id,
+        let task: Pool.PromisePoolTask<any> = pool.addGenericTask({
             generator: (index) => {
                 return wait(tick)
                     .then(() => {
-                        return pool.getTaskStatus(id);
+                        return task.getStatus();
                     });
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
-        }).promise().then((status) => {
+        });
+        task.promise().then((status) => {
             expect(status[0]).to.deep.equal({
-                id: id,
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
                 invocations: 1,
@@ -639,16 +634,15 @@ describe("Miscellaneous Features", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
-            let groupId: any = Symbol();
+            let group = pool.addGroup({});
             pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     return wait(tick);
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
-            return pool.waitForGroupIdle(groupId)
+            return group.waitForIdle()
                 .then(() => {
                     expectTimes([Date.now() - start], [1], "Timing Results");
                 });
@@ -658,34 +652,26 @@ describe("Miscellaneous Features", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
-            let groupId: any = Symbol();
+            let group = pool.addGroup({});
             pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     return wait(tick).then(() => {
                         pool.addGenericTask({
-                            groupIds: [groupId],
+                            groups: [group],
                             generator: () => {
                                 return wait(tick);
                             },
                             invocationLimit: 1,
-                            noPromise: true,
                         });
                     });
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
-            return pool.waitForGroupIdle(groupId)
+            return group.waitForIdle()
                 .then(() => {
                     expectTimes([Date.now() - start], [2], "Timing Results");
                 });
-        });
-
-        it("No Task", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            return pool.waitForGroupIdle(Symbol());
         });
     });
 
@@ -694,21 +680,18 @@ describe("Miscellaneous Features", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
-            let groupId: any = Symbol();
-            pool.configureGroup({
-                groupId: groupId,
+            let group = pool.addGroup({
                 frequencyLimit: 1,
                 frequencyWindow: tick * 2,
             });
             wait(tick).then(() => {
-                pool.configureGroup({
-                    groupId: groupId,
+                group.configure({
                     frequencyLimit: 1,
                     frequencyWindow: 1,
                 });
             });
             return pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
@@ -716,64 +699,6 @@ describe("Miscellaneous Features", () => {
             }).promise().then((results) => {
                 expectTimes(results, [0, 1], "Timing Results");
             });
-        });
-    });
-
-    describe("deleteGroupConfiguration", () => {
-        it("triggerPromises", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            let start: number = Date.now();
-            let groupId: any = Symbol();
-            pool.configureGroup({
-                groupId: groupId,
-                frequencyLimit: 1,
-                frequencyWindow: tick * 2,
-            });
-            wait(tick).then(() => {
-                pool.deleteGroupConfiguration(groupId);
-            });
-            return pool.addGenericTask({
-                groupIds: [groupId],
-                generator: () => {
-                    return Promise.resolve(Date.now() - start);
-                },
-                invocationLimit: 2,
-            }).promise().then((results) => {
-                expectTimes(results, [0, 1], "Timing Results");
-            });
-        });
-
-        it("Forget Inactive Group", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            let groupId: any = Symbol();
-            pool.configureGroup({
-                groupId: groupId,
-                frequencyLimit: 1,
-                frequencyWindow: tick * 2,
-            });
-            let groupCount: number = (pool as any)._groupMap.size;
-            pool.deleteGroupConfiguration(groupId);
-            expect((pool as any)._groupMap.size).to.equal(groupCount - 1);
-        });
-    });
-
-    it("Forget Unconfigured Group", () => {
-        let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-        let groupId: any = Symbol();
-        let groupCount: number;
-        process.nextTick(() => {
-            groupCount = (pool as any)._groupMap.size;
-        });
-        return pool.addGenericTask({
-            groupIds: [groupId],
-            generator: () => wait(1),
-            invocationLimit: 1,
-        }).then(() => {
-            // 2 groups are used - 1 for the task, another for groupId
-            expect((pool as any)._groupMap.size).to.equal(groupCount - 2);
         });
     });
 });
