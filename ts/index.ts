@@ -227,6 +227,20 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         this._promises.push(promise);
         return promise.promise;
     }
+
+    public _incrementTasks(): void {
+        this._activeTaskCount++;
+    }
+
+    public _decrementTasks(): void {
+        this._activeTaskCount--;
+        if (this._activeTaskCount < 1 && this._promises.length) {
+            this._promises.forEach((promise) => {
+                promise.resolve();
+            });
+            this._promises.length = 0;
+        }
+    }
 }
 
 export interface PromisePoolTaskBase<R> {
@@ -287,7 +301,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         }
 
         this._groups.forEach((group) => {
-            group._activeTaskCount++;
+            group._incrementTasks();
         });
 
         this._triggerPromises();
@@ -710,6 +724,13 @@ export class PromisePoolExecutor {
     /** Configures the global limits set for the pool. */
     public configure(params: Partial<PromiseLimits>): void {
         this._globalGroup.configure(params);
+    }
+
+    public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
+        return new PromisePoolGroupInternal({
+            ...params,
+            pool: this,
+        });
     }
 
     /**

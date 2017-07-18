@@ -97,7 +97,7 @@ describe("Concurrency", () => {
                     });
             },
             invocationLimit: 3,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [1, 1, 1], "Timing Results");
         });
     });
@@ -114,7 +114,7 @@ describe("Concurrency", () => {
                     });
             },
             invocationLimit: 3,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
@@ -132,16 +132,14 @@ describe("Concurrency", () => {
             },
             invocationLimit: 3,
             concurrencyLimit: 2,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
 
     it("Group Limit", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-        let groupId: any = Symbol();
-        pool.configureGroup({
-            groupId: groupId,
+        const group: Pool.PromisePoolGroup = pool.addGroup({
             concurrencyLimit: 2,
         });
 
@@ -153,9 +151,9 @@ describe("Concurrency", () => {
                         return Date.now() - start;
                     });
             },
-            groupIds: [groupId],
+            groups: [group],
             invocationLimit: 3,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
@@ -175,7 +173,7 @@ describe("Frequency", () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [0, 0, 1], "Timing Results");
             });
         });
@@ -193,7 +191,7 @@ describe("Frequency", () => {
                     return wait(tick).then(() => Date.now() - start);
                 },
                 invocationLimit: 4,
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [1, 2, 4, 5], "Timing Results");
             });
         });
@@ -210,7 +208,7 @@ describe("Frequency", () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [0, 0, 1], "Timing Results 1");
                 return wait(tick * 2);
             }).then(() => {
@@ -220,7 +218,7 @@ describe("Frequency", () => {
                     },
                     invocationLimit: 3,
                 });
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [3, 3, 4], "Timing Results 2");
             });
         });
@@ -242,7 +240,7 @@ describe("Frequency", () => {
             },
             groupIds: [groupId],
             invocationLimit: 3,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [0, 0, 1], "Timing Results");
         });
     });
@@ -258,7 +256,7 @@ describe("Exception Handling", () => {
             generator: () => {
                 throw error;
             }
-        }).catch((err) => {
+        }).promise().catch((err) => {
             expect(err).to.equal(error);
             caught = true;
         }).then((results) => {
@@ -278,7 +276,7 @@ describe("Exception Handling", () => {
                 });
             },
             invocationLimit: 1
-        }).catch((err) => {
+        }).promise().catch((err) => {
             expect(err).to.equal(error);
             caught = true;
         }).then((results) => {
@@ -296,7 +294,6 @@ describe("Exception Handling", () => {
                     throw error;
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return expectUnhandledRejection(error);
         });
@@ -312,7 +309,6 @@ describe("Exception Handling", () => {
                     });
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return expectUnhandledRejection(error);
         });
@@ -325,7 +321,6 @@ describe("Exception Handling", () => {
                     return Promise.resolve();
                 },
                 concurrencyLimit: 0, // invalid
-                noPromise: true,
             });
             return expectUnhandledRejection();
         });
@@ -342,7 +337,7 @@ describe("Exception Handling", () => {
                     });
                 },
                 invocationLimit: 2,
-            }).catch((err) => {
+            }).promise().catch((err) => {
                 caught = err;
             });
             return expectUnhandledRejection(
@@ -364,7 +359,6 @@ describe("Exception Handling", () => {
                     throw error;
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return pool.waitForIdle(
             ).catch((err) => {
@@ -387,7 +381,6 @@ describe("Exception Handling", () => {
                     });
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return pool.waitForIdle(
             ).catch((err) => {
@@ -408,7 +401,6 @@ describe("Exception Handling", () => {
                     return Promise.resolve();
                 },
                 concurrencyLimit: 0, // invalid
-                noPromise: true,
             });
             return pool.waitForIdle(
             ).catch((err) => {
@@ -430,7 +422,7 @@ describe("Exception Handling", () => {
                         });
                     },
                     invocationLimit: 1,
-                }).catch((err) => {
+                }).promise().catch((err) => {
                     expect(err).to.equal(error);
                     caught = true;
                 });
@@ -451,7 +443,7 @@ describe("Exception Handling", () => {
                         return null;
                     },
                     concurrencyLimit: 0, // Invalid
-                }).catch((err) => {
+                }).promise().catch((err) => {
                     expect(err).to.be.instanceof(Error);
                     caught = true;
                 });
@@ -472,16 +464,15 @@ describe("Exception Handling", () => {
 
             let error: Error = new Error();
             let caught: boolean = false;
-            let groupId: any = Symbol();
+            let group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     throw error;
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
-            return pool.waitForGroupIdle(groupId
+            return group.waitForIdle(
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
@@ -495,18 +486,17 @@ describe("Exception Handling", () => {
 
             let error: Error = new Error();
             let caught: boolean = false;
-            let groupId: any = Symbol();
+            let group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     return wait(1).then(() => {
                         throw error;
                     });
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
-            return pool.waitForGroupIdle(groupId
+            return group.waitForIdle(
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
@@ -520,16 +510,15 @@ describe("Exception Handling", () => {
 
             let error: Error = new Error();
             let caught: boolean = false;
-            let groupId: any = Symbol();
+            let group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
-                groupIds: [groupId],
+                groups: [group],
                 generator: () => {
                     return Promise.resolve();
                 },
                 concurrencyLimit: 0, // invalid
-                noPromise: true,
             });
-            return pool.waitForGroupIdle(groupId
+            return pool.waitForIdle(
             ).catch((err) => {
                 caught = true;
             }).then((results) => {
@@ -556,7 +545,7 @@ describe("Miscellaneous Features", () => {
                         return Date.now() - start;
                     });
             }
-        }).then((results) => {
+        }).promise().then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
         });
@@ -578,7 +567,7 @@ describe("Miscellaneous Features", () => {
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
-        }).then((status) => {
+        }).promise().then((status) => {
             expect(status[0]).to.deep.equal({
                 id: id,
                 activePromiseCount: 1,
@@ -600,7 +589,6 @@ describe("Miscellaneous Features", () => {
                     return wait(tick);
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return pool.waitForIdle()
                 .then(() => {
@@ -628,12 +616,10 @@ describe("Miscellaneous Features", () => {
                                 return wait(tick);
                             },
                             invocationLimit: 1,
-                            noPromise: true,
                         });
                     });
                 },
                 invocationLimit: 1,
-                noPromise: true,
             });
             return pool.waitForIdle()
                 .then(() => {
@@ -727,7 +713,7 @@ describe("Miscellaneous Features", () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 2,
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [0, 1], "Timing Results");
             });
         });
@@ -753,7 +739,7 @@ describe("Miscellaneous Features", () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 2,
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [0, 1], "Timing Results");
             });
         });
@@ -809,7 +795,7 @@ describe("Task Secializations", () => {
                         return Date.now() - start;
                     });
             }
-        }).then((result) => {
+        }).promise().then((result) => {
             // The task must return the expected non-array result
             expectTimes([result], [1], "Timing Results");
         });
@@ -827,7 +813,7 @@ describe("Task Secializations", () => {
                     });
             },
             invocationLimit: 3
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [1, 2, 3], "Timing Results");
         });
     });
@@ -845,7 +831,7 @@ describe("Task Secializations", () => {
                     });
             },
             concurrencyLimit: Infinity,
-        }).then((results) => {
+        }).promise().then((results) => {
             expectTimes(results, [3, 2, 1], "Timing Results");
         });
     });
@@ -866,7 +852,7 @@ describe("Task Secializations", () => {
                             return Date.now() - start;
                         });
                 }
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [4, 2], "Timing Results");
             });
         });
@@ -888,7 +874,7 @@ describe("Task Secializations", () => {
                         });
                 },
                 concurrencyLimit: 2
-            }).then((results) => {
+            }).promise().then((results) => {
                 expectTimes(results, [2, 4], "Timing Results");
             });
         });
