@@ -122,11 +122,11 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
     public _frequencyWindow: number;
-    public _frequencyStarts: number[];
-    public _promises: Array<ResolvablePromise<void>>;
+    public _frequencyStarts: number[] = [];
+    public _promises: Array<ResolvablePromise<void>> = [];
     public _rejection?: TaskError;
-    public _activeTaskCount: number;
-    public _activePromiseCount: number;
+    public _activeTaskCount: number = 0;
+    public _activePromiseCount: number = 0;
 
     constructor(params: PromisePoolGroupParams) {
         this._pool = params.pool;
@@ -263,10 +263,10 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     private _taskGroup: PromisePoolGroupInternal; // Needed?
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
-    private _result: R[];
+    private _result: R[] = [];
     private _returnResult: any;
     private _exhausted?: boolean;
-    private _errored?: boolean;
+    private _rejection?: TaskError;
     private _init: boolean;
     private _promises: Array<ResolvablePromise<R[]>> = [];
     private _pool: PromisePoolExecutor;
@@ -304,7 +304,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
             group._incrementTasks();
         });
 
-        this._triggerPromises();
+        // The creator will trigger the promises to run
     }
 
     public _busyTime(): boolean | number {
@@ -353,8 +353,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         let resultIndex: number = this._invocations;
         this._invocations++;
         if (this._invocations >= this._invocationLimit) {
-            // this._exhausted = true;
-            this.end();
+            this._exhaust();
         }
 
         promise.catch((err) => {
@@ -365,6 +364,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
                 group._activePromiseCount--;
             });
             this._result[resultIndex] = result;
+            if (this._exhausted && this._taskGroup._activePromiseCount <= 0 && !this._rejection) {
+                this._resolve();
+            }
             // Remove the task if needed and start the next task
             this._triggerPromises();
         });
@@ -372,7 +374,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     }
 
     private _resolve(): void {
-        this._exhausted = true;
+        this._exhaust();
 
         if (this._resultConverter) {
             try {
@@ -393,11 +395,12 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     }
 
     private _reject(err: any) {
-        this._exhausted = true;
+        this._exhaust();
         const taskError: TaskError = {
             error: err,
             handled: false,
         };
+        this._rejection = taskError;
         if (this._promises.length) {
             taskError.handled = true;
             this._promises.forEach((promise) => {
@@ -462,9 +465,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
 
     public promise(): Promise<R[]> {
         if (this._exhausted) {
-            if (this._errored) {
-                this._taskGroup._rejection.handled = true;
-                return Promise.reject(this._taskGroup._rejection.error);
+            if (this._rejection) {
+                this._rejection.handled = true;
+                return Promise.reject(this._rejection.error);
             } else if (this._taskGroup._activePromiseCount < 1) {
                 return Promise.resolve(this._returnResult);
             }
@@ -475,12 +478,18 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         return promise.promise;
     }
 
-    public end(): void {
-        if (this._exhausted) {
-            return;
+    private _exhaust() {
+        if (!this._exhausted) {
+            this._exhausted = true;
+            this._remove();
         }
-        this._exhausted = true;
-        this._remove();
+    }
+
+    public end(): void {
+        this._exhaust();
+        if (this._taskGroup._activePromiseCount < 1 && !this._rejection) {
+            this._resolve();
+        }
     }
 
     public getStatus(): TaskStatus {
@@ -751,12 +760,15 @@ export class PromisePoolExecutor {
                 this._removeTask(task);
             }
         });
+        this._tasks.push(task);
+        this._triggerPromises();
         return task;
     }
 
     private _removeTask(task: PromisePoolTaskInternal<any>) {
         const i: number = this._tasks.indexOf(task);
-        if (i > 0) {
+        if (i !== -1) {
+            console.log("Task removed");
             this._tasks.splice(i, 1);
         }
     }
