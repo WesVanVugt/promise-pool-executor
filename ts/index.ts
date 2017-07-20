@@ -1,6 +1,6 @@
 const nextTick = require("next-tick");
 
-const TASK_FIXED_GROUPS = 2;
+const TASK_GROUP_INDEX = 1;
 
 export interface TaskGeneral {
     /**
@@ -46,7 +46,8 @@ interface PromisePoolTaskParams<R> extends GenericTaskParams<R> {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupInternal;
     triggerPromises: () => void;
-    remove: () => void;
+    attach: (groups: PromisePoolGroupInternal[]) => void;
+    detach: (groups: PromisePoolGroupInternal[]) => void;
     resultConverter?: (result: R[]) => any;
 }
 
@@ -219,7 +220,7 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
             this._rejection.handled = true;
             return Promise.reject(this._rejection.error);
         }
-        if (this._activePromiseCount === 0) {
+        if (this._activeTaskCount <= 0) {
             return Promise.resolve();
         }
 
@@ -271,7 +272,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     private _promises: Array<ResolvablePromise<R[]>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerPromises: () => void;
-    private _remove: () => void;
+    private _detachCallback: (groups: PromisePoolGroupInternal[]) => void;
     private _resultConverter?: (result: R[]) => any;
 
     // addGenericTask
@@ -279,7 +280,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     public constructor(params: PromisePoolTaskParams<R>) {
         this._pool = params.pool;
         this._triggerPromises = params.triggerPromises;
-        this._remove = params.remove;
+        this._detachCallback = params.detach;
         this._resultConverter = params.resultConverter;
 
         if (!isNull(params.invocationLimit)) {
@@ -303,6 +304,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         this._groups.forEach((group) => {
             group._incrementTasks();
         });
+
+        params.attach(this._groups);
 
         // The creator will trigger the promises to run
     }
@@ -364,8 +367,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
                 group._activePromiseCount--;
             });
             this._result[resultIndex] = result;
-            if (this._exhausted && this._taskGroup._activePromiseCount <= 0 && !this._rejection) {
-                this._resolve();
+            if (this._exhausted && this._taskGroup._activePromiseCount <= 0) {
+                this._detach();
             }
             // Remove the task if needed and start the next task
             this._triggerPromises();
@@ -412,11 +415,11 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
             group._reject(taskError);
         });
 
-        if (!err.handled) {
+        if (!taskError.handled) {
             nextTick(() => {
-                if (!err.handled) {
+                if (!taskError.handled) {
                     // Unhandled promise rejection
-                    Promise.reject(err.error);
+                    Promise.reject(taskError.error);
                 }
             });
         }
@@ -481,7 +484,22 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     private _exhaust() {
         if (!this._exhausted) {
             this._exhausted = true;
-            this._remove();
+
+        }
+        if (this._taskGroup._activePromiseCount <= 0) {
+            this._detach();
+        }
+    }
+
+    private _detach() {
+        if (this._taskGroup._activeTaskCount > 0) {
+            this._groups.forEach((group) => {
+                group._decrementTasks();
+            });
+            this._detachCallback(this._groups);
+            if (!this._rejection) {
+                this._resolve();
+            }
         }
     }
 
@@ -607,12 +625,8 @@ export class PromisePoolExecutor {
      * All tasks which are active or waiting.
      */
     private _tasks: PromisePoolTaskInternal<any>[] = [];
-    /**
-     * A map containing all tasks which are active or waiting, indexed by their ids.
-     */
-    private _taskMap: Map<any, PromisePoolTaskInternal<any>> = new Map(); // Is this needed?
     private _globalGroup: PromisePoolGroupInternal;
-    private _groupMap: Map<any, PromisePoolGroupInternal> = new Map(); // Is this needed?
+    private _groupSet: Set<PromisePoolGroupInternal> = new Set();
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -636,6 +650,7 @@ export class PromisePoolExecutor {
             }
         }
         this._globalGroup = new PromisePoolGroupInternal(groupParams);
+        this._groupSet.add(this._globalGroup);
     }
 
     /**
@@ -676,7 +691,7 @@ export class PromisePoolExecutor {
 
     private _updateFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
-        this._groupMap.forEach((group) => {
+        this._groupSet.forEach((group) => {
             group._updateFrequencyStarts();
         });
     }
@@ -704,7 +719,7 @@ export class PromisePoolExecutor {
 
             if (busyTime === true) {
                 taskIndex++;
-            } else if (busyTime && busyTime > Date.now()) {
+            } else if (busyTime) {
                 if (busyTime < soonest) {
                     soonest = busyTime;
                 }
@@ -756,7 +771,18 @@ export class PromisePoolExecutor {
             triggerPromises: () => {
                 this._triggerPromises();
             },
-            remove: () => {
+            attach: (groups: PromisePoolGroupInternal[]) => {
+                groups.forEach((group) => {
+                    this._groupSet.add(group);
+                });
+            },
+            detach: (groups: PromisePoolGroupInternal[]) => {
+                const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
+                groups.forEach((group) => {
+                    if (group._activeTaskCount <= limit && group !== this._globalGroup) {
+                        this._groupSet.delete(group);
+                    }
+                });
                 this._removeTask(task);
             }
         });
