@@ -615,7 +615,7 @@ describe("Miscellaneous Features", () => {
         });
     });
 
-    describe("configureGroup", () => {
+    describe("Configure Group", () => {
         it("triggerPromises", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 

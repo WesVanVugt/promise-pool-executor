@@ -274,7 +274,7 @@ export interface PromisePoolSingleTask<R> extends PromisePoolTaskBase {
 class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupInternal[];
     private _generator: (invocation: number) => Promise<R> | null;
-    private _taskGroup: PromisePoolGroupInternal; // Needed?
+    private _taskGroup: PromisePoolGroupInternal;
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
     private _result: R[] = [];
@@ -282,7 +282,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _exhausted?: boolean;
     private _rejection?: TaskError;
     private _init: boolean;
-    private _promises: Array<ResolvablePromise<R[]>> = [];
+    private _promises: Array<ResolvablePromise<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerPromises: () => void;
     private _detachCallback: (groups: PromisePoolGroupInternal[]) => void;
@@ -535,6 +535,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         });
 
         return {
+            activeTaskCount: this._taskGroup._activeTaskCount,
             activePromiseCount: this._taskGroup._activePromiseCount,
             concurrencyLimit: this._taskGroup._concurrencyLimit,
             frequencyLimit: this._taskGroup._frequencyLimit,
@@ -571,6 +572,7 @@ export interface GroupStatus {
 }
 
 export interface GroupStatus extends PromiseLimits {
+    activeTaskCount: number;
     /**
      * The current number of active invocations for the task.
      */
