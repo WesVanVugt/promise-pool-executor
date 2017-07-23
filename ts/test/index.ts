@@ -80,7 +80,8 @@ function unhandledRejectionListener(err: any) {
     throw new Error("UnhandledPromiseRejection: " + err.message);
 }
 
-before(() => {
+beforeEach(() => {
+    process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
 });
 
@@ -531,7 +532,7 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: function (index) {
                 if (index >= 2) {
                     this.end();
@@ -551,7 +552,7 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        pool.addGenericTask({
+        return pool.addGenericTask({
             generator: function (index) {
                 return wait(tick)
                     .then(() => {
@@ -560,12 +561,16 @@ describe("Miscellaneous Features", () => {
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
+            frequencyLimit: 5,
+            frequencyWindow: 1000,
         }).promise().then((status) => {
             expect(status[0]).to.deep.equal({
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
                 invocations: 1,
                 invocationLimit: 1,
+                frequencyLimit: 5,
+                frequencyWindow: 1000,
                 freeSlots: 0,
             } as Pool.TaskStatus);
         });
