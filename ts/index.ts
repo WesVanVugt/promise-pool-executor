@@ -349,18 +349,25 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         return time ? time : false;
     }
 
-    public _run(): boolean {
+    public _run(): void {
+        if (this._invocations >= this._invocationLimit) {
+            // TODO: Make a test for this
+            // This may detach / resolve the task if no promises are active
+            this._exhaust();
+            return;
+        }
+
         let promise: Promise<any>;
         try {
             promise = this._generator.call(this, this._invocations);
         } catch (err) {
             this._reject(err);
-            return false;
+            return;
         }
         if (!promise) {
             this.end();
             // Remove the task if needed and start the next task
-            return false;
+            return;
         }
 
         if (!(promise instanceof Promise)) {
@@ -376,6 +383,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         let resultIndex: number = this._invocations;
         this._invocations++;
         if (this._invocations >= this._invocationLimit) {
+            // this will not detach the task since there are active promises
             this._exhaust();
         }
 
@@ -393,7 +401,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             // Remove the task if needed and start the next task
             this._triggerPromises();
         });
-        return true;
     }
 
     private _resolve(): void {
@@ -428,12 +435,15 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             return;
         }
 
-        this._exhaust();
         const taskError: TaskError = {
             error: err,
             handled: false,
         };
         this._rejection = taskError;
+
+        // This may detach the task
+        this._exhaust();
+
         if (this._promises.length) {
             taskError.handled = true;
             this._promises.forEach((promise) => {
@@ -446,6 +456,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         });
 
         if (!taskError.handled) {
+            // Wait a tick to see if the error gets handled
             nextTick(() => {
                 if (!taskError.handled) {
                     // Unhandled promise rejection
