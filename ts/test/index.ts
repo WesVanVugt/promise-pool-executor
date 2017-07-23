@@ -390,25 +390,6 @@ describe("Exception Handling", () => {
             });
         });
 
-        it("Invalid Parameters", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            let error: Error = new Error();
-            let caught: boolean = false;
-            pool.addGenericTask({
-                generator: () => {
-                    return Promise.resolve();
-                },
-                concurrencyLimit: 0, // invalid
-            });
-            return pool.waitForIdle(
-            ).catch((err) => {
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
-        });
-
         describe("Clearing After Delay", () => {
             it("Promise Rejection", () => {
                 let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
@@ -423,27 +404,6 @@ describe("Exception Handling", () => {
                     invocationLimit: 1,
                 }).promise().catch((err) => {
                     expect(err).to.equal(error);
-                    caught = true;
-                });
-                return wait(tick).then(() => {
-                    return pool.waitForIdle();
-                }).catch(() => {
-                    throw new Error("Error did not clear");
-                }).then(() => {
-                    expect(caught).to.equal(true, "Must throw an error");
-                });
-            });
-
-            it("Invalid Parameters", function () {
-                let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                let caught: boolean = false;
-                pool.addGenericTask({
-                    generator: () => {
-                        return null;
-                    },
-                    concurrencyLimit: 0, // Invalid
-                }).promise().catch((err) => {
-                    expect(err).to.be.instanceof(Error);
                     caught = true;
                 });
                 return wait(tick).then(() => {
@@ -498,27 +458,6 @@ describe("Exception Handling", () => {
             return group.waitForIdle(
             ).catch((err) => {
                 expect(err).to.equal(error);
-                caught = true;
-            }).then((results) => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
-        });
-
-        it("Invalid Parameters", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            let error: Error = new Error();
-            let caught: boolean = false;
-            let group: Pool.PromisePoolGroup = pool.addGroup({});
-            pool.addGenericTask({
-                groups: [group],
-                generator: () => {
-                    return Promise.resolve();
-                },
-                concurrencyLimit: 0, // invalid
-            });
-            return pool.waitForIdle(
-            ).catch((err) => {
                 caught = true;
             }).then((results) => {
                 expect(caught).to.equal(true, "Must throw an error");
