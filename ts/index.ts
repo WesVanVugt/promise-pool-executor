@@ -353,7 +353,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         if (this._invocations >= this._invocationLimit) {
             // TODO: Make a test for this
             // This may detach / resolve the task if no promises are active
-            this._exhaust();
+            this.end();
             return;
         }
 
@@ -384,7 +384,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         this._invocations++;
         if (this._invocations >= this._invocationLimit) {
             // this will not detach the task since there are active promises
-            this._exhaust();
+            this.end();
         }
 
         promise.catch((err) => {
@@ -407,7 +407,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         if (this._rejection) {
             return;
         }
-        this._exhaust();
+        this.end();
 
         if (this._resultConverter) {
             try {
@@ -442,7 +442,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         this._rejection = taskError;
 
         // This may detach the task
-        this._exhaust();
+        this.end();
 
         if (this._promises.length) {
             taskError.handled = true;
@@ -505,10 +505,10 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         return promise.promise;
     }
 
-    private _exhaust() {
+    public end() {
+        console.log("Ending task");
         if (!this._exhausted) {
             this._exhausted = true;
-
         }
         if (this._taskGroup._activePromiseCount <= 0) {
             this._detach();
@@ -522,13 +522,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             });
             this._detachCallback(this._groups);
             this._resolve();
-        }
-    }
-
-    public end(): void {
-        this._exhaust();
-        if (this._taskGroup._activePromiseCount < 1) {
-            this._detach();
         }
     }
 
@@ -599,7 +592,6 @@ export interface GroupStatus extends PromiseLimits {
      */
     freeSlots: number;
 }
-
 
 export interface TaskStatus extends GroupStatus {
     /**
