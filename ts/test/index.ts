@@ -531,19 +531,17 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        let task = pool.addGenericTask({
-            generator: (index) => {
+        pool.addGenericTask({
+            generator: function (index) {
                 if (index >= 2) {
-                    // expect(pool.stopTask(id)).to.equal(true, "Stop task must succede");
-                    task.end();
+                    this.end();
                 }
                 return wait(tick)
                     .then(() => {
                         return Date.now() - start;
                     });
             }
-        });
-        task.promise().then((results) => {
+        }).promise().then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
         });

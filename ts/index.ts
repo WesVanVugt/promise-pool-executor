@@ -55,7 +55,7 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     /**
      * A function used for creating promises to run.
      */
-    generator: (data?: T) => Promise<R>;
+    generator: (this: PromisePoolTask<any>, data?: T) => Promise<R>;
     /**
      * Optional data to pass to the generator function as a parameter.
     */
@@ -67,7 +67,7 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimi
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (invocation?: number) => Promise<R>;
+    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<R>;
 }
 
 export interface BatchTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
@@ -77,7 +77,7 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimit
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any>, values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -99,7 +99,7 @@ export interface EachTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (value: T, index?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any>, value: T, index?: number) => Promise<R> | null;
     /**
      * An array of elements to be individually passed to {generator}.
      */
@@ -806,7 +806,9 @@ export class PromisePoolExecutor {
     public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolSingleTask<R> {
         return this.addGenericTask({
             groups: params.groups,
-            generator: () => params.generator(params.data),
+            generator: function () {
+                return params.generator.call(this, params.data);
+            },
             invocationLimit: 1,
             resultConverter: (result) => result[0],
         }) as any; // TODO fix this typing
@@ -867,7 +869,7 @@ export class PromisePoolExecutor {
                     index += params.batchSize;
                 }
 
-                return params.generator(params.data.slice(oldIndex, index), oldIndex, invocation);
+                return params.generator.call(this, params.data.slice(oldIndex, index), oldIndex, invocation);
             },
             concurrencyLimit: params.concurrencyLimit,
             frequencyLimit: params.frequencyLimit,
@@ -885,13 +887,13 @@ export class PromisePoolExecutor {
     public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R> {
         return this.addGenericTask({
             groups: params.groups,
-            generator: (index) => {
+            generator: function (index) {
                 if (index >= params.data.length) {
                     return null;
                 }
                 let oldIndex: number = index;
                 index++;
-                return params.generator(params.data[oldIndex], oldIndex);
+                return params.generator.call(this, params.data[oldIndex], oldIndex);
             },
             concurrencyLimit: params.concurrencyLimit,
             frequencyLimit: params.frequencyLimit,
