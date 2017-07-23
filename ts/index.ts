@@ -38,7 +38,7 @@ export interface GenericTaskParams<R> extends TaskGeneral, Partial<PromiseLimits
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (invocation?: number) => Promise<R> | null,
+    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<R> | null,
     resultConverter?: (result: R[]) => any;
 }
 
@@ -116,22 +116,26 @@ export interface PromisePoolGroup {
 
 interface PromisePoolGroupParams extends PromisePoolGroupConfig {
     pool: PromisePoolExecutor;
+    triggerPromises: () => void;
 }
 
 class PromisePoolGroupInternal implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
+    private _triggerPromises: () => void;
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
     public _frequencyWindow: number;
     public _frequencyStarts: number[] = [];
-    public _promises: Array<ResolvablePromise<void>> = [];
-    public _rejection?: TaskError;
+    private _promises: Array<ResolvablePromise<void>> = [];
+    private _rejection?: TaskError;
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
 
     constructor(params: PromisePoolGroupParams) {
-        this._pool = params.pool;
+        // Finish the configuration afterwards because otherwise the promises will trigger during creation
         this.configure(params);
+        this._pool = params.pool;
+        this._triggerPromises = params.triggerPromises;
     }
 
     public configure(params: PromisePoolGroupConfig): void {
@@ -162,6 +166,10 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         this._concurrencyLimit = concurrencyLimit;
         this._frequencyLimit = frequencyLimit;
         this._frequencyWindow = frequencyWindow;
+
+        if (this._triggerPromises) {
+            this._triggerPromises();
+        }
     }
 
     public _updateFrequencyStarts(): void {
@@ -292,7 +300,14 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         this._taskGroup = new PromisePoolGroupInternal(params);
         this._groups = [params.globalGroup, this._taskGroup];
         if (params.groups) {
-            this._groups.push(...params.groups as PromisePoolGroupInternal[]);
+            const groups = params.groups as PromisePoolGroupInternal[];
+            groups.forEach((group) => {
+                if (group._pool !== this._pool) {
+                    // TODO: Make a test for this
+                    throw new Error("params.groups contains a group belonging to a different pool");
+                }
+            });
+            this._groups.push(...groups);
         }
         this._generator = params.generator;
 
@@ -437,26 +452,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
             }
             invocationLimit = params.invocationLimit;
         }
-        if (!isNull(params.concurrencyLimit)) {
-            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
-                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
-            }
-            concurrencyLimit = params.concurrencyLimit;
-        }
-        if (!isNull(params.frequencyLimit) || !isNull(params.frequencyWindow)) {
-            if (isNull(params.frequencyLimit) || isNull(params.frequencyWindow)) {
-                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
-            }
-            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
-                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
-            }
-            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
-                throw new Error("Invalid frequency window: " + params.frequencyWindow);
-            }
-            frequencyLimit = params.frequencyLimit;
-            frequencyWindow = params.frequencyWindow;
-        }
+        this._taskGroup.configure(params);
 
+        this._invocationLimit = invocationLimit;
         if (this._taskGroup._activeTaskCount > 0) {
             this._run();
         }
@@ -638,6 +636,7 @@ export class PromisePoolExecutor {
     constructor(params?: Partial<PromiseLimits> | number) {
         let groupParams: PromisePoolGroupParams = {
             pool: this,
+            triggerPromises: () => this._triggerPromises(),
         };
 
         if (params !== undefined && params !== null) {
@@ -754,6 +753,7 @@ export class PromisePoolExecutor {
         return new PromisePoolGroupInternal({
             ...params,
             pool: this,
+            triggerPromises: () => this._triggerPromises(),
         });
     }
 
@@ -768,9 +768,7 @@ export class PromisePoolExecutor {
             ...params,
             pool: this,
             globalGroup: this._globalGroup,
-            triggerPromises: () => {
-                this._triggerPromises();
-            },
+            triggerPromises: () => this._triggerPromises(),
             attach: (groups: PromisePoolGroupInternal[]) => {
                 groups.forEach((group) => {
                     this._groupSet.add(group);
@@ -847,15 +845,15 @@ export class PromisePoolExecutor {
             throw new Error("Invalid batch size: " + params.batchSize);
         }
 
-        const task: PromisePoolTask<R> = this.addGenericTask({
+        return this.addGenericTask({
             groups: params.groups,
-            generator: (invocation) => {
+            generator: function (invocation) {
                 if (index >= params.data.length) {
                     return null;
                 }
                 let oldIndex: number = index;
                 if (typeof params.batchSize === "function") {
-                    let status: TaskStatus = task.getStatus();
+                    let status: TaskStatus = this.getStatus();
                     let batchSize: number = params.batchSize(
                         params.data.length - oldIndex,
                         status.freeSlots,
@@ -876,7 +874,6 @@ export class PromisePoolExecutor {
             frequencyWindow: params.frequencyWindow,
             invocationLimit: params.invocationLimit,
         });
-        return task;
     }
 
     /**

@@ -409,7 +409,7 @@ describe("Exception Handling", () => {
         });
 
         describe("Clearing After Delay", () => {
-            it("Promise Rejection", function () {
+            it("Promise Rejection", () => {
                 let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let error: Error = new Error();
                 let caught: boolean = false;
@@ -553,17 +553,16 @@ describe("Miscellaneous Features", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
-        let task: Pool.PromisePoolTask<any> = pool.addGenericTask({
-            generator: (index) => {
+        pool.addGenericTask({
+            generator: function (index) {
                 return wait(tick)
                     .then(() => {
-                        return task.getStatus();
+                        return this.getStatus();
                     });
             },
             invocationLimit: 1,
             concurrencyLimit: 5,
-        });
-        task.promise().then((status) => {
+        }).promise().then((status) => {
             expect(status[0]).to.deep.equal({
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
