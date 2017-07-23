@@ -32,14 +32,24 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface GenericTaskParams<R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
+export interface PromisePoolGroupConfig extends Partial<PromiseLimits> { }
+
+export interface TaskLimits extends PromisePoolGroupConfig, InvocationLimit { }
+
+export interface GenericTaskParamsBase extends TaskGeneral, TaskLimits { }
+
+export interface GenericTaskParams<R> extends GenericTaskParamsBase {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<R> | null,
-    resultConverter?: (result: R[]) => any;
+    generator: (this: PromisePoolTask<any[]>, invocation?: number) => Promise<R> | null,
+}
+
+export interface GenericTaskParamsConverted<I, R> extends GenericTaskParamsBase {
+    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<I> | null,
+    resultConverter: (result: I[]) => R;
 }
 
 interface PromisePoolTaskParams<R> extends GenericTaskParams<R> {
@@ -62,22 +72,22 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     data?: T;
 }
 
-export interface LinearTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
+export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<R>;
+    generator: (this: PromisePoolTask<any[]>, invocation?: number) => Promise<R>;
 }
 
-export interface BatchTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
+export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (this: PromisePoolTask<any>, values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -92,21 +102,18 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimit
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskParams<T, R> extends TaskGeneral, Partial<PromiseLimits>, InvocationLimit {
+export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * 
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (this: PromisePoolTask<any>, value: T, index?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, value: T, index?: number) => Promise<R> | null;
     /**
      * An array of elements to be individually passed to {generator}.
      */
     data: T[];
-}
-
-export interface PromisePoolGroupConfig extends Partial<PromiseLimits> {
 }
 
 export interface PromisePoolGroup {
@@ -256,21 +263,21 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
     }
 }
 
-export interface PromisePoolTaskBase<R> {
-    configure(params: GenericTaskParams<R>): void;
+export interface PromisePoolTaskBase {
+    configure(params: PromisePoolGroupConfig): void;
     end(): void;
     getStatus(): TaskStatus;
 }
 
-export interface PromisePoolTask<R> extends PromisePoolTaskBase<R> {
-    promise(): Promise<R[]>;
-}
-
-export interface PromisePoolSingleTask<R> extends PromisePoolTaskBase<R> {
+export interface PromisePoolTask<R> extends PromisePoolTaskBase {
     promise(): Promise<R>;
 }
 
-class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
+export interface PromisePoolSingleTask<R> extends PromisePoolTaskBase {
+    promise(): Promise<R>;
+}
+
+class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupInternal[];
     private _generator: (invocation?: number) => Promise<R> | null;
     private _taskGroup: PromisePoolGroupInternal; // Needed?
@@ -451,7 +458,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
         }
     }
 
-    public configure(params: GenericTaskParams<R>): void {
+    public configure(params: TaskLimits): void {
         let invocationLimit: number = Infinity;
         let concurrencyLimit: number = Infinity;
         let frequencyLimit: number = Infinity;
@@ -610,11 +617,11 @@ class ResolvablePromise<T> {
     }
 }
 
-export interface ConfigureGroupParams extends Partial<PromiseLimits> {
+export interface ConfigureGroupParams extends PromisePoolGroupConfig {
     groupId: any;
 }
 
-export interface ConfigureTaskParams extends Partial<PromiseLimits> {
+export interface ConfigureTaskParams extends PromisePoolGroupConfig {
     taskId: any;
 }
 
@@ -642,9 +649,9 @@ export class PromisePoolExecutor {
      * 
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
-    constructor(params?: Partial<PromiseLimits>);
+    constructor(params?: PromisePoolGroupConfig);
     constructor(concurrencyLimit?: number);
-    constructor(params?: Partial<PromiseLimits> | number) {
+    constructor(params?: PromisePoolGroupConfig | number) {
         let groupParams: PromisePoolGroupParams = {
             pool: this,
             triggerPromises: () => this._triggerPromises(),
@@ -718,7 +725,7 @@ export class PromisePoolExecutor {
         }
 
         let taskIndex: number = 0;
-        let task: PromisePoolTaskInternal<any>;
+        let task: PromisePoolTaskInternal<any[]>;
         let soonest: number = Infinity;
         let busyTime: boolean | number;
         let blocked: boolean;
@@ -756,7 +763,7 @@ export class PromisePoolExecutor {
     }
 
     /** Configures the global limits set for the pool. */
-    public configure(params: Partial<PromiseLimits>): void {
+    public configure(params: PromisePoolGroupConfig): void {
         this._globalGroup.configure(params);
     }
 
@@ -774,7 +781,9 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R> {
+    public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
+    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
+    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]> {
         const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal({
             ...params,
             pool: this,
@@ -793,7 +802,7 @@ export class PromisePoolExecutor {
                     }
                 });
                 this._removeTask(task);
-            }
+            },
         });
         this._tasks.push(task);
         this._triggerPromises();
@@ -815,14 +824,14 @@ export class PromisePoolExecutor {
      * @return A promise which resolves to the result of the task.
      */
     public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolSingleTask<R> {
-        return this.addGenericTask({
+        return this.addGenericTask<R, R>({
             groups: params.groups,
             generator: function () {
                 return params.generator.call(this, params.data);
             },
             invocationLimit: 1,
             resultConverter: (result) => result[0],
-        }) as any; // TODO fix this typing
+        });
     }
 
     /**
@@ -831,7 +840,7 @@ export class PromisePoolExecutor {
      * @param params 
      * @return A promise which resolves to an array containing the results of the task.
      */
-    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): PromisePoolTask<R> {
+    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
             groups: params.groups,
             generator: params.generator,
@@ -848,7 +857,7 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the results of the task. Each element in the array corresponds to one invocation.
      */
-    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): PromisePoolTask<R> {
+    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): PromisePoolTask<R[]> {
         let index: number = 0;
 
         // Unacceptable values: NaN, <=0, type not number/function
@@ -895,7 +904,7 @@ export class PromisePoolExecutor {
      * @param params 
      * @return A promise which resolves to an array containing the results of the task.
      */
-    public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R> {
+    public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
             groups: params.groups,
             generator: function (index) {
