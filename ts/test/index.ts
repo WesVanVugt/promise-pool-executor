@@ -315,13 +315,12 @@ describe("Exception Handling", () => {
         it("Invalid Parameters", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            pool.addGenericTask({
+            expect(() => pool.addGenericTask({
                 generator: () => {
                     return Promise.resolve();
                 },
                 concurrencyLimit: 0, // invalid
-            });
-            return expectUnhandledRejection();
+            })).to.throw();
         });
 
         it("Multi-rejection", () => {
