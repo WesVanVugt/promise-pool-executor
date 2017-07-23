@@ -214,10 +214,14 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
             return;
         }
         this._rejection = err;
-        this._promises.forEach((promise) => {
-            promise.reject(err.error);
-        });
-        this._promises.length = 0;
+        if (this._promises.length) {
+            err.handled = true;
+            this._promises.forEach((promise) => {
+                promise.reject(err.error);
+            });
+            this._promises.length = 0;
+        }
+        // The group error state should reset on the next tick
         nextTick(() => {
             delete this._rejection;
         });
@@ -347,7 +351,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     public _run(): boolean {
         let promise: Promise<any>;
         try {
-            promise = this._generator(this._invocations);
+            promise = this._generator.call(this, this._invocations);
         } catch (err) {
             this._reject(err);
             return false;
@@ -413,6 +417,13 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<R> {
     }
 
     private _reject(err: any) {
+        // Check if the task has already failed
+        if (this._rejection) {
+            // Unhandled promise rejection
+            Promise.reject(err);
+            return;
+        }
+
         this._exhaust();
         const taskError: TaskError = {
             error: err,
