@@ -283,6 +283,33 @@ describe("Exception Handling", () => {
         });
     });
 
+    describe("Invalid Configuration", () => {
+        it("Invalid Parameters", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            expect(() => pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve();
+                },
+                concurrencyLimit: 0, // invalid
+            })).to.throw();
+        });
+
+        it("Group From Another Pool", () => {
+            const pool1: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            const pool2: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            expect(() => pool1.addGenericTask({
+                generator: () => {
+                    return Promise.resolve();
+                },
+                groups: [pool2.addGroup({
+                    concurrencyLimit: 1,
+                })],
+            })).to.throw();
+        });
+    })
+
     describe("Unhandled Rejection", () => {
         it("Generator Function (synchronous)", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
@@ -312,17 +339,6 @@ describe("Exception Handling", () => {
             return expectUnhandledRejection(error);
         });
 
-        it("Invalid Parameters", () => {
-            let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            expect(() => pool.addGenericTask({
-                generator: () => {
-                    return Promise.resolve();
-                },
-                concurrencyLimit: 0, // invalid
-            })).to.throw();
-        });
-
         it("Multi-rejection", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
@@ -346,7 +362,7 @@ describe("Exception Handling", () => {
         });
     })
 
-    describe("waitForIdle", () => {
+    describe("pool.waitForIdle", () => {
         it("Generator Function (synchronous)", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
@@ -416,7 +432,7 @@ describe("Exception Handling", () => {
         });
     });
 
-    describe("waitForGroupIdle", () => {
+    describe("group.waitForIdle", () => {
         it("Generator Function (synchronous)", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
@@ -502,7 +518,8 @@ describe("Miscellaneous Features", () => {
             frequencyLimit: 5,
             frequencyWindow: 1000,
         }).promise().then((status) => {
-            expect(status[0]).to.deep.equal({
+            const expectedStatus: Pool.TaskStatus = {
+                activeTaskCount: 1,
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
                 invocations: 1,
@@ -510,7 +527,8 @@ describe("Miscellaneous Features", () => {
                 frequencyLimit: 5,
                 frequencyWindow: 1000,
                 freeSlots: 0,
-            } as Pool.TaskStatus);
+            };
+            expect(status[0]).to.deep.equal(expectedStatus);
         });
     });
 

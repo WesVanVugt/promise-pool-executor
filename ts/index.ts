@@ -56,7 +56,7 @@ interface PromisePoolTaskParams<R> extends GenericTaskParams<R> {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupInternal;
     triggerPromises: () => void;
-    attach: (groups: PromisePoolGroupInternal[]) => void;
+    attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => void;
     detach: (groups: PromisePoolGroupInternal[]) => void;
     resultConverter?: (result: R[]) => any;
 }
@@ -325,7 +325,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             group._incrementTasks();
         });
 
-        params.attach(this._groups);
+        params.attach(this, this._groups);
 
         // The creator will trigger the promises to run
     }
@@ -397,6 +397,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     private _resolve(): void {
+        if (this._rejection) {
+            return;
+        }
         this._exhaust();
 
         if (this._resultConverter) {
@@ -507,16 +510,14 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
                 group._decrementTasks();
             });
             this._detachCallback(this._groups);
-            if (!this._rejection) {
-                this._resolve();
-            }
+            this._resolve();
         }
     }
 
     public end(): void {
         this._exhaust();
-        if (this._taskGroup._activePromiseCount < 1 && !this._rejection) {
-            this._resolve();
+        if (this._taskGroup._activePromiseCount < 1) {
+            this._detach();
         }
     }
 
@@ -785,10 +786,11 @@ export class PromisePoolExecutor {
             pool: this,
             globalGroup: this._globalGroup,
             triggerPromises: () => this._triggerPromises(),
-            attach: (groups: PromisePoolGroupInternal[]) => {
+            attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
                 groups.forEach((group) => {
                     this._groupSet.add(group);
                 });
+                this._tasks.push(task);
             },
             detach: (groups: PromisePoolGroupInternal[]) => {
                 const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
@@ -800,7 +802,6 @@ export class PromisePoolExecutor {
                 this._removeTask(task);
             },
         });
-        this._tasks.push(task);
         this._triggerPromises();
         return task;
     }
