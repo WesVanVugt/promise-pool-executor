@@ -482,7 +482,7 @@ describe("Exception Handling", () => {
 });
 
 describe("Miscellaneous Features", () => {
-    it("Stop Task", () => {
+    it("End Task", () => {
         let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         let start: number = Date.now();
@@ -499,6 +499,34 @@ describe("Miscellaneous Features", () => {
         }).promise().then((results) => {
             // The task must return the expected non-array result
             expectTimes(results, [1, 1, 1], "Timing Results");
+        });
+    });
+
+    it("Pause/Resume Task", () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        const start: number = Date.now();
+        let paused: boolean = false;
+        const task = pool.addGenericTask({
+            invocationLimit: 3,
+            generator: function (index) {
+                if (index === 1 && !paused) {
+                    paused = true;
+                    this.pause();
+                    return null;
+                }
+                return wait(tick)
+                    .then(() => {
+                        return Date.now() - start;
+                    });
+            },
+        });
+        wait(tick).then(() => {
+            task.resume();
+        })
+        return task.promise().then((results) => {
+            // The task must return the expected non-array result
+            expectTimes(results, [1, 2, 2], "Timing Results");
         });
     });
 

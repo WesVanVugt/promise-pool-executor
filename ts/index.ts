@@ -257,17 +257,12 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
     }
 }
 
-export interface PromisePoolTaskBase {
-    configure(params: PromisePoolGroupConfig): void;
+export interface PromisePoolTask<R> {
+    configure(params: TaskLimits): void;
+    pause(): void;
+    resume(): void;
     end(): void;
     getStatus(): TaskStatus;
-}
-
-export interface PromisePoolTask<R> extends PromisePoolTaskBase {
-    promise(): Promise<R>;
-}
-
-export interface PromisePoolSingleTask<R> extends PromisePoolTaskBase {
     promise(): Promise<R>;
 }
 
@@ -279,7 +274,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _invocationLimit: number = Infinity;
     private _result: R[] = [];
     private _returnResult: any;
-    private _exhausted?: boolean;
+    private _paused: boolean = false;
+    private _exhausted: boolean = false;
     private _rejection?: TaskError;
     private _init: boolean;
     private _promises: Array<ResolvablePromise<any>> = [];
@@ -331,7 +327,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     public _busyTime(): boolean | number {
-        if (this._exhausted) {
+        if (this._exhausted || this._paused) {
             return true;
         }
 
@@ -365,7 +361,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             return;
         }
         if (!promise) {
-            this.end();
+            if (!this._paused) {
+                this.end();
+            }
             // Remove the task if needed and start the next task
             return;
         }
@@ -482,7 +480,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
 
         this._invocationLimit = invocationLimit;
         if (this._taskGroup._activeTaskCount > 0) {
-            this._run();
+            this._triggerPromises();
         }
         if (!isNull(params.invocationLimit) && params.invocationLimit <= 0) {
             this.end();
@@ -505,17 +503,25 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         return promise.promise;
     }
 
-    public end() {
+    public pause(): void {
+        this._paused = true;
+    }
+
+    public resume(): void {
+        this._paused = false;
+        this._triggerPromises();
+    }
+
+    public end(): void {
+        // Note that this does not trigger more tasks to run. It can resolve a task though.
         console.log("Ending task");
-        if (!this._exhausted) {
-            this._exhausted = true;
-        }
+        this._exhausted = true;
         if (this._taskGroup._activePromiseCount <= 0) {
             this._detach();
         }
     }
 
-    private _detach() {
+    private _detach(): void {
         if (this._taskGroup._activeTaskCount > 0) {
             this._groups.forEach((group) => {
                 group._decrementTasks();
@@ -823,7 +829,7 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to the result of the task.
      */
-    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolSingleTask<R> {
+    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
         return this.addGenericTask<R, R>({
             groups: params.groups,
             generator: function () {
