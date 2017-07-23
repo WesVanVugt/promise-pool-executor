@@ -44,11 +44,11 @@ export interface GenericTaskParams<R> extends GenericTaskParamsBase {
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation?: number) => Promise<R> | null,
+    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | null,
 }
 
 export interface GenericTaskParamsConverted<I, R> extends GenericTaskParamsBase {
-    generator: (this: PromisePoolTask<any>, invocation?: number) => Promise<I> | null,
+    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | null,
     resultConverter: (result: I[]) => R;
 }
 
@@ -65,7 +65,7 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     /**
      * A function used for creating promises to run.
      */
-    generator: (this: PromisePoolTask<any>, data?: T) => Promise<R>;
+    generator: (this: PromisePoolTask<any>, data: T) => Promise<R>;
     /**
      * Optional data to pass to the generator function as a parameter.
     */
@@ -77,7 +77,7 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupCon
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation?: number) => Promise<R>;
+    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
 
 export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
@@ -87,7 +87,7 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConf
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex?: number, invocation?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number) => Promise<R> | null;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -109,7 +109,7 @@ export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfi
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (this: PromisePoolTask<any[]>, value: T, index?: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | null;
     /**
      * An array of elements to be individually passed to {generator}.
      */
@@ -204,15 +204,12 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         return false;
     }
 
-    public _resolve(data?: any) {
-        if (arguments.length > 0) {
-            this._promises.forEach((promise) => {
-                promise.resolve(data);
-            });
-        } else {
+    public _resolve() {
+        if (!this._rejection && this._promises.length) {
             this._promises.forEach((promise) => {
                 promise.resolve();
             });
+            this._promises.length = 0;
         }
     }
 
@@ -254,11 +251,8 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
 
     public _decrementTasks(): void {
         this._activeTaskCount--;
-        if (this._activeTaskCount < 1 && this._promises.length) {
-            this._promises.forEach((promise) => {
-                promise.resolve();
-            });
-            this._promises.length = 0;
+        if (this._activeTaskCount < 1) {
+            this._resolve();
         }
     }
 }
@@ -279,7 +273,7 @@ export interface PromisePoolSingleTask<R> extends PromisePoolTaskBase {
 
 class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupInternal[];
-    private _generator: (invocation?: number) => Promise<R> | null;
+    private _generator: (invocation: number) => Promise<R> | null;
     private _taskGroup: PromisePoolGroupInternal; // Needed?
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
