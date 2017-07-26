@@ -150,7 +150,9 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
      */
     public configure(params: PromisePoolGroupConfig): void {
         this._configure(params);
-        this._triggerCallback();
+        if (this._triggerCallback) {
+            this._triggerCallback();
+        }
     }
 
     /**
@@ -195,7 +197,7 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         if (this._frequencyStarts.length > 0) {
             let time: number = now - this._frequencyWindow;
             let i: number = 0;
-            while (i < this._frequencyStarts.length && this._frequencyStarts[i] > time) {
+            while (i < this._frequencyStarts.length && this._frequencyStarts[i] <= time) {
                 i++;
             }
             if (i > 0) {
@@ -572,13 +574,14 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     public getStatus(): TaskStatus {
+        const now = Date.now();
         let freeSlots: number = this._invocationLimit - this._invocations;
         this._groups.forEach((group) => {
             let slots = group._concurrencyLimit - group._activePromiseCount;
             if (slots < freeSlots) {
                 freeSlots = slots;
             }
-            group._cleanFrequencyStarts();
+            group._cleanFrequencyStarts(now);
             slots = group._frequencyLimit - group._frequencyStarts.length;
             if (slots < freeSlots) {
                 freeSlots = slots;
@@ -754,8 +757,9 @@ export class PromisePoolExecutor {
 
     private _updateFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
+        const now = Date.now();
         this._groupSet.forEach((group) => {
-            group._cleanFrequencyStarts();
+            group._cleanFrequencyStarts(now);
         });
     }
 
