@@ -128,7 +128,7 @@ interface PromisePoolGroupParams extends PromisePoolGroupConfig {
 
 class PromisePoolGroupInternal implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
-    private _triggerPromises: () => void;
+    private _triggerCallback: () => void;
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
     public _frequencyWindow: number;
@@ -142,10 +142,21 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         // Finish the configuration afterwards because otherwise the promises will trigger during creation
         this.configure(params);
         this._pool = params.pool;
-        this._triggerPromises = params.triggerPromises;
+        this._triggerCallback = params.triggerPromises;
     }
 
+    /**
+     * Configures the group and triggers promises to run if applicable.
+     */
     public configure(params: PromisePoolGroupConfig): void {
+        this._configure(params);
+        this._triggerCallback();
+    }
+
+    /**
+     * Configures the group without triggering promises to run.
+     */
+    private _configure(params: PromisePoolGroupConfig): void {
         let concurrencyLimit: number = Infinity;
         let frequencyLimit: number = Infinity;
         let frequencyWindow: number = 0;
@@ -173,21 +184,19 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         this._concurrencyLimit = concurrencyLimit;
         this._frequencyLimit = frequencyLimit;
         this._frequencyWindow = frequencyWindow;
-
-        if (this._triggerPromises) {
-            this._triggerPromises();
-        }
     }
 
-    public _updateFrequencyStarts(): void {
+    /**
+     * Cleans out old entries from the frequencyStarts array. Uses a passed timestamp to ensure consistency between
+     * groups.
+     */
+    public _cleanFrequencyStarts(now: number): void {
         // Remove the frequencyStarts entries which are outside of the window
         if (this._frequencyStarts.length > 0) {
-            let time: number = Date.now() - this._frequencyWindow;
+            let time: number = now - this._frequencyWindow;
             let i: number = 0;
-            for (; i < this._frequencyStarts.length; i++) {
-                if (this._frequencyStarts[i] > time) {
-                    break;
-                }
+            while (i < this._frequencyStarts.length && this._frequencyStarts[i] > time) {
+                i++;
             }
             if (i > 0) {
                 this._frequencyStarts.splice(0, i);
@@ -195,6 +204,10 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         }
     }
 
+    /** 
+     * Returns false if the group is available, true if the group is busy for an indeterminate time, or the timestamp
+     * of when the group will become available.
+     */
     public _busyTime(): boolean | number {
         if (this._activePromiseCount >= this._concurrencyLimit) {
             return true;
@@ -204,6 +217,9 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         return false;
     }
 
+    /**
+     * Resolves all pending waitForIdle promises.
+     */
     public _resolve() {
         if (!this._rejection && this._promises.length) {
             this._promises.forEach((promise) => {
@@ -213,6 +229,9 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         }
     }
 
+    /**
+     * Rejects all pending waitForIdle promises using the provided error.
+     */
     public _reject(err: TaskError): void {
         if (this._rejection) {
             return;
@@ -231,6 +250,9 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         });
     }
 
+    /**
+     * Returns a promise which resolves when the group becomes idle.
+     */
     public waitForIdle(): Promise<void> {
         if (this._rejection) {
             this._rejection.handled = true;
@@ -249,6 +271,9 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         this._activeTaskCount++;
     }
 
+    /**
+     * Decrements the active tasks, resolving promises if applicable.
+     */
     public _decrementTasks(): void {
         this._activeTaskCount--;
         if (this._activeTaskCount < 1) {
@@ -280,15 +305,14 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _init: boolean;
     private _promises: Array<ResolvablePromise<any>> = [];
     private _pool: PromisePoolExecutor;
-    private _triggerPromises: () => void;
+    private _triggerCallback: () => void;
     private _detachCallback: (groups: PromisePoolGroupInternal[]) => void;
     private _resultConverter?: (result: R[]) => any;
 
-    // addGenericTask
-
     public constructor(params: PromisePoolTaskParams<R>) {
+        console.log("Creating task");
         this._pool = params.pool;
-        this._triggerPromises = params.triggerPromises;
+        this._triggerCallback = params.triggerPromises;
         this._detachCallback = params.detach;
         this._resultConverter = params.resultConverter;
 
@@ -298,13 +322,13 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             }
             this._invocationLimit = params.invocationLimit;
         }
+        // Create a group exclusively for this task. This may throw errors.
         this._taskGroup = new PromisePoolGroupInternal(params);
         this._groups = [params.globalGroup, this._taskGroup];
         if (params.groups) {
             const groups = params.groups as PromisePoolGroupInternal[];
             groups.forEach((group) => {
                 if (group._pool !== this._pool) {
-                    // TODO: Make a test for this
                     throw new Error("params.groups contains a group belonging to a different pool");
                 }
             });
@@ -312,6 +336,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         }
         this._generator = params.generator;
 
+        // Resolve the promise only after all parameters have been validated
         if (params.invocationLimit <= 0) {
             this._resolve();
             return;
@@ -326,6 +351,10 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         // The creator will trigger the promises to run
     }
 
+    /**
+     * Private. Returns false if the task is ready, true if the task is busy with an indeterminate ready time, or the timestamp
+     * for when the task will be ready.
+     */
     public _busyTime(): boolean | number {
         if (this._exhausted || this._paused) {
             return true;
@@ -345,6 +374,9 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         return time ? time : false;
     }
 
+    /**
+     * Private. Invokes the task.
+     */
     public _run(): void {
         if (this._invocations >= this._invocationLimit) {
             // TODO: Make a test for this
@@ -392,12 +424,16 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             this._groups.forEach((group) => {
                 group._activePromiseCount--;
             });
-            this._result[resultIndex] = result;
+            // Avoid storing the result if it is undefined.
+            // Some tasks may have countless iterations and never return anything, so this could eat memory.
+            if (result !== undefined) {
+                this._result[resultIndex] = result;
+            }
             if (this._exhausted && this._taskGroup._activePromiseCount <= 0) {
                 this._detach();
             }
             // Remove the task if needed and start the next task
-            this._triggerPromises();
+            this._triggerCallback();
         });
     }
 
@@ -406,12 +442,16 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             return;
         }
         this.end();
+        // Set the length of the resulting array in case some undefined results affected this
+        this._result.length = this._invocations;
 
         if (this._resultConverter) {
             try {
                 this._returnResult = this._resultConverter(this._result);
+                this._resultConverter = null;
             } catch (err) {
-                return this._reject(err);
+                this._reject(err);
+                return;
             }
         } else {
             this._returnResult = this._result;
@@ -480,7 +520,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
 
         this._invocationLimit = invocationLimit;
         if (this._taskGroup._activeTaskCount > 0) {
-            this._triggerPromises();
+            this._triggerCallback();
         }
         if (!isNull(params.invocationLimit) && params.invocationLimit <= 0) {
             this.end();
@@ -509,7 +549,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
 
     public resume(): void {
         this._paused = false;
-        this._triggerPromises();
+        this._triggerCallback();
     }
 
     public end(): void {
@@ -538,7 +578,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             if (slots < freeSlots) {
                 freeSlots = slots;
             }
-            group._updateFrequencyStarts();
+            group._cleanFrequencyStarts();
             slots = group._frequencyLimit - group._frequencyStarts.length;
             if (slots < freeSlots) {
                 freeSlots = slots;
@@ -715,7 +755,7 @@ export class PromisePoolExecutor {
     private _updateFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
         this._groupSet.forEach((group) => {
-            group._updateFrequencyStarts();
+            group._cleanFrequencyStarts();
         });
     }
 
