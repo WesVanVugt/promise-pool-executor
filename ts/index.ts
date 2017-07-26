@@ -293,6 +293,13 @@ export interface PromisePoolTask<R> {
     promise(): Promise<R>;
 }
 
+export enum TaskState {
+    Running,
+    Paused,
+    Exhausted,
+    Terminated,
+}
+
 class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupInternal[];
     private _generator: (invocation: number) => Promise<R> | null;
@@ -301,8 +308,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _invocationLimit: number = Infinity;
     private _result: R[] = [];
     private _returnResult: any;
-    private _paused: boolean = false;
-    private _exhausted: boolean = false;
+    private _state: TaskState = TaskState.Running;
     private _rejection?: TaskError;
     private _init: boolean;
     private _promises: Array<ResolvablePromise<any>> = [];
@@ -340,7 +346,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
 
         // Resolve the promise only after all parameters have been validated
         if (params.invocationLimit <= 0) {
-            this._resolve();
+            this.end();
             return;
         }
 
@@ -358,7 +364,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
      * for when the task will be ready.
      */
     public _busyTime(): boolean | number {
-        if (this._exhausted || this._paused) {
+        if (this._state !== TaskState.Running) {
             return true;
         }
 
@@ -395,7 +401,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             return;
         }
         if (!promise) {
-            if (!this._paused) {
+            if (this._state === TaskState.Running) {
                 this.end();
             }
             // Remove the task if needed and start the next task
@@ -431,26 +437,29 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             if (result !== undefined) {
                 this._result[resultIndex] = result;
             }
-            if (this._exhausted && this._taskGroup._activePromiseCount <= 0) {
-                this._detach();
+            if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
+                this.end();
             }
             // Remove the task if needed and start the next task
             this._triggerCallback();
         });
     }
 
+    /**
+     * Private. Resolves the task if possible. Should only be called by end()
+     */
     private _resolve(): void {
         if (this._rejection) {
             return;
         }
-        this.end();
         // Set the length of the resulting array in case some undefined results affected this
         this._result.length = this._invocations;
+
+        this._state = TaskState.Terminated;
 
         if (this._resultConverter) {
             try {
                 this._returnResult = this._resultConverter(this._result);
-                this._resultConverter = null;
             } catch (err) {
                 this._reject(err);
                 return;
@@ -458,6 +467,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         } else {
             this._returnResult = this._result;
         }
+        // discard the original array to free memory
+        this._result = null;
 
         if (this._promises.length) {
             this._promises.forEach((promise) => {
@@ -531,13 +542,11 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     public promise(): Promise<R[]> {
-        if (this._exhausted) {
-            if (this._rejection) {
-                this._rejection.handled = true;
-                return Promise.reject(this._rejection.error);
-            } else if (this._taskGroup._activePromiseCount < 1) {
-                return Promise.resolve(this._returnResult);
-            }
+        if (this._rejection) {
+            this._rejection.handled = true;
+            return Promise.reject(this._rejection.error);
+        } else if (this._state === TaskState.Terminated) {
+            return Promise.resolve(this._returnResult);
         }
 
         const promise: ResolvablePromise<R[]> = new ResolvablePromise();
@@ -546,29 +555,33 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     public pause(): void {
-        this._paused = true;
+        if (this._state == TaskState.Running) {
+            this._state = TaskState.Paused;
+        }
     }
 
     public resume(): void {
-        this._paused = false;
-        this._triggerCallback();
+        if (this._state == TaskState.Paused) {
+            this._state = TaskState.Running;
+            this._triggerCallback();
+        }
     }
 
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
         console.log("Ending task");
-        this._exhausted = true;
-        if (this._taskGroup._activePromiseCount <= 0) {
-            this._detach();
+        if (this._state < TaskState.Exhausted) {
+            this._state = TaskState.Exhausted;
         }
-    }
+        if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
+            this._state = TaskState.Terminated;
 
-    private _detach(): void {
-        if (this._taskGroup._activeTaskCount > 0) {
-            this._groups.forEach((group) => {
-                group._decrementTasks();
-            });
-            this._detachCallback(this._groups);
+            if (this._taskGroup._activeTaskCount > 0) {
+                this._groups.forEach((group) => {
+                    group._decrementTasks();
+                });
+                this._detachCallback(this._groups);
+            }
             this._resolve();
         }
     }
