@@ -8,6 +8,10 @@ export interface TaskGeneral {
      * to the completion of a larger task.
      */
     groups?: PromisePoolGroup[];
+    /**
+     * Starts the task in a paused state if set to true.
+     */
+    paused?: boolean;
 }
 
 export interface PromiseLimits {
@@ -321,7 +325,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _invocationLimit: number = Infinity;
     private _result: R[] = [];
     private _returnResult: any;
-    private _state: TaskState = TaskState.Active;
+    private _state: TaskState;
     private _rejection?: TaskError;
     private _init: boolean;
     private _promises: Array<ResolvablePromise<any>> = [];
@@ -336,6 +340,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         this._triggerCallback = params.triggerPromises;
         this._detachCallback = params.detach;
         this._resultConverter = params.resultConverter;
+        this._state = params.paused ? TaskState.Paused : TaskState.Active;
 
         if (!isNull(params.invocationLimit)) {
             if (typeof params.invocationLimit !== "number") {
@@ -891,10 +896,12 @@ export class PromisePoolExecutor {
      * @return A promise which resolves to the result of the task.
      */
     public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
+        const data: T = params.data;
         return this.addGenericTask<R, R>({
             groups: params.groups,
+            paused: params.paused,
             generator: function () {
-                return params.generator.call(this, params.data);
+                return params.generator.call(this, data);
             },
             invocationLimit: 1,
             resultConverter: (result) => result[0],
@@ -915,6 +922,7 @@ export class PromisePoolExecutor {
             concurrencyLimit: 1,
             frequencyLimit: params.frequencyLimit,
             frequencyWindow: params.frequencyWindow,
+            paused: params.paused,
         });
     }
 
@@ -936,6 +944,11 @@ export class PromisePoolExecutor {
 
         return this.addGenericTask({
             groups: params.groups,
+            concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            invocationLimit: params.invocationLimit,
+            paused: params.paused,
             generator: function (invocation) {
                 if (index >= params.data.length) {
                     return null;
@@ -958,10 +971,6 @@ export class PromisePoolExecutor {
 
                 return params.generator.call(this, params.data.slice(oldIndex, index), oldIndex, invocation);
             },
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            invocationLimit: params.invocationLimit,
         });
     }
 
@@ -974,6 +983,11 @@ export class PromisePoolExecutor {
     public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
             groups: params.groups,
+            concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            invocationLimit: params.invocationLimit,
+            paused: params.paused,
             generator: function (index) {
                 if (index >= params.data.length) {
                     return null;
@@ -982,10 +996,6 @@ export class PromisePoolExecutor {
                 index++;
                 return params.generator.call(this, params.data[oldIndex], oldIndex);
             },
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            invocationLimit: params.invocationLimit,
         });
     }
 
