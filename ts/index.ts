@@ -999,10 +999,164 @@ export class PromisePoolExecutor {
         });
     }
 
+    public addPersistentBatchTask<I, O>(params: PersistentBatcherTaskParams<I, O>): PersistentBatcherTask<I, O> {
+        return new PersistentBatchTaskInternal(this, params);
+    }
+
     /**
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     public waitForIdle(): Promise<void> {
         return this._globalGroup.waitForIdle();
+    }
+}
+
+export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupConfig {
+    maxBatchSize?: number;
+    queuingDelay?: number;
+    batchThresholds?: number[];
+    generator: (input: I[]) => Promise<(O | Error)[]>;
+}
+
+export interface PersistentBatcherTask<I, O> {
+    getResult(input: I): Promise<O>;
+    end(): void;
+    getStats(): TaskStatus;
+    configure(params: TaskLimits): void;
+}
+
+class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
+    private _task: PromisePoolTask<any>;
+    private _maxBatchSize: number = Infinity;
+    private _queuingDelay: number = 1;
+    private _batchThresholds: number[];
+    private _activePromiseCount: number = 0;
+    private _inputQueue: I[] = [];
+    private _outputPromises: ResolvablePromise<O>[] = [];
+    private _generator: (input: I[]) => Promise<(O | Error)[]>;
+    private _runTimeout: NodeJS.Timer;
+    private _running: boolean = false;
+
+    constructor(pool: PromisePoolExecutor, params: PersistentBatcherTaskParams<I, O>) {
+        const batcher = this;
+        this._generator = params.generator;
+        if (Array.isArray(params.batchThresholds)) {
+            if (!params.batchThresholds.length) {
+                throw new Error("params.batchThresholds must contain at least one number");
+            }
+            params.batchThresholds.forEach((n) => {
+                if (n < 1) {
+                    throw new Error("params.batchThresholds must not contain numbers less than 1");
+                }
+            })
+            this._batchThresholds = [...params.batchThresholds];
+        } else {
+            this._batchThresholds = [1];
+        }
+        if (!isNull(params.maxBatchSize)) {
+            if (params.maxBatchSize < 1) {
+                throw new Error("params.batchSize must be greater than 0");
+            }
+            this._maxBatchSize = params.maxBatchSize;
+        }
+        if (!isNull(params.queuingDelay)) {
+            this._queuingDelay = params.queuingDelay;
+        }
+
+        this._task = pool.addGenericTask({
+            concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            paused: true,
+            generator: function () {
+                batcher._running = false;
+                batcher._activePromiseCount++;
+                const inputs = batcher._inputQueue.splice(0, batcher._maxBatchSize);
+                const outputPromises = batcher._outputPromises.splice(0, batcher._maxBatchSize);
+
+                // Prepare for the next iteration, pausing the task if needed
+                batcher._run();
+                if (!batcher._running || batcher._runTimeout) {
+                    batcher._task.pause();
+                }
+
+                let batchPromise;
+                try {
+                    batchPromise = batcher._generator(inputs);
+                    if (!(batchPromise instanceof Promise)) {
+                        batchPromise = Promise.resolve(batchPromise);
+                    }
+                } catch (err) {
+                    batchPromise = Promise.reject(err);
+                }
+
+                return batchPromise.then((outputs) => {
+                    if (outputs.length !== outputPromises.length) {
+                        // TODO: Add a test for this
+                        throw new Error("Generator function output length does not equal the input length.");
+                    }
+                    outputPromises.forEach((promise, index) => {
+                        const output = outputs[index];
+                        if (output instanceof Error) {
+                            promise.reject(output);
+                        } else {
+                            promise.resolve(output);
+                        }
+                    });
+                }).catch((err) => {
+                    outputPromises.forEach((promise) => {
+                        promise.reject(err);
+                    });
+                }).then(() => {
+                    batcher._activePromiseCount--;
+                });
+            },
+        });
+    }
+
+    public getResult(input: I): Promise<O> {
+        const index = this._inputQueue.length;
+        this._inputQueue[index] = input;
+        const promise = new ResolvablePromise<O>();
+        this._outputPromises[index] = promise;
+        this._run();
+        return promise.promise;
+    }
+
+    private _run(): void {
+        // If the queue has reached the maximum batch size, start it immediately
+        if (this._inputQueue.length >= this._maxBatchSize) {
+            if (this._runTimeout) {
+                clearTimeout(this._runTimeout);
+                this._runTimeout = null;
+            }
+            this._running = true;
+            this._task.resume();
+            return;
+        }
+        if (this._running) {
+            return;
+        }
+        const thresholdIndex: number = Math.min(this._activePromiseCount, this._batchThresholds.length - 1);
+        if (this._inputQueue.length >= this._batchThresholds[thresholdIndex]) {
+            // Run the batch, but with a delay
+            this._running = true;
+            this._runTimeout = setTimeout(() => {
+                this._runTimeout = null;
+                this._task.resume();
+            }, this._queuingDelay);
+        }
+    }
+
+    public end(): void {
+        this._task.end();
+    }
+
+    public getStats(): TaskStatus {
+        return this._task.getStatus();
+    }
+
+    public configure(params: TaskLimits): void {
+        this._task.configure(params);
     }
 }

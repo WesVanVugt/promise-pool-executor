@@ -790,4 +790,203 @@ describe("Task Secializations", () => {
             });
         });
     });
+
+    describe("Persistent Batch Task", () => {
+        it("Simple", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<number, string>({
+                generator: (input) => {
+                    runCount++;
+                    return wait(tick).then(() => input.map(String));
+                },
+            });
+            const inputs = [1, 5, 9];
+            const start: number = Date.now();
+            return Promise.all(inputs.map((input) => {
+                return task.getResult(input).then((output) => {
+                    expect(output).to.equal(String(input), "Outputs");
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                });
+            })).then((outputs) => {
+                expect(runCount).to.equal(1, "runCount");
+                // Verify that the task is not storing the results, which would waste memory.
+                expect((task as any)._task._result.length).to.equal(0);
+            });
+        });
+        it("Offset Batches", () => {
+            // Runs two batches of requests, offset so the seconds starts while the first is half finished.
+            // The second batch should start before the first finishes.
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            const start: number = Date.now();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<number, string>({
+                generator: (input) => {
+                    runCount++;
+                    return wait(tick * 2).then(() => input.map(String));
+                },
+            });
+            const inputs = [[1, 9], [5, 7]];
+            return Promise.all(inputs.map((input, index) => {
+                return wait(index * tick).then(() => Promise.all(input.map((value, index2) => {
+                    return task.getResult(value).then((result) => {
+                        expect(result).to.equal(String(value));
+                        expectTimes([Date.now() - start], [index + 2], `Timing result (${index},${index2})`)
+                    });
+                })));
+            })).then(() => {
+                expect(runCount).to.equal(2, "runCount")
+            });
+        });
+        it("maxBatchSize", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<number, string>({
+                maxBatchSize: 2,
+                generator: (input) => {
+                    runCount++;
+                    return wait(tick).then(() => input.map(String));
+                },
+            });
+            const inputs = [1, 5, 9];
+            const start: number = Date.now();
+            return Promise.all(inputs.map((input) => {
+                return task.getResult(input).then((output) => {
+                    expect(output).to.equal(String(input), "Outputs");
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                });
+            })).then((outputs) => {
+                expect(runCount).to.equal(2, "runCount")
+            });
+        });
+        it("queuingDelay", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<null, null>({
+                queuingDelay: tick * 2,
+                generator: (input) => {
+                    runCount++;
+                    return Promise.resolve(new Array(input.length));
+                },
+            });
+            const delays = [0, 1, 3];
+            const start: number = Date.now();
+            return Promise.all(delays.map((delay) => {
+                return wait(delay * tick)
+                    .then(() => task.getResult(null))
+                    .then(() => Date.now() - start);
+            })).then((results) => {
+                expectTimes(results, [2, 2, 5], "Timing Results")
+                expect(runCount).to.equal(2, "runCount")
+            });
+        });
+        it("Instant Start", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<null, null>({
+                maxBatchSize: 2,
+                generator: (input) => {
+                    runCount++;
+                    return wait(tick).then(() => input);
+                },
+            });
+
+            const runCounts = [0, 1, 1];
+            return Promise.all(runCounts.map((expectedRunCount) => {
+                // The generator should be triggered instantly when the max batch size is reached
+                const promise = task.getResult(null);
+                expect(runCount).to.equal(expectedRunCount);
+                return promise;
+            }));
+        });
+
+        describe("Error Handling", () => {
+            it("Single Rejection", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<string, null>({
+                    generator: (input) => {
+                        return wait(tick).then(() => input.map((value) => {
+                            return value === "error" ? new Error("test") : null;
+                        }));
+                    },
+                });
+
+                const inputs = ["a", "error", "b"]
+                return Promise.all(inputs.map((input) => {
+                    return task.getResult(input).then(() => true).catch((err: Error) => {
+                        expect(err.message).to.equal("test");
+                        return false;
+                    });
+                })).then((results) => {
+                    expect(results).to.deep.equal([true, false, true])
+                });
+            });
+            it("Synchronous Generator Exception Followed By Success", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<number, null>({
+                    maxBatchSize: 2,
+                    generator: (input) => {
+                        input.forEach((value) => {
+                            if (value === 0) {
+                                throw new Error("test");
+                            }
+                        });
+                        return wait(1).then(() => new Array(input.length));
+                    },
+                });
+
+                const inputs = [0, 1, 2]
+                return Promise.all(inputs.map((input) => {
+                    return task.getResult(input).then(() => true).catch((err: Error) => {
+                        expect(err.message).to.equal("test");
+                        return false;
+                    });
+                })).then((results) => {
+                    expect(results).to.deep.equal([false, false, true])
+                });
+            });
+            it("Asynchronous Generator Exception Followed By Success", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<number, null>({
+                    maxBatchSize: 2,
+                    generator: (input) => {
+                        return wait(1).then(() => {
+                            input.forEach((value) => {
+                                if (value === 0) {
+                                    throw new Error("test");
+                                }
+                            });
+                            return new Array(input.length);
+                        });
+                    },
+                });
+
+                const inputs = [0, 1, 2]
+                return Promise.all(inputs.map((input) => {
+                    return task.getResult(input).then(() => true).catch((err: Error) => {
+                        expect(err.message).to.equal("test");
+                        return false;
+                    });
+                })).then((results) => {
+                    expect(results).to.deep.equal([false, false, true])
+                });
+            });
+            it("Invalid Output Length", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<number, null>({
+                    generator: (input) => {
+                        // Respond with an array larger than the input
+                        return wait(1).then(() => new Array(input.length + 1));
+                    },
+                });
+
+                const inputs = [0, 1, 2]
+                return Promise.all(inputs.map((input) => {
+                    return task.getResult(input).then(() => true).catch(() => false);
+                })).then((results) => {
+                    expect(results).to.deep.equal([false, false, false])
+                });
+            });
+        });
+    });
 });
