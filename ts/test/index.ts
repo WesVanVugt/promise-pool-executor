@@ -14,6 +14,9 @@ const tolerance: number = 20;
  * Returns a promise which waits the specified amount of time before resolving.
  */
 function wait(time: number): Promise<void> {
+    if (time <= 0) {
+        return Promise.resolve();
+    }
     return new Promise<void>((resolve, reject) => {
         setTimeout(() => {
             resolve();
