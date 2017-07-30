@@ -792,7 +792,7 @@ describe("Task Secializations", () => {
     });
 
     describe("Persistent Batch Task", () => {
-        it("Simple", () => {
+        it("Core Functionality", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
             const task = pool.addPersistentBatchTask<number, string>({
@@ -838,25 +838,46 @@ describe("Task Secializations", () => {
                 expect(runCount).to.equal(2, "runCount")
             });
         });
-        it("maxBatchSize", () => {
-            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-            let runCount: number = 0;
-            const task = pool.addPersistentBatchTask<number, string>({
-                maxBatchSize: 2,
-                generator: (input) => {
-                    runCount++;
-                    return wait(tick).then(() => input.map(String));
-                },
-            });
-            const inputs = [1, 5, 9];
-            const start: number = Date.now();
-            return Promise.all(inputs.map((input) => {
-                return task.getResult(input).then((output) => {
-                    expect(output).to.equal(String(input), "Outputs");
-                    expectTimes([Date.now() - start], [1], "Timing Results");
+        describe("maxBatchSize", () => {
+            it("Core Functionality", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount: number = 0;
+                const task = pool.addPersistentBatchTask<number, string>({
+                    maxBatchSize: 2,
+                    generator: (input) => {
+                        runCount++;
+                        return wait(tick).then(() => input.map(String));
+                    },
                 });
-            })).then((outputs) => {
-                expect(runCount).to.equal(2, "runCount")
+                const inputs = [1, 5, 9];
+                const start: number = Date.now();
+                return Promise.all(inputs.map((input) => {
+                    return task.getResult(input).then((output) => {
+                        expect(output).to.equal(String(input), "Outputs");
+                        expectTimes([Date.now() - start], [1], "Timing Results");
+                    });
+                })).then((outputs) => {
+                    expect(runCount).to.equal(2, "runCount")
+                });
+            });
+            it("Instant Start", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount: number = 0;
+                const task = pool.addPersistentBatchTask<null, null>({
+                    maxBatchSize: 2,
+                    generator: (input) => {
+                        runCount++;
+                        return wait(tick).then(() => input);
+                    },
+                });
+
+                const runCounts = [0, 1, 1];
+                return Promise.all(runCounts.map((expectedRunCount) => {
+                    // The generator should be triggered instantly when the max batch size is reached
+                    const promise = task.getResult(null);
+                    expect(runCount).to.equal(expectedRunCount);
+                    return promise;
+                }));
             });
         });
         it("queuingDelay", () => {
@@ -881,7 +902,7 @@ describe("Task Secializations", () => {
             });
         });
         describe("queueingThresholds", () => {
-            it("Functionality", () => {
+            it("Core Functionality", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
                 const task = pool.addPersistentBatchTask<null, null>({
@@ -921,26 +942,6 @@ describe("Task Secializations", () => {
                 });
             });
         });
-        it("Instant Start", () => {
-            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-            let runCount: number = 0;
-            const task = pool.addPersistentBatchTask<null, null>({
-                maxBatchSize: 2,
-                generator: (input) => {
-                    runCount++;
-                    return wait(tick).then(() => input);
-                },
-            });
-
-            const runCounts = [0, 1, 1];
-            return Promise.all(runCounts.map((expectedRunCount) => {
-                // The generator should be triggered instantly when the max batch size is reached
-                const promise = task.getResult(null);
-                expect(runCount).to.equal(expectedRunCount);
-                return promise;
-            }));
-        });
-
         describe("Error Handling", () => {
             it("Single Rejection", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
