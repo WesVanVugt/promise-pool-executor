@@ -2,7 +2,18 @@
   "name": "promise-pool-executor",
   "version": "0.3.1",
   "description": "A module for managing ES6 promise concurrency.",
-  "keywords": ["promise", "promises", "concurrency", "es6", "async", "await", "pool", "queue", "throttle", "frequency"],
+  "keywords": [
+    "promise",
+    "promises",
+    "concurrency",
+    "es6",
+    "async",
+    "await",
+    "pool",
+    "queue",
+    "throttle",
+    "frequency"
+  ],
   "bugs": {
     "url": "https://github.com/baudzilla/promise-pool-executor/issues",
     "email": "baudzila@gmail.com"
@@ -25,12 +36,12 @@
     "next-tick": "^1.0.0"
   },
   "devDependencies": {
-    "@types/chai": "^3.5.0",
+    "@types/chai": "^4.0.1",
     "@types/mocha": "^2.2.41",
     "@types/node": "^6.0.69",
-    "chai": "^3.5.0",
-    "mocha": "^3.2.0",
-    "typescript": "^2.2.2"
+    "chai": "^4.1.0",
+    "mocha": "^3.4.2",
+    "typescript": "^2.4.2"
   },
   "license": "MIT",
   "public": true
