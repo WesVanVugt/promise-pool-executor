@@ -1014,7 +1014,7 @@ export class PromisePoolExecutor {
 export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupConfig {
     maxBatchSize?: number;
     queuingDelay?: number;
-    batchThresholds?: number[];
+    queuingThresholds?: number[];
     generator: (input: I[]) => Promise<(O | Error)[]>;
 }
 
@@ -1029,7 +1029,7 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
     private _task: PromisePoolTask<any>;
     private _maxBatchSize: number = Infinity;
     private _queuingDelay: number = 1;
-    private _batchThresholds: number[];
+    private _queuingThresholds: number[];
     private _activePromiseCount: number = 0;
     private _inputQueue: I[] = [];
     private _outputPromises: ResolvablePromise<O>[] = [];
@@ -1040,18 +1040,18 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
     constructor(pool: PromisePoolExecutor, params: PersistentBatcherTaskParams<I, O>) {
         const batcher = this;
         this._generator = params.generator;
-        if (Array.isArray(params.batchThresholds)) {
-            if (!params.batchThresholds.length) {
+        if (Array.isArray(params.queuingThresholds)) {
+            if (!params.queuingThresholds.length) {
                 throw new Error("params.batchThresholds must contain at least one number");
             }
-            params.batchThresholds.forEach((n) => {
+            params.queuingThresholds.forEach((n) => {
                 if (n < 1) {
                     throw new Error("params.batchThresholds must not contain numbers less than 1");
                 }
             })
-            this._batchThresholds = [...params.batchThresholds];
+            this._queuingThresholds = [...params.queuingThresholds];
         } else {
-            this._batchThresholds = [1];
+            this._queuingThresholds = [1];
         }
         if (!isNull(params.maxBatchSize)) {
             if (params.maxBatchSize < 1) {
@@ -1109,6 +1109,8 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
                     });
                 }).then(() => {
                     batcher._activePromiseCount--;
+                    // Since we may be operating at a lower queuing threshold now, we should try run again
+                    batcher._run();
                 });
             },
         });
@@ -1137,8 +1139,8 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
         if (this._running) {
             return;
         }
-        const thresholdIndex: number = Math.min(this._activePromiseCount, this._batchThresholds.length - 1);
-        if (this._inputQueue.length >= this._batchThresholds[thresholdIndex]) {
+        const thresholdIndex: number = Math.min(this._activePromiseCount, this._queuingThresholds.length - 1);
+        if (this._inputQueue.length >= this._queuingThresholds[thresholdIndex]) {
             // Run the batch, but with a delay
             this._running = true;
             this._runTimeout = setTimeout(() => {

@@ -880,6 +880,47 @@ describe("Task Secializations", () => {
                 expect(runCount).to.equal(2, "runCount")
             });
         });
+        describe("queueingThresholds", () => {
+            it("Functionality", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount: number = 0;
+                const task = pool.addPersistentBatchTask<null, null>({
+                    queuingThresholds: [1, 2],
+                    generator: (input) => {
+                        runCount++;
+                        return wait(5 * tick).then(() => new Array(input.length));
+                    },
+                });
+                const delays = [0, 1, 2, 3, 4];
+                const start: number = Date.now();
+                return Promise.all(delays.map((delay) => {
+                    return wait(delay * tick)
+                        .then(() => task.getResult(null))
+                        .then(() => Date.now() - start);
+                })).then((results) => {
+                    expectTimes(results, [5, 7, 7, 9, 9], "Timing Results")
+                    expect(runCount).to.equal(3, "runCount")
+                });
+            });
+            it("Should Trigger On Task Completion", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<null, null>({
+                    queuingThresholds: [1, 2],
+                    generator: (input) => {
+                        return wait(2 * tick).then(() => new Array(input.length));
+                    },
+                });
+                const delays = [0, 1];
+                const start: number = Date.now();
+                return Promise.all(delays.map((delay) => {
+                    return wait(delay * tick)
+                        .then(() => task.getResult(null))
+                        .then(() => Date.now() - start);
+                })).then((results) => {
+                    expectTimes(results, [2, 4], "Timing Results")
+                });
+            });
+        });
         it("Instant Start", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
