@@ -1,4 +1,7 @@
-const nextTick = require("next-tick");
+import * as Debug from "debug";
+const debug = Debug("promise-pool-executor");
+
+const nextTick: (fn: () => void) => void = require("next-tick");
 
 const TASK_GROUP_INDEX = 1;
 
@@ -386,7 +389,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         internalPrams: GenericTaskParamsInternal<R>,
         params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>,
     ) {
-        console.log("Creating task");
+        debug("Creating task");
         this._pool = internalPrams.pool;
         this._triggerCallback = internalPrams.triggerNowCallback;
         this._detachCallback = internalPrams.detach;
@@ -528,6 +531,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             this.end();
             return;
         }
+        debug("Running task");
 
         let promise: Promise<any>;
         try {
@@ -576,6 +580,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
                 this.end();
             }
+            debug("Promise Count: " + this._taskGroup._activePromiseCount);
+
             // Remove the task if needed and start the next task
             this._triggerCallback();
         });
@@ -617,6 +623,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _reject(err: any) {
         // Check if the task has already failed
         if (this._rejection) {
+            debug("This task already failed!");
             // Unhandled promise rejection
             Promise.reject(err);
             return;
@@ -647,6 +654,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             nextTick(() => {
                 if (!taskError.handled) {
                     // Unhandled promise rejection
+                    debug("Unhandled promise rejection!");
                     Promise.reject(taskError.error);
                 }
             });
@@ -694,7 +702,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
      */
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
-        console.log("Ending task");
+        debug("Ending task");
         if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
             this._state = TaskState.Terminated;
 
@@ -831,7 +839,7 @@ export class PromisePoolExecutor {
      * Private Method: Triggers promises to start.
      */
     private _triggerNow(): void {
-        console.log("Trigger promises");
+        debug("Trigger promises");
         this._updateFrequencyStarts();
 
         this._clearTriggerTimeout();
@@ -845,6 +853,7 @@ export class PromisePoolExecutor {
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
+            debug(`BusyTime: ${busyTime}`);
 
             if (busyTime === true) {
                 taskIndex++;
@@ -922,7 +931,7 @@ export class PromisePoolExecutor {
     private _removeTask(task: PromisePoolTaskInternal<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
-            console.log("Task removed");
+            debug("Task removed");
             this._tasks.splice(i, 1);
         }
     }

@@ -25,7 +25,8 @@
   },
   "scripts": {
     "build": "tsc -p ts",
-    "test": "./node_modules/.bin/mocha js/test/*.js --reporter spec"
+    "test": "./node_modules/.bin/mocha js/test/*.js --reporter spec",
+    "test-debug": "cross-env DEBUG=promise-pool-executor npm test"
   },
   "main": "js/index.js",
   "typings": "js/index",
@@ -33,13 +34,16 @@
     "node": ">=5.0.0"
   },
   "dependencies": {
+    "debug": "^2.6.8",
     "next-tick": "^1.0.0"
   },
   "devDependencies": {
     "@types/chai": "^4.0.1",
+    "@types/debug": "0.0.29",
     "@types/mocha": "^2.2.41",
     "@types/node": "^6.0.69",
     "chai": "^4.1.0",
+    "cross-env": "^5.0.1",
     "mocha": "^3.4.2",
     "typescript": "^2.4.2"
   },

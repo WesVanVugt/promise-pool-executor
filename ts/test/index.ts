@@ -1,5 +1,7 @@
 import { expect } from "chai";
 import * as Pool from "../index";
+import * as Debug from "debug";
+const debug = Debug("promise-pool-executor");
 
 /**
  * Milliseconds per tick.
@@ -45,6 +47,7 @@ function expectUnhandledRejection(expectedError?: any, delay?: number): Promise<
     let error: any;
     process.prependOnceListener("unhandledRejection", (err: any) => {
         if (!reAdded) {
+            debug("Caught unhandled");
             error = err;
             // Catch any extra unhandled rejections which could occur before
             process.addListener("unhandledRejection", unhandledRejectionListener);
@@ -79,6 +82,7 @@ function sum(nums: number[]): number {
 }
 
 function unhandledRejectionListener(err: any) {
+    debug("unhandledRejectionListener: " + err.stack);
     // Fail the test
     throw new Error("UnhandledPromiseRejection: " + err.message);
 }
@@ -213,6 +217,7 @@ describe("Frequency", () => {
                 },
                 invocationLimit: 3,
             }).promise().then((results) => {
+                debug(results);
                 expectTimes(results, [0, 0, 1], "Timing Results 1");
                 return wait(tick * 2);
             }).then(() => {
@@ -223,6 +228,7 @@ describe("Frequency", () => {
                     invocationLimit: 3,
                 }).promise();
             }).then((results) => {
+                debug(results);
                 expectTimes(results, [3, 3, 4], "Timing Results 2");
             });
         });
@@ -738,6 +744,7 @@ describe("Task Secializations", () => {
                     });
             }
         }).promise().then((result) => {
+            debug(`Test result: ${result} (${typeof result})`);
             // The task must return the expected non-array result
             expectTimes([result], [1], "Timing Results");
         });
