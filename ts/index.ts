@@ -1,7 +1,6 @@
 import * as Debug from "debug";
+import * as nextTick from "next-tick";
 const debug = Debug("promise-pool-executor");
-
-const nextTick: (fn: () => void) => void = require("next-tick");
 
 const TASK_GROUP_INDEX = 1;
 
@@ -39,7 +38,7 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface PromisePoolGroupConfig extends Partial<PromiseLimits> { }
+export type PromisePoolGroupConfig = Partial<PromiseLimits>;
 
 export interface TaskLimits extends PromisePoolGroupConfig, InvocationLimit { }
 
@@ -51,11 +50,11 @@ export interface GenericTaskParams<R> extends GenericTaskParamsBase {
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | null,
+    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | null;
 }
 
 export interface GenericTaskParamsConverted<I, R> extends GenericTaskParamsBase {
-    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | null,
+    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | null;
     resultConverter: (result: I[]) => R;
 }
 
@@ -75,7 +74,7 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     generator: (this: PromisePoolTask<any>, data: T) => Promise<R>;
     /**
      * Optional data to pass to the generator function as a parameter.
-    */
+     */
     data?: T;
 }
 
@@ -90,7 +89,6 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupCon
 export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
     /**
      * A function used for creating promises to run.
-     * 
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
@@ -102,7 +100,6 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConf
     /**
      * The number of elements from {data} to be passed to {generator} for each batch.
      * If a function is used here, the value returned by the function determines the size of the batch.
-     * 
      * @param elements The number of unprocessed elements remaining in {data}.
      * @param freeSlots The number of unused promise slots available in the promise pool.
      */
@@ -112,7 +109,6 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConf
 export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
     /**
      * A function used for creating promises to run.
-     * 
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
@@ -124,26 +120,26 @@ export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfi
 }
 
 export interface PromisePoolGroup {
-    waitForIdle(): Promise<void>;
     readonly activeTaskCount: number;
     readonly activePromiseCount: number;
     concurrencyLimit: number;
     frequencyLimit: number;
     frequencyWindow: number;
     readonly freeSlots: number;
+    waitForIdle(): Promise<void>;
 }
 
 class PromisePoolGroupInternal implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
-    private _triggerNextCallback: () => void;
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
     public _frequencyWindow: number;
     public _frequencyStarts: number[] = [];
-    private _promises: Array<ResolvablePromise<void>> = [];
-    private _rejection?: TaskError;
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
+    private _promises: Array<ResolvablePromise<void>> = [];
+    private _rejection?: TaskError;
+    private _triggerNextCallback: () => void;
 
     constructor(
         pool: PromisePoolExecutor,
@@ -244,7 +240,7 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
     public _cleanFrequencyStarts(now: number): void {
         // Remove the frequencyStarts entries which are outside of the window
         if (this._frequencyStarts.length > 0) {
-            let time: number = now - this._frequencyWindow;
+            const time: number = now - this._frequencyWindow;
             let i: number = 0;
             while (i < this._frequencyStarts.length && this._frequencyStarts[i] <= time) {
                 i++;
@@ -255,7 +251,7 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
         }
     }
 
-    /** 
+    /**
      * Returns false if the group is available, true if the group is busy for an indeterminate time, or the timestamp
      * of when the group will become available.
      */
@@ -334,10 +330,6 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
 }
 
 export interface PromisePoolTask<R> {
-    pause(): void;
-    resume(): void;
-    end(): void;
-    promise(): Promise<R>;
     readonly activePromiseCount: number;
     readonly invocations: number;
     invocationLimit: number;
@@ -346,6 +338,10 @@ export interface PromisePoolTask<R> {
     frequencyWindow: number;
     readonly freeSlots: number;
     readonly state: TaskState;
+    pause(): void;
+    resume(): void;
+    end(): void;
+    promise(): Promise<R>;
 }
 
 export enum TaskState {
@@ -486,7 +482,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     public get freeSlots(): number {
         let freeSlots: number = this._invocationLimit - this._invocations;
         this._groups.forEach((group) => {
-            let slots = group.freeSlots;
+            const slots = group.freeSlots;
             if (slots < freeSlots) {
                 freeSlots = slots;
             }
@@ -499,8 +495,65 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     }
 
     /**
-     * Private. Returns false if the task is ready, true if the task is busy with an indeterminate ready time, or the timestamp
-     * for when the task will be ready.
+     * Returns a promise which resolves when the task completes.
+     */
+    public promise(): Promise<any> {
+        if (this._rejection) {
+            this._rejection.handled = true;
+            return Promise.reject(this._rejection.error);
+        } else if (this._state === TaskState.Terminated) {
+            return Promise.resolve(this._returnResult);
+        }
+
+        const promise: ResolvablePromise<any> = new ResolvablePromise();
+        this._promises.push(promise);
+        return promise.promise;
+    }
+
+    /**
+     * Pauses a running task, preventing any additional promises from being generated.
+     */
+    public pause(): void {
+        if (this._state === TaskState.Active) {
+            this._state = TaskState.Paused;
+        }
+    }
+
+    /**
+     * Pauses resumed a paused task, allowing for the generation of additional promises.
+     */
+    public resume(): void {
+        if (this._state === TaskState.Paused) {
+            this._state = TaskState.Active;
+            this._triggerCallback();
+        }
+    }
+
+    /**
+     * Ends the task. Any promises created by the promise() method will be resolved when all outstanding promises
+     * have ended.
+     */
+    public end(): void {
+        // Note that this does not trigger more tasks to run. It can resolve a task though.
+        debug("Ending task");
+        if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
+            this._state = TaskState.Terminated;
+
+            if (this._taskGroup._activeTaskCount > 0) {
+                this._groups.forEach((group) => {
+                    group._decrementTasks();
+                });
+                this._detachCallback(this._groups);
+            }
+            this._resolve();
+        } else if (this._state < TaskState.Exhausted) {
+            this._state = TaskState.Exhausted;
+        }
+    }
+
+    /**
+     * Private. Returns false if the task is ready, true if the task is busy with an indeterminate ready time, or the
+     * timestamp for when the task will be ready.
      */
     public _busyTime(): boolean | number {
         if (this._state !== TaskState.Active) {
@@ -508,7 +561,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         }
 
         let time: number = 0;
-        for (let group of this._groups) {
+        for (const group of this._groups) {
             const busyTime: boolean | number = group._busyTime();
             if (typeof busyTime === "number") {
                 if (busyTime > time) {
@@ -558,7 +611,7 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
                 group._frequencyStarts.push(Date.now());
             }
         });
-        let resultIndex: number = this._invocations;
+        const resultIndex: number = this._invocations;
         this._invocations++;
         if (this._invocations >= this._invocationLimit) {
             // this will not detach the task since there are active promises
@@ -660,63 +713,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             });
         }
     }
-
-    /**
-     * Returns a promise which resolves when the task completes.
-     */
-    public promise(): Promise<any> {
-        if (this._rejection) {
-            this._rejection.handled = true;
-            return Promise.reject(this._rejection.error);
-        } else if (this._state === TaskState.Terminated) {
-            return Promise.resolve(this._returnResult);
-        }
-
-        const promise: ResolvablePromise<any> = new ResolvablePromise();
-        this._promises.push(promise);
-        return promise.promise;
-    }
-
-    /**
-     * Pauses a running task, preventing any additional promises from being generated.
-     */
-    public pause(): void {
-        if (this._state == TaskState.Active) {
-            this._state = TaskState.Paused;
-        }
-    }
-
-    /**
-     * Pauses resumed a paused task, allowing for the generation of additional promises.
-     */
-    public resume(): void {
-        if (this._state == TaskState.Paused) {
-            this._state = TaskState.Active;
-            this._triggerCallback();
-        }
-    }
-
-    /**
-     * Ends the task. Any promises created by the promise() method will be resolved when all outstanding promises
-     * have ended.
-     */
-    public end(): void {
-        // Note that this does not trigger more tasks to run. It can resolve a task though.
-        debug("Ending task");
-        if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
-            this._state = TaskState.Terminated;
-
-            if (this._taskGroup._activeTaskCount > 0) {
-                this._groups.forEach((group) => {
-                    group._decrementTasks();
-                });
-                this._detachCallback(this._groups);
-            }
-            this._resolve();
-        } else if (this._state < TaskState.Exhausted) {
-            this._state = TaskState.Exhausted;
-        }
-    }
 }
 
 class ResolvablePromise<T> {
@@ -747,17 +743,14 @@ export class PromisePoolExecutor {
     /**
      * All tasks which are active or waiting.
      */
-    private _tasks: PromisePoolTaskInternal<any>[] = [];
+    private _tasks: Array<PromisePoolTaskInternal<any>> = [];
     private _globalGroup: PromisePoolGroupInternal;
     private _groupSet: Set<PromisePoolGroupInternal> = new Set();
 
     /**
      * Construct a new PromisePoolExecutor object.
-     * 
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
-    constructor(params?: PromisePoolGroupConfig);
-    constructor(concurrencyLimit?: number);
     constructor(params?: PromisePoolGroupConfig | number) {
         let groupParams: PromisePoolGroupConfig;
 
@@ -805,6 +798,166 @@ export class PromisePoolExecutor {
         return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
     }
 
+    public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
+        return new PromisePoolGroupInternal(
+            this,
+            () => this._triggerNextTick(),
+            params,
+        );
+    }
+
+    /**
+     * General-purpose function for adding a task.
+     * @param params Parameters used to define the task.
+     * @return A promise which resolves to an array containing the values returned by the task.
+     */
+    public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
+    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
+    public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
+        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal(
+            {
+                attach: (task2: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
+                    groups.forEach((group) => {
+                        this._groupSet.add(group);
+                    });
+                    this._tasks.push(task2);
+                },
+                detach: (groups: PromisePoolGroupInternal[]) => {
+                    const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
+                    groups.forEach((group) => {
+                        if (group._activeTaskCount <= limit && group !== this._globalGroup) {
+                            this._groupSet.delete(group);
+                        }
+                    });
+                    this._removeTask(task);
+                },
+                globalGroup: this._globalGroup,
+                pool: this,
+                triggerNextCallback: () => this._triggerNextTick(),
+                triggerNowCallback: () => this._triggerNow(),
+            },
+            params,
+        );
+        this._triggerNow();
+        return task;
+    }
+
+    /**
+     * Runs a task once while obeying the concurrency limit set for the pool.
+     * @param params Parameters used to define the task.
+     * @return A promise which resolves to the result of the task.
+     */
+    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
+        const data: T = params.data;
+        return this.addGenericTask<R, R>({
+            generator() {
+                return params.generator.call(this, data);
+            },
+            groups: params.groups,
+            invocationLimit: 1,
+            paused: params.paused,
+            resultConverter: (result) => result[0],
+        });
+    }
+
+    /**
+     * Runs a task with a concurrency limit of 1.
+     * @return A promise which resolves to an array containing the results of the task.
+     */
+    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): PromisePoolTask<R[]> {
+        return this.addGenericTask({
+            concurrencyLimit: 1,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            generator: params.generator,
+            groups: params.groups,
+            invocationLimit: params.invocationLimit,
+            paused: params.paused,
+        });
+    }
+
+    /**
+     * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
+     * @param params Parameters used to define the task.
+     * @return A promise which resolves to an array containing the results of the task. Each element in the array
+     * corresponds to one invocation.
+     */
+    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): PromisePoolTask<R[]> {
+        let index: number = 0;
+
+        // Unacceptable values: NaN, <=0, type not number/function
+        if (!params.batchSize || typeof params.batchSize !== "function"
+            && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
+
+            throw new Error("Invalid batch size: " + params.batchSize);
+        }
+
+        return this.addGenericTask({
+            concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            generator(invocation) {
+                if (index >= params.data.length) {
+                    return null;
+                }
+                const oldIndex: number = index;
+                if (typeof params.batchSize === "function") {
+                    const batchSize: number = params.batchSize(
+                        params.data.length - oldIndex,
+                        this.freeSlots,
+                    );
+                    // Unacceptable values: NaN, <=0, type not number
+                    if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
+                        return Promise.reject(new Error("Invalid batch size: " + batchSize));
+                    }
+                    index += batchSize;
+                } else {
+                    index += params.batchSize;
+                }
+
+                return params.generator.call(this, params.data.slice(oldIndex, index), oldIndex, invocation);
+            },
+            groups: params.groups,
+            invocationLimit: params.invocationLimit,
+            paused: params.paused,
+        });
+    }
+
+    /**
+     * Runs a task for each element in an array.
+     * @param params
+     * @return A promise which resolves to an array containing the results of the task.
+     */
+    public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R[]> {
+        return this.addGenericTask({
+            concurrencyLimit: params.concurrencyLimit,
+            frequencyLimit: params.frequencyLimit,
+            frequencyWindow: params.frequencyWindow,
+            groups: params.groups,
+            invocationLimit: params.invocationLimit,
+            paused: params.paused,
+            generator(index) {
+                if (index >= params.data.length) {
+                    return null;
+                }
+                const oldIndex: number = index;
+                index++;
+                return params.generator.call(this, params.data[oldIndex], oldIndex);
+            },
+        });
+    }
+
+    public addPersistentBatchTask<I, O>(params: PersistentBatcherTaskParams<I, O>): PersistentBatcherTask<I, O> {
+        return new PersistentBatchTaskInternal(this, params);
+    }
+
+    /**
+     * Returns a promise which resolves when there are no more tasks queued to run.
+     */
+    public waitForIdle(): Promise<void> {
+        return this._globalGroup.waitForIdle();
+    }
+
     private _updateFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
         const now = Date.now();
@@ -848,7 +1001,6 @@ export class PromisePoolExecutor {
         let task: PromisePoolTaskInternal<any[]>;
         let soonest: number = Infinity;
         let busyTime: boolean | number;
-        let blocked: boolean;
 
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
@@ -883,51 +1035,6 @@ export class PromisePoolExecutor {
         }
     }
 
-    public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
-        return new PromisePoolGroupInternal(
-            this,
-            () => this._triggerNextTick(),
-            params,
-        );
-    }
-
-    /**
-     * General-purpose function for adding a task.
-     * 
-     * @param params Parameters used to define the task.
-     * @return A promise which resolves to an array containing the values returned by the task.
-     */
-    public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
-    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
-    public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
-        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal(
-            {
-                pool: this,
-                globalGroup: this._globalGroup,
-                triggerNextCallback: () => this._triggerNextTick(),
-                triggerNowCallback: () => this._triggerNow(),
-                attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
-                    groups.forEach((group) => {
-                        this._groupSet.add(group);
-                    });
-                    this._tasks.push(task);
-                },
-                detach: (groups: PromisePoolGroupInternal[]) => {
-                    const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
-                    groups.forEach((group) => {
-                        if (group._activeTaskCount <= limit && group !== this._globalGroup) {
-                            this._groupSet.delete(group);
-                        }
-                    });
-                    this._removeTask(task);
-                },
-            },
-            params,
-        );
-        this._triggerNow();
-        return task;
-    }
-
     private _removeTask(task: PromisePoolTaskInternal<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
@@ -935,133 +1042,13 @@ export class PromisePoolExecutor {
             this._tasks.splice(i, 1);
         }
     }
-
-    /**
-     * Runs a task once while obeying the concurrency limit set for the pool.
-     * 
-     * @param params Parameters used to define the task.
-     * @return A promise which resolves to the result of the task.
-     */
-    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
-        const data: T = params.data;
-        return this.addGenericTask<R, R>({
-            groups: params.groups,
-            paused: params.paused,
-            generator: function () {
-                return params.generator.call(this, data);
-            },
-            invocationLimit: 1,
-            resultConverter: (result) => result[0],
-        });
-    }
-
-    /**
-     * Runs a task with a concurrency limit of 1.
-     * 
-     * @param params 
-     * @return A promise which resolves to an array containing the results of the task.
-     */
-    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): PromisePoolTask<R[]> {
-        return this.addGenericTask({
-            groups: params.groups,
-            generator: params.generator,
-            invocationLimit: params.invocationLimit,
-            concurrencyLimit: 1,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            paused: params.paused,
-        });
-    }
-
-    /**
-     * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
-     * 
-     * @param params Parameters used to define the task.
-     * @return A promise which resolves to an array containing the results of the task. Each element in the array corresponds to one invocation.
-     */
-    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): PromisePoolTask<R[]> {
-        let index: number = 0;
-
-        // Unacceptable values: NaN, <=0, type not number/function
-        if (!params.batchSize || typeof params.batchSize !== "function"
-            && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
-
-            throw new Error("Invalid batch size: " + params.batchSize);
-        }
-
-        return this.addGenericTask({
-            groups: params.groups,
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            invocationLimit: params.invocationLimit,
-            paused: params.paused,
-            generator: function (invocation) {
-                if (index >= params.data.length) {
-                    return null;
-                }
-                let oldIndex: number = index;
-                if (typeof params.batchSize === "function") {
-                    let batchSize: number = params.batchSize(
-                        params.data.length - oldIndex,
-                        this.freeSlots,
-                    );
-                    // Unacceptable values: NaN, <=0, type not number
-                    if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-                        return Promise.reject(new Error("Invalid batch size: " + batchSize));
-                    }
-                    index += batchSize;
-                } else {
-                    index += params.batchSize;
-                }
-
-                return params.generator.call(this, params.data.slice(oldIndex, index), oldIndex, invocation);
-            },
-        });
-    }
-
-    /**
-     * Runs a task for each element in an array.
-     * 
-     * @param params 
-     * @return A promise which resolves to an array containing the results of the task.
-     */
-    public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R[]> {
-        return this.addGenericTask({
-            groups: params.groups,
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            invocationLimit: params.invocationLimit,
-            paused: params.paused,
-            generator: function (index) {
-                if (index >= params.data.length) {
-                    return null;
-                }
-                let oldIndex: number = index;
-                index++;
-                return params.generator.call(this, params.data[oldIndex], oldIndex);
-            },
-        });
-    }
-
-    public addPersistentBatchTask<I, O>(params: PersistentBatcherTaskParams<I, O>): PersistentBatcherTask<I, O> {
-        return new PersistentBatchTaskInternal(this, params);
-    }
-
-    /**
-     * Returns a promise which resolves when there are no more tasks queued to run.
-     */
-    public waitForIdle(): Promise<void> {
-        return this._globalGroup.waitForIdle();
-    }
 }
 
 export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupConfig {
     maxBatchSize?: number;
     queuingDelay?: number;
     queuingThresholds?: number[];
-    generator: (input: I[]) => Promise<(O | Error)[]>;
+    generator: (input: I[]) => Promise<Array<O | Error>>;
 }
 
 export interface PersistentBatcherTask<I, O> {
@@ -1076,8 +1063,8 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
     private _queuingThresholds: number[];
     private _activePromiseCount: number = 0;
     private _inputQueue: I[] = [];
-    private _outputPromises: ResolvablePromise<O>[] = [];
-    private _generator: (input: I[]) => Promise<(O | Error)[]>;
+    private _outputPromises: Array<ResolvablePromise<O>> = [];
+    private _generator: (input: I[]) => Promise<Array<O | Error>>;
     private _runTimeout: NodeJS.Timer;
     private _running: boolean = false;
 
@@ -1092,7 +1079,7 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
                 if (n < 1) {
                     throw new Error("params.batchThresholds must not contain numbers less than 1");
                 }
-            })
+            });
             this._queuingThresholds = [...params.queuingThresholds];
         } else {
             this._queuingThresholds = [1];
@@ -1112,7 +1099,7 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
             frequencyLimit: params.frequencyLimit,
             frequencyWindow: params.frequencyWindow,
             paused: true,
-            generator: function () {
+            generator() {
                 batcher._running = false;
                 batcher._activePromiseCount++;
                 const inputs = batcher._inputQueue.splice(0, batcher._maxBatchSize);
@@ -1169,6 +1156,10 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
         return promise.promise;
     }
 
+    public end(): void {
+        this._task.end();
+    }
+
     private _run(): void {
         // If the queue has reached the maximum batch size, start it immediately
         if (this._inputQueue.length >= this._maxBatchSize) {
@@ -1192,9 +1183,5 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
                 this._task.resume();
             }, this._queuingDelay);
         }
-    }
-
-    public end(): void {
-        this._task.end();
     }
 }
