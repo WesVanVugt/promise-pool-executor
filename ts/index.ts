@@ -56,13 +56,13 @@ export interface GenericTaskParamsConverted<I, R> extends GenericTaskParamsBase 
     resultConverter: (result: I[]) => R;
 }
 
-interface PromisePoolTaskParams<R> extends GenericTaskParams<R> {
+interface GenericTaskParamsInternal<R> {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupInternal;
-    triggerPromises: () => void;
+    triggerNextCallback: () => void;
+    triggerNowCallback: () => void;
     attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => void;
     detach: (groups: PromisePoolGroupInternal[]) => void;
-    resultConverter?: (result: R[]) => any;
 }
 
 export interface SingleTaskParams<T, R> extends TaskGeneral {
@@ -121,18 +121,18 @@ export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfi
 }
 
 export interface PromisePoolGroup {
-    configure(params: PromisePoolGroupConfig): void;
     waitForIdle(): Promise<void>;
-}
-
-interface PromisePoolGroupParams extends PromisePoolGroupConfig {
-    pool: PromisePoolExecutor;
-    triggerPromises: () => void;
+    readonly activeTaskCount: number;
+    readonly activePromiseCount: number;
+    concurrencyLimit: number;
+    frequencyLimit: number;
+    frequencyWindow: number;
+    readonly freeSlots: number;
 }
 
 class PromisePoolGroupInternal implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
-    private _triggerCallback: () => void;
+    private _triggerNextCallback: () => void;
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
     public _frequencyWindow: number;
@@ -142,54 +142,96 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
 
-    constructor(params: PromisePoolGroupParams) {
-        // Finish the configuration afterwards because otherwise the promises will trigger during creation
-        this.configure(params);
-        this._pool = params.pool;
-        this._triggerCallback = params.triggerPromises;
+    constructor(
+        pool: PromisePoolExecutor,
+        triggerNextCallback: () => void,
+        params: PromisePoolGroupConfig,
+    ) {
+        this._pool = pool;
+
+        if (!params) {
+            params = {};
+        }
+        // Throw errors if applicable
+        this.concurrencyLimit = params.concurrencyLimit;
+        this.frequencyLimit = params.frequencyLimit;
+        this.frequencyWindow = params.frequencyWindow;
+
+        // Set the callback afterwards so it does not get triggered during creation
+        this._triggerNextCallback = triggerNextCallback;
     }
 
-    /**
-     * Configures the group and triggers promises to run if applicable.
-     */
-    public configure(params: PromisePoolGroupConfig): void {
-        this._configure(params);
-        if (this._triggerCallback) {
-            this._triggerCallback();
+    public get activeTaskCount(): number {
+        return this._activeTaskCount;
+    }
+
+    public get activePromiseCount(): number {
+        return this._activePromiseCount;
+    }
+
+    public get concurrencyLimit(): number {
+        return this._concurrencyLimit;
+    }
+
+    public set concurrencyLimit(val: number) {
+        if (isNull(val)) {
+            this._concurrencyLimit = Infinity;
+        } else if (val && typeof val === "number" && val > 0) {
+            this._concurrencyLimit = val;
+        } else {
+            throw new Error("Invalid concurrency limit: " + val);
+        }
+        if (this._triggerNextCallback) {
+            this._triggerNextCallback();
         }
     }
 
-    /**
-     * Configures the group without triggering promises to run.
-     */
-    public _configure(params: PromisePoolGroupConfig): void {
-        let concurrencyLimit: number = Infinity;
-        let frequencyLimit: number = Infinity;
-        let frequencyWindow: number = 0;
+    public get frequencyLimit(): number {
+        return this._frequencyLimit;
+    }
 
-        if (!isNull(params.concurrencyLimit)) {
-            if (!params.concurrencyLimit || typeof params.concurrencyLimit !== "number" || params.concurrencyLimit <= 0) {
-                throw new Error("Invalid concurrency limit: " + params.concurrencyLimit);
-            }
-            concurrencyLimit = params.concurrencyLimit;
+    public set frequencyLimit(val: number) {
+        if (isNull(val)) {
+            this._frequencyLimit = Infinity;
+        } else if (val && typeof val === "number" && val > 0) {
+            this._frequencyLimit = val;
+        } else {
+            throw new Error("Invalid frequency limit: " + val);
         }
-        if (!isNull(params.frequencyLimit) || !isNull(params.frequencyWindow)) {
-            if (isNull(params.frequencyLimit) || isNull(params.frequencyWindow)) {
-                throw new Error("Both frequencyLimit and frequencyWindow must be set at the same time.");
-            }
-            if (!params.frequencyLimit || typeof params.frequencyLimit !== "number" || params.frequencyLimit <= 0) {
-                throw new Error("Invalid frequency limit: " + params.frequencyLimit);
-            }
-            if (!params.frequencyWindow || typeof params.frequencyWindow !== "number" || params.frequencyWindow <= 0) {
-                throw new Error("Invalid frequency window: " + params.frequencyWindow);
-            }
-            frequencyLimit = params.frequencyLimit;
-            frequencyWindow = params.frequencyWindow;
+        if (this._triggerNextCallback) {
+            this._triggerNextCallback();
         }
+    }
 
-        this._concurrencyLimit = concurrencyLimit;
-        this._frequencyLimit = frequencyLimit;
-        this._frequencyWindow = frequencyWindow;
+    public get frequencyWindow(): number {
+        return this._frequencyWindow;
+    }
+
+    public set frequencyWindow(val: number) {
+        if (isNull(val)) {
+            this._frequencyWindow = 1000;
+        } else if (val && typeof val === "number" && val > 0) {
+            this._frequencyWindow = val;
+        } else {
+            throw new Error("Invalid frequency window: " + val);
+        }
+        if (this._triggerNextCallback) {
+            this._triggerNextCallback();
+        }
+    }
+
+    public get freeSlots(): number {
+        if (this._frequencyLimit !== Infinity) {
+            this._cleanFrequencyStarts(Date.now());
+        }
+        return this._getFreeSlots();
+    }
+
+    public _getFreeSlots() {
+        return Math.min(
+            this._concurrencyLimit - this._activePromiseCount,
+            this._frequencyLimit - this._frequencyStarts.length,
+        );
     }
 
     /**
@@ -289,12 +331,18 @@ class PromisePoolGroupInternal implements PromisePoolGroup {
 }
 
 export interface PromisePoolTask<R> {
-    configure(params: TaskLimits): void;
     pause(): void;
     resume(): void;
     end(): void;
-    getStatus(): TaskStatus;
     promise(): Promise<R>;
+    readonly activePromiseCount: number;
+    readonly invocations: number;
+    invocationLimit: number;
+    concurrencyLimit: number;
+    frequencyLimit: number;
+    frequencyWindow: number;
+    readonly freeSlots: number;
+    readonly state: TaskState;
 }
 
 export enum TaskState {
@@ -334,12 +382,15 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _detachCallback: (groups: PromisePoolGroupInternal[]) => void;
     private _resultConverter?: (result: R[]) => any;
 
-    public constructor(params: PromisePoolTaskParams<R>) {
+    public constructor(
+        internalPrams: GenericTaskParamsInternal<R>,
+        params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>,
+    ) {
         console.log("Creating task");
-        this._pool = params.pool;
-        this._triggerCallback = params.triggerPromises;
-        this._detachCallback = params.detach;
-        this._resultConverter = params.resultConverter;
+        this._pool = internalPrams.pool;
+        this._triggerCallback = internalPrams.triggerNowCallback;
+        this._detachCallback = internalPrams.detach;
+        this._resultConverter = (params as GenericTaskParamsConverted<any, R>).resultConverter;
         this._state = params.paused ? TaskState.Paused : TaskState.Active;
 
         if (!isNull(params.invocationLimit)) {
@@ -349,8 +400,8 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             this._invocationLimit = params.invocationLimit;
         }
         // Create a group exclusively for this task. This may throw errors.
-        this._taskGroup = new PromisePoolGroupInternal(params);
-        this._groups = [params.globalGroup, this._taskGroup];
+        this._taskGroup = new PromisePoolGroupInternal(internalPrams.pool, internalPrams.triggerNextCallback, params);
+        this._groups = [internalPrams.globalGroup, this._taskGroup];
         if (params.groups) {
             const groups = params.groups as PromisePoolGroupInternal[];
             groups.forEach((group) => {
@@ -372,9 +423,76 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             group._incrementTasks();
         });
 
-        params.attach(this, this._groups);
+        internalPrams.attach(this, this._groups);
 
         // The creator will trigger the promises to run
+    }
+
+    public get activePromiseCount(): number {
+        return this._taskGroup._activePromiseCount;
+    }
+
+    public get invocations(): number {
+        return this._invocations;
+    }
+
+    public get invocationLimit(): number {
+        return this._invocationLimit;
+    }
+
+    public set invocationLimit(val: number) {
+        if (isNull(val)) {
+            this._invocationLimit = Infinity;
+        } else if (!isNaN(val) && typeof val === "number" && val >= 0) {
+            this._invocationLimit = val;
+            if (this._invocations >= this._invocationLimit) {
+                this.end();
+            }
+        } else {
+            throw new Error("Invalid invocation limit: " + val);
+        }
+        if (this._triggerCallback) {
+            this._triggerCallback();
+        }
+    }
+
+    public get concurrencyLimit(): number {
+        return this._taskGroup.concurrencyLimit;
+    }
+
+    public set concurrencyLimit(val: number) {
+        this._taskGroup.concurrencyLimit = val;
+    }
+
+    public get frequencyLimit(): number {
+        return this._taskGroup.frequencyLimit;
+    }
+
+    public set frequencyLimit(val: number) {
+        this._taskGroup.frequencyLimit = val;
+    }
+
+    public get frequencyWindow(): number {
+        return this._taskGroup.frequencyWindow;
+    }
+
+    public set frequencyWindow(val: number) {
+        this._taskGroup.frequencyWindow = val;
+    }
+
+    public get freeSlots(): number {
+        let freeSlots: number = this._invocationLimit - this._invocations;
+        this._groups.forEach((group) => {
+            let slots = group.freeSlots;
+            if (slots < freeSlots) {
+                freeSlots = slots;
+            }
+        });
+        return freeSlots;
+    }
+
+    public get state(): TaskState {
+        return this._state;
     }
 
     /**
@@ -535,30 +653,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
         }
     }
 
-    public configure(params: TaskLimits): void {
-        let invocationLimit: number = Infinity;
-        let concurrencyLimit: number = Infinity;
-        let frequencyLimit: number = Infinity;
-        let frequencyWindow: number = 0;
-
-        if (!isNull(params.invocationLimit)) {
-            if (typeof params.invocationLimit !== "number") {
-                throw new Error("Invalid invocation limit: " + params.invocationLimit);
-            }
-            invocationLimit = params.invocationLimit;
-        }
-        // Call the private configure method to avoid triggering a callback
-        this._taskGroup._configure(params);
-
-        this._invocationLimit = invocationLimit;
-
-        if (this._invocations >= this._invocationLimit) {
-            this.end();
-        } else if (this._taskGroup._activeTaskCount > 0) {
-            this._triggerCallback();
-        }
-    }
-
     /**
      * Returns a promise which resolves when the task completes.
      */
@@ -615,64 +709,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             this._state = TaskState.Exhausted;
         }
     }
-
-    /**
-     * Gets the current status of the task.
-     */
-    public getStatus(): TaskStatus {
-        const now = Date.now();
-        let freeSlots: number = this._invocationLimit - this._invocations;
-        this._groups.forEach((group) => {
-            let slots = group._concurrencyLimit - group._activePromiseCount;
-            if (slots < freeSlots) {
-                freeSlots = slots;
-            }
-            group._cleanFrequencyStarts(now);
-            slots = group._frequencyLimit - group._frequencyStarts.length;
-            if (slots < freeSlots) {
-                freeSlots = slots;
-            }
-        });
-
-        return {
-            activeTaskCount: this._taskGroup._activeTaskCount,
-            activePromiseCount: this._taskGroup._activePromiseCount,
-            concurrencyLimit: this._taskGroup._concurrencyLimit,
-            frequencyLimit: this._taskGroup._frequencyLimit,
-            frequencyWindow: this._taskGroup._frequencyWindow,
-            invocations: this._invocations,
-            invocationLimit: this._invocationLimit,
-            freeSlots: freeSlots,
-        };
-    }
-}
-
-export interface GroupStatus extends PromiseLimits {
-    activeTaskCount: number;
-    /**
-     * The current number of active invocations for the task.
-     */
-    activePromiseCount: number;
-    /**
-     * The concurrency limit for the task.
-     */
-    concurrencyLimit: number;
-    /**
-     * The number of times the task can be invoked before reaching the invocation limit,
-     * or the pool or task concurrency limit.
-     */
-    freeSlots: number;
-}
-
-export interface TaskStatus extends GroupStatus {
-    /**
-     * The number of times the task has been invoked.
-     */
-    invocations: number;
-    /**
-     * The maximum number of times the task can be invoked.
-     */
-    invocationLimit: number;
 }
 
 class ResolvablePromise<T> {
@@ -686,14 +722,6 @@ class ResolvablePromise<T> {
             this.reject = reject;
         });
     }
-}
-
-export interface ConfigureGroupParams extends PromisePoolGroupConfig {
-    groupId: any;
-}
-
-export interface ConfigureTaskParams extends PromisePoolGroupConfig {
-    taskId: any;
 }
 
 interface TaskError {
@@ -723,21 +751,19 @@ export class PromisePoolExecutor {
     constructor(params?: PromisePoolGroupConfig);
     constructor(concurrencyLimit?: number);
     constructor(params?: PromisePoolGroupConfig | number) {
-        let groupParams: PromisePoolGroupParams = {
-            pool: this,
-            triggerPromises: () => this._triggerPromises(),
-        };
+        let groupParams: PromisePoolGroupConfig;
 
-        if (params !== undefined && params !== null) {
+        if (!isNull(params)) {
             if (typeof params === "object") {
-                groupParams.concurrencyLimit = params.concurrencyLimit;
-                groupParams.frequencyLimit = params.frequencyLimit;
-                groupParams.frequencyWindow = params.frequencyWindow;
+                groupParams = params;
             } else {
-                groupParams.concurrencyLimit = params;
+                groupParams = {
+                    concurrencyLimit: params,
+                };
             }
         }
-        this._globalGroup = new PromisePoolGroupInternal(groupParams);
+
+        this._globalGroup = this.addGroup(groupParams) as PromisePoolGroupInternal;
         this._groupSet.add(this._globalGroup);
     }
 
@@ -748,14 +774,8 @@ export class PromisePoolExecutor {
         return this._globalGroup._concurrencyLimit;
     }
 
-    public set concurrencyLimit(value: number) {
-        if (value === undefined || value === null) {
-            value = Infinity;
-        } else if (!value || typeof value !== "number" || value <= 0) {
-            throw new Error("Invalid concurrency limit: " + value);
-        }
-        this._globalGroup._concurrencyLimit = value;
-        this._triggerPromises();
+    public set concurrencyLimit(val: number) {
+        this._globalGroup._concurrencyLimit = val;
     }
 
     /**
@@ -785,16 +805,36 @@ export class PromisePoolExecutor {
         });
     }
 
-    /**
-     * Private Method: Triggers promises to start.
-     */
-    private _triggerPromises(): void {
-        this._updateFrequencyStarts();
-
+    private _clearTriggerTimeout(): void {
         if (this._nextTriggerTimeout) {
             clearTimeout(this._nextTriggerTimeout);
             this._nextTriggerTimeout = null;
         }
+        this._nextTriggerTime = null;
+    }
+
+    private _triggerNextTick(): void {
+        if (this._nextTriggerTime === -1) {
+            return;
+        }
+        this._clearTriggerTimeout();
+        this._nextTriggerTime = -1;
+        nextTick(() => {
+            if (this._nextTriggerTime === -1) {
+                this._nextTriggerTime = null;
+                this._triggerNow();
+            }
+        });
+    }
+
+    /**
+     * Private Method: Triggers promises to start.
+     */
+    private _triggerNow(): void {
+        console.log("Trigger promises");
+        this._updateFrequencyStarts();
+
+        this._clearTriggerTimeout();
 
         let taskIndex: number = 0;
         let task: PromisePoolTaskInternal<any[]>;
@@ -822,29 +862,24 @@ export class PromisePoolExecutor {
         if (soonest !== Infinity) {
             time = Date.now();
             if (time >= soonest) {
-                return this._triggerPromises();
+                return this._triggerNow();
             }
 
             this._nextTriggerTime = soonest;
             this._nextTriggerTimeout = setTimeout(() => {
                 this._nextTriggerTimeout = null;
                 this._nextTriggerTime = 0;
-                this._triggerPromises();
+                this._triggerNow();
             }, soonest - time);
         }
     }
 
-    /** Configures the global limits set for the pool. */
-    public configure(params: PromisePoolGroupConfig): void {
-        this._globalGroup.configure(params);
-    }
-
     public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
-        return new PromisePoolGroupInternal({
-            ...params,
-            pool: this,
-            triggerPromises: () => this._triggerPromises(),
-        });
+        return new PromisePoolGroupInternal(
+            this,
+            () => this._triggerNextTick(),
+            params,
+        );
     }
 
     /**
@@ -855,29 +890,32 @@ export class PromisePoolExecutor {
      */
     public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
     public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
-    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]> {
-        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal({
-            ...params,
-            pool: this,
-            globalGroup: this._globalGroup,
-            triggerPromises: () => this._triggerPromises(),
-            attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
-                groups.forEach((group) => {
-                    this._groupSet.add(group);
-                });
-                this._tasks.push(task);
+    public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
+        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal(
+            {
+                pool: this,
+                globalGroup: this._globalGroup,
+                triggerNextCallback: () => this._triggerNextTick(),
+                triggerNowCallback: () => this._triggerNow(),
+                attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
+                    groups.forEach((group) => {
+                        this._groupSet.add(group);
+                    });
+                    this._tasks.push(task);
+                },
+                detach: (groups: PromisePoolGroupInternal[]) => {
+                    const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
+                    groups.forEach((group) => {
+                        if (group._activeTaskCount <= limit && group !== this._globalGroup) {
+                            this._groupSet.delete(group);
+                        }
+                    });
+                    this._removeTask(task);
+                },
             },
-            detach: (groups: PromisePoolGroupInternal[]) => {
-                const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
-                groups.forEach((group) => {
-                    if (group._activeTaskCount <= limit && group !== this._globalGroup) {
-                        this._groupSet.delete(group);
-                    }
-                });
-                this._removeTask(task);
-            },
-        });
-        this._triggerPromises();
+            params,
+        );
+        this._triggerNow();
         return task;
     }
 
@@ -955,10 +993,9 @@ export class PromisePoolExecutor {
                 }
                 let oldIndex: number = index;
                 if (typeof params.batchSize === "function") {
-                    let status: TaskStatus = this.getStatus();
                     let batchSize: number = params.batchSize(
                         params.data.length - oldIndex,
-                        status.freeSlots,
+                        this.freeSlots,
                     );
                     // Unacceptable values: NaN, <=0, type not number
                     if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
@@ -1021,8 +1058,6 @@ export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupConfi
 export interface PersistentBatcherTask<I, O> {
     getResult(input: I): Promise<O>;
     end(): void;
-    getStats(): TaskStatus;
-    configure(params: TaskLimits): void;
 }
 
 class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
@@ -1152,13 +1187,5 @@ class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
 
     public end(): void {
         this._task.end();
-    }
-
-    public getStats(): TaskStatus {
-        return this._task.getStatus();
-    }
-
-    public configure(params: TaskLimits): void {
-        this._task.configure(params);
     }
 }

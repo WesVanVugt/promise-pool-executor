@@ -541,7 +541,16 @@ describe("Miscellaneous Features", () => {
             generator: function (index) {
                 return wait(tick)
                     .then(() => {
-                        return this.getStatus();
+                        return {
+                            activePromiseCount: this.activePromiseCount,
+                            concurrencyLimit: this.concurrencyLimit,
+                            invocations: this.invocations,
+                            invocationLimit: this.invocationLimit,
+                            frequencyLimit: this.frequencyLimit,
+                            frequencyWindow: this.frequencyWindow,
+                            freeSlots: this.freeSlots,
+                            state: this.state,
+                        };
                     });
             },
             invocationLimit: 1,
@@ -549,8 +558,7 @@ describe("Miscellaneous Features", () => {
             frequencyLimit: 5,
             frequencyWindow: 1000,
         }).promise().then((status) => {
-            const expectedStatus: Pool.TaskStatus = {
-                activeTaskCount: 1,
+            expect(status[0]).to.deep.equal({
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
                 invocations: 1,
@@ -558,8 +566,8 @@ describe("Miscellaneous Features", () => {
                 frequencyLimit: 5,
                 frequencyWindow: 1000,
                 freeSlots: 0,
-            };
-            expect(status[0]).to.deep.equal(expectedStatus);
+                state: Pool.TaskState.Exhausted,
+            });
         });
     });
 
@@ -664,8 +672,30 @@ describe("Miscellaneous Features", () => {
         });
     });
 
+    describe("Configure Task", () => {
+        it("Invocation Limit Triggers Completion", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const start: number = Date.now();
+            const task = pool.addGenericTask({
+                generator: () => {
+                    return Promise.resolve(Date.now() - start);
+                },
+                invocationLimit: 2,
+                frequencyLimit: 1,
+                frequencyWindow: tick * 2,
+            })
+            wait(tick).then(() => {
+                task.invocationLimit = 1;
+            });
+            return task.promise().then((results) => {
+                expectTimes([...results, Date.now() - start], [0, 1], "Timing Results");
+            });
+        });
+    });
+
     describe("Configure Group", () => {
-        it("triggerPromises", () => {
+        it("Triggers Promises", () => {
             let pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             let start: number = Date.now();
@@ -674,10 +704,8 @@ describe("Miscellaneous Features", () => {
                 frequencyWindow: tick * 2,
             });
             wait(tick).then(() => {
-                group.configure({
-                    frequencyLimit: 1,
-                    frequencyWindow: 1,
-                });
+                group.frequencyWindow = 1;
+                group.frequencyLimit = 1;
             });
             return pool.addGenericTask({
                 groups: [group],
