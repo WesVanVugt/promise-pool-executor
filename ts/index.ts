@@ -2,6 +2,7 @@ import * as Debug from "debug";
 import * as nextTick from "next-tick";
 const debug = Debug("promise-pool-executor");
 
+const GLOBAL_GROUP_INDEX = 0;
 const TASK_GROUP_INDEX = 1;
 
 export interface TaskGeneral {
@@ -63,8 +64,7 @@ interface GenericTaskParamsInternal<R> {
     globalGroup: PromisePoolGroupInternal;
     triggerNextCallback: () => void;
     triggerNowCallback: () => void;
-    attach: (task: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => void;
-    detach: (groups: PromisePoolGroupInternal[]) => void;
+    detach: () => void;
 }
 
 export interface SingleTaskParams<T, R> extends TaskGeneral {
@@ -422,8 +422,6 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             group._incrementTasks();
         });
 
-        internalPrams.attach(this, this._groups);
-
         // The creator will trigger the promises to run
     }
 
@@ -572,6 +570,14 @@ class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             }
         }
         return time ? time : false;
+    }
+
+    public _cleanFrequencyStarts(now: number): void {
+        this._groups.forEach((group, index) => {
+            if (index > GLOBAL_GROUP_INDEX) {
+                group._cleanFrequencyStarts(now);
+            }
+        });
     }
 
     /**
@@ -816,19 +822,7 @@ export class PromisePoolExecutor {
     public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
         const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal(
             {
-                attach: (task2: PromisePoolTaskInternal<R>, groups: PromisePoolGroupInternal[]) => {
-                    groups.forEach((group) => {
-                        this._groupSet.add(group);
-                    });
-                    this._tasks.push(task2);
-                },
-                detach: (groups: PromisePoolGroupInternal[]) => {
-                    const limit: number = groups[TASK_GROUP_INDEX]._activeTaskCount;
-                    groups.forEach((group) => {
-                        if (group._activeTaskCount <= limit && group !== this._globalGroup) {
-                            this._groupSet.delete(group);
-                        }
-                    });
+                detach: () => {
                     this._removeTask(task);
                 },
                 globalGroup: this._globalGroup,
@@ -838,6 +832,10 @@ export class PromisePoolExecutor {
             },
             params,
         );
+        if (task.state <= TaskState.Paused) {
+            // Attach the task
+            this._tasks.push(task);
+        }
         this._triggerNow();
         return task;
     }
@@ -958,11 +956,12 @@ export class PromisePoolExecutor {
         return this._globalGroup.waitForIdle();
     }
 
-    private _updateFrequencyStarts(): void {
+    private _cleanFrequencyStarts(): void {
         // Remove the frequencyStarts entries which are outside of the window
         const now = Date.now();
-        this._groupSet.forEach((group) => {
-            group._cleanFrequencyStarts(now);
+        this._globalGroup._cleanFrequencyStarts(now);
+        this._tasks.forEach((task) => {
+            task._cleanFrequencyStarts(now);
         });
     }
 
@@ -993,7 +992,7 @@ export class PromisePoolExecutor {
      */
     private _triggerNow(): void {
         debug("Trigger promises");
-        this._updateFrequencyStarts();
+        this._cleanFrequencyStarts();
 
         this._clearTriggerTimeout();
 
