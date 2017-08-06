@@ -16,7 +16,7 @@ export interface GenericTaskOptionsPrivate<R> {
 
 export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupPrivate[];
-    private _generator: (invocation: number) => Promise<R> | null;
+    private _generator: (invocation: number) => Promise<R> | undefined;
     private _taskGroup: PromisePoolGroupPrivate;
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
@@ -63,7 +63,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         this._generator = options.generator;
 
         // Resolve the promise only after all options have been validated
-        if (options.invocationLimit <= 0) {
+        if (!isNull(options.invocationLimit) && options.invocationLimit <= 0) {
             this.end();
             return;
         }
@@ -249,7 +249,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._reject(err);
             return;
         }
-        if (!promise) {
+        if (isNull(promise)) {
             if (this._state === TaskState.Active) {
                 this.end();
             }
@@ -319,7 +319,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._returnResult = this._result;
         }
         // discard the original array to free memory
-        this._result = null;
+        this._result = undefined;
 
         if (this._promises.length) {
             this._promises.forEach((promise) => {

@@ -45,7 +45,9 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number) => Promise<R> | null;
+    generator: (
+        this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number,
+    ) => Promise<R> | undefined;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -65,7 +67,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | undefined;
     /**
      * An array of elements to be individually passed to {generator}.
      */
@@ -242,7 +244,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
             frequencyWindow: options.frequencyWindow,
             generator(invocation) {
                 if (index >= options.data.length) {
-                    return null;
+                    return;
                 }
                 const oldIndex: number = index;
                 if (typeof options.batchSize === "function") {
@@ -282,7 +284,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
             paused: options.paused,
             generator(index) {
                 if (index >= options.data.length) {
-                    return null;
+                    return;
                 }
                 const oldIndex: number = index;
                 index++;
@@ -314,9 +316,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     private _clearTriggerTimeout(): void {
         if (this._nextTriggerTimeout) {
             clearTimeout(this._nextTriggerTimeout);
-            this._nextTriggerTimeout = null;
+            this._nextTriggerTimeout = undefined;
         }
-        this._nextTriggerTime = null;
+        this._nextTriggerTime = undefined;
     }
 
     private _triggerNextTick(): void {
@@ -327,7 +329,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         this._nextTriggerTime = -1;
         process.nextTick(() => {
             if (this._nextTriggerTime === -1) {
-                this._nextTriggerTime = null;
+                this._nextTriggerTime = undefined;
                 this._triggerNow();
             }
         });
@@ -373,7 +375,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 
             this._nextTriggerTime = soonest;
             this._nextTriggerTimeout = setTimeout(() => {
-                this._nextTriggerTimeout = null;
+                this._nextTriggerTimeout = undefined;
                 this._nextTriggerTime = 0;
                 this._triggerNow();
             }, soonest - time);

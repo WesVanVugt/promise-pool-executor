@@ -34,14 +34,15 @@ export interface GenericTaskOptionsBase extends PromisePoolGroupOptions, TaskOpt
 export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
     /**
      * Function used for creating promises to run.
-     * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
+     * This function will be run repeatedly until it returns undefined or the concurrency or invocation limit is
+     * reached.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | null;
+    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | undefined;
 }
 
 export interface GenericTaskConvertedOptions<I, R> extends GenericTaskOptionsBase {
-    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | null;
+    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | undefined;
     resultConverter: (result: I[]) => R;
 }
 

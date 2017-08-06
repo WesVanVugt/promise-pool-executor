@@ -523,7 +523,7 @@ describe("Miscellaneous Features", () => {
                 if (index === 1 && !paused) {
                     paused = true;
                     this.pause();
-                    return null;
+                    return;
                 }
                 return wait(tick)
                     .then(() => {
@@ -903,7 +903,7 @@ describe("Task Secializations", () => {
             it("Instant Start", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
-                const task = pool.addPersistentBatchTask<null, null>({
+                const task = pool.addPersistentBatchTask<undefined, undefined>({
                     generator: (input) => {
                         runCount++;
                         return wait(tick).then(() => input);
@@ -914,7 +914,7 @@ describe("Task Secializations", () => {
                 const runCounts = [0, 1, 1];
                 return Promise.all(runCounts.map((expectedRunCount) => {
                     // The generator should be triggered instantly when the max batch size is reached
-                    const promise = task.getResult(null);
+                    const promise = task.getResult(undefined);
                     expect(runCount).to.equal(expectedRunCount);
                     return promise;
                 }));
@@ -923,7 +923,7 @@ describe("Task Secializations", () => {
         it("queuingDelay", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
-            const task = pool.addPersistentBatchTask<null, null>({
+            const task = pool.addPersistentBatchTask<undefined, undefined>({
                 generator: (input) => {
                     runCount++;
                     return Promise.resolve(new Array(input.length));
@@ -934,7 +934,7 @@ describe("Task Secializations", () => {
             const start: number = Date.now();
             return Promise.all(delays.map((delay) => {
                 return wait(delay * tick)
-                    .then(() => task.getResult(null))
+                    .then(() => task.getResult(undefined))
                     .then(() => Date.now() - start);
             })).then((results) => {
                 expectTimes(results, [2, 2, 5], "Timing Results");
@@ -945,7 +945,7 @@ describe("Task Secializations", () => {
             it("Core Functionality", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
-                const task = pool.addPersistentBatchTask<null, null>({
+                const task = pool.addPersistentBatchTask<undefined, undefined>({
                     generator: (input) => {
                         runCount++;
                         return wait(5 * tick).then(() => new Array(input.length));
@@ -956,7 +956,7 @@ describe("Task Secializations", () => {
                 const start: number = Date.now();
                 return Promise.all(delays.map((delay) => {
                     return wait(delay * tick)
-                        .then(() => task.getResult(null))
+                        .then(() => task.getResult(undefined))
                         .then(() => Date.now() - start);
                 })).then((results) => {
                     expectTimes(results, [5, 7, 7, 9, 9], "Timing Results");
@@ -965,7 +965,7 @@ describe("Task Secializations", () => {
             });
             it("Should Trigger On Task Completion", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                const task = pool.addPersistentBatchTask<null, null>({
+                const task = pool.addPersistentBatchTask<undefined, undefined>({
                     generator: (input) => {
                         return wait(2 * tick).then(() => new Array(input.length));
                     },
@@ -975,7 +975,7 @@ describe("Task Secializations", () => {
                 const start: number = Date.now();
                 return Promise.all(delays.map((delay) => {
                     return wait(delay * tick)
-                        .then(() => task.getResult(null))
+                        .then(() => task.getResult(undefined))
                         .then(() => Date.now() - start);
                 })).then((results) => {
                     expectTimes(results, [2, 4], "Timing Results");
@@ -985,10 +985,10 @@ describe("Task Secializations", () => {
         describe("Error Handling", () => {
             it("Single Rejection", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                const task = pool.addPersistentBatchTask<string, null>({
+                const task = pool.addPersistentBatchTask<string, undefined>({
                     generator: (input) => {
                         return wait(tick).then(() => input.map((value) => {
-                            return value === "error" ? new Error("test") : null;
+                            return value === "error" ? new Error("test") : undefined;
                         }));
                     },
                 });
@@ -1005,7 +1005,7 @@ describe("Task Secializations", () => {
             });
             it("Synchronous Generator Exception Followed By Success", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                const task = pool.addPersistentBatchTask<number, null>({
+                const task = pool.addPersistentBatchTask<number, undefined>({
                     generator: (input) => {
                         input.forEach((value) => {
                             if (value === 0) {
@@ -1029,7 +1029,7 @@ describe("Task Secializations", () => {
             });
             it("Asynchronous Generator Exception Followed By Success", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                const task = pool.addPersistentBatchTask<number, null>({
+                const task = pool.addPersistentBatchTask<number, undefined>({
                     generator: (input) => {
                         return wait(1).then(() => {
                             input.forEach((value) => {
@@ -1055,7 +1055,7 @@ describe("Task Secializations", () => {
             });
             it("Invalid Output Length", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                const task = pool.addPersistentBatchTask<number, null>({
+                const task = pool.addPersistentBatchTask<number, undefined>({
                     generator: (input) => {
                         // Respond with an array larger than the input
                         return wait(1).then(() => new Array(input.length + 1));
