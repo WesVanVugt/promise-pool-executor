@@ -1,4 +1,6 @@
 **/*
 !js/index.js
 !js/index.d.ts
+!js/private/*.js
+!js/public/*
 !README.md

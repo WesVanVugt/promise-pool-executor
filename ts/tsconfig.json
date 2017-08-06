@@ -7,10 +7,11 @@
         "noImplicitThis": true,
         "preserveConstEnums": true,
         "declaration": true,
-        "sourceMap": true,
+        "sourceMap": false,
         "outDir": "../js"
     },
     "include": [
-        "**/*.ts"
+        "index.ts",
+        "test/index.ts"
     ]
 }

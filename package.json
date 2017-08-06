@@ -31,7 +31,7 @@
     "tslint": "tslint ts/**/*.ts"
   },
   "main": "js/index.js",
-  "typings": "js/index",
+  "typings": "js/index.d.ts",
   "engines": {
     "node": ">=5.0.0"
   },

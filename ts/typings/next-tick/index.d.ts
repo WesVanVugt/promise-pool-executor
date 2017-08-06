@@ -1,5 +1,5 @@
-declare const nextTick: (fn: () => void) => void;
 
 declare module "next-tick" {
+    const nextTick: (fn: () => void) => void;
     export = nextTick;
 }
