@@ -31,7 +31,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     data?: T;
 }
 
-export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, InvocationLimit {
+export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -39,7 +39,7 @@ export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<Freque
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
 
-export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, InvocationLimit {
+export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * @param {T[]} values - Elements from {data} batched for this invocation.
@@ -59,7 +59,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, InvocationLimit {
+export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * @param value The value from {data} for this invocation.

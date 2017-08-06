@@ -14,10 +14,8 @@ export interface InvocationLimit {
     /**
      * Limits the number of times a promise will be invoked.
      */
-    invocationLimit?: number;
+    invocationLimit: number;
 }
-
-export interface TaskLimits extends PromisePoolGroupOptions, InvocationLimit { }
 
 export interface TaskOptionsBase {
     /**
@@ -31,7 +29,7 @@ export interface TaskOptionsBase {
     paused?: boolean;
 }
 
-export interface GenericTaskOptionsBase extends TaskOptionsBase, TaskLimits { }
+export interface GenericTaskOptionsBase extends PromisePoolGroupOptions, TaskOptionsBase, Partial<InvocationLimit> { }
 
 export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
     /**
