@@ -16,7 +16,7 @@ import {
     TaskState,
 } from "./task";
 
-export interface SingleTaskParams<T, R> extends TaskGeneral {
+export interface SingleTaskOptions<T, R> extends TaskGeneral {
     /**
      * A function used for creating promises to run.
      */
@@ -27,7 +27,7 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     data?: T;
 }
 
-export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface LinearTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -35,7 +35,7 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOpt
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
 
-export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface BatchTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param {T[]} values - Elements from {data} batched for this invocation.
@@ -55,7 +55,7 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOpti
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface EachTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param value The value from {data} for this invocation.
@@ -139,12 +139,14 @@ export class PromisePoolExecutor {
 
     /**
      * General-purpose function for adding a task.
-     * @param params Parameters used to define the task.
+     * @param options Options used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    public addGenericTask<I, R>(params: GenericTaskConvertedOptions<I, R>): PromisePoolTask<R>;
-    public addGenericTask<R>(params: GenericTaskOptions<R>): PromisePoolTask<R[]>;
-    public addGenericTask<R>(params: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>): PromisePoolTask<R[]> {
+    public addGenericTask<I, R>(options: GenericTaskConvertedOptions<I, R>): PromisePoolTask<R>;
+    public addGenericTask<R>(options: GenericTaskOptions<R>): PromisePoolTask<R[]>;
+    public addGenericTask<R>(
+        options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
+    ): PromisePoolTask<R[]> {
         const task: PromisePoolTaskPrivate<R> = new PromisePoolTaskPrivate(
             {
                 detach: () => {
@@ -155,7 +157,7 @@ export class PromisePoolExecutor {
                 triggerNextCallback: () => this._triggerNextTick(),
                 triggerNowCallback: () => this._triggerNow(),
             },
-            params,
+            options,
         );
         if (task.state <= TaskState.Paused) {
             // Attach the task
@@ -167,18 +169,18 @@ export class PromisePoolExecutor {
 
     /**
      * Runs a task once while obeying the concurrency limit set for the pool.
-     * @param params Parameters used to define the task.
+     * @param options Options used to define the task.
      * @return A promise which resolves to the result of the task.
      */
-    public addSingleTask<T, R>(params: SingleTaskParams<T, R>): PromisePoolTask<R> {
-        const data: T = params.data;
+    public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
+        const data: T = options.data;
         return this.addGenericTask<R, R>({
             generator() {
-                return params.generator.call(this, data);
+                return options.generator.call(this, data);
             },
-            groups: params.groups,
+            groups: options.groups,
             invocationLimit: 1,
-            paused: params.paused,
+            paused: options.paused,
             resultConverter: (result) => result[0],
         });
     }
@@ -187,46 +189,46 @@ export class PromisePoolExecutor {
      * Runs a task with a concurrency limit of 1.
      * @return A promise which resolves to an array containing the results of the task.
      */
-    public addLinearTask<T, R>(params: LinearTaskParams<T, R>): PromisePoolTask<R[]> {
+    public addLinearTask<T, R>(options: LinearTaskOptions<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
             concurrencyLimit: 1,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            generator: params.generator,
-            groups: params.groups,
-            invocationLimit: params.invocationLimit,
-            paused: params.paused,
+            frequencyLimit: options.frequencyLimit,
+            frequencyWindow: options.frequencyWindow,
+            generator: options.generator,
+            groups: options.groups,
+            invocationLimit: options.invocationLimit,
+            paused: options.paused,
         });
     }
 
     /**
      * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
-     * @param params Parameters used to define the task.
+     * @param options Parameters used to define the task.
      * @return A promise which resolves to an array containing the results of the task. Each element in the array
      * corresponds to one invocation.
      */
-    public addBatchTask<T, R>(params: BatchTaskParams<T, R>): PromisePoolTask<R[]> {
+    public addBatchTask<T, R>(options: BatchTaskOptions<T, R>): PromisePoolTask<R[]> {
         let index: number = 0;
 
         // Unacceptable values: NaN, <=0, type not number/function
-        if (!params.batchSize || typeof params.batchSize !== "function"
-            && (typeof params.batchSize !== "number" || params.batchSize <= 0)) {
+        if (!options.batchSize || typeof options.batchSize !== "function"
+            && (typeof options.batchSize !== "number" || options.batchSize <= 0)) {
 
-            throw new Error("Invalid batch size: " + params.batchSize);
+            throw new Error("Invalid batch size: " + options.batchSize);
         }
 
         return this.addGenericTask({
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
+            concurrencyLimit: options.concurrencyLimit,
+            frequencyLimit: options.frequencyLimit,
+            frequencyWindow: options.frequencyWindow,
             generator(invocation) {
-                if (index >= params.data.length) {
+                if (index >= options.data.length) {
                     return null;
                 }
                 const oldIndex: number = index;
-                if (typeof params.batchSize === "function") {
-                    const batchSize: number = params.batchSize(
-                        params.data.length - oldIndex,
+                if (typeof options.batchSize === "function") {
+                    const batchSize: number = options.batchSize(
+                        options.data.length - oldIndex,
                         this.freeSlots,
                     );
                     // Unacceptable values: NaN, <=0, type not number
@@ -235,37 +237,37 @@ export class PromisePoolExecutor {
                     }
                     index += batchSize;
                 } else {
-                    index += params.batchSize;
+                    index += options.batchSize;
                 }
 
-                return params.generator.call(this, params.data.slice(oldIndex, index), oldIndex, invocation);
+                return options.generator.call(this, options.data.slice(oldIndex, index), oldIndex, invocation);
             },
-            groups: params.groups,
-            invocationLimit: params.invocationLimit,
-            paused: params.paused,
+            groups: options.groups,
+            invocationLimit: options.invocationLimit,
+            paused: options.paused,
         });
     }
 
     /**
      * Runs a task for each element in an array.
-     * @param params
+     * @param options
      * @return A promise which resolves to an array containing the results of the task.
      */
-    public addEachTask<T, R>(params: EachTaskParams<T, R>): PromisePoolTask<R[]> {
+    public addEachTask<T, R>(options: EachTaskOptions<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
-            groups: params.groups,
-            invocationLimit: params.invocationLimit,
-            paused: params.paused,
+            concurrencyLimit: options.concurrencyLimit,
+            frequencyLimit: options.frequencyLimit,
+            frequencyWindow: options.frequencyWindow,
+            groups: options.groups,
+            invocationLimit: options.invocationLimit,
+            paused: options.paused,
             generator(index) {
-                if (index >= params.data.length) {
+                if (index >= options.data.length) {
                     return null;
                 }
                 const oldIndex: number = index;
                 index++;
-                return params.generator.call(this, params.data[oldIndex], oldIndex);
+                return options.generator.call(this, options.data[oldIndex], oldIndex);
             },
         });
     }
