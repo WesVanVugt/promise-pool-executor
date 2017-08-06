@@ -18,7 +18,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     constructor(
         pool: PromisePoolExecutor,
         triggerNextCallback: () => void,
-        options: PromisePoolGroupOptions,
+        options?: PromisePoolGroupOptions,
     ) {
         this._pool = pool;
         if (!options) {
@@ -41,11 +41,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         return this._activePromiseCount;
     }
 
-    public get concurrencyLimit(): number {
+    public get concurrencyLimit(): number | undefined {
         return this._concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number) {
+    public set concurrencyLimit(val: number | undefined) {
         if (isNull(val)) {
             this._concurrencyLimit = Infinity;
         } else if (val && typeof val === "number" && val > 0) {
@@ -58,11 +58,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         }
     }
 
-    public get frequencyLimit(): number {
+    public get frequencyLimit(): number | undefined {
         return this._frequencyLimit;
     }
 
-    public set frequencyLimit(val: number) {
+    public set frequencyLimit(val: number | undefined) {
         if (isNull(val)) {
             this._frequencyLimit = Infinity;
         } else if (val && typeof val === "number" && val > 0) {
@@ -75,11 +75,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         }
     }
 
-    public get frequencyWindow(): number {
+    public get frequencyWindow(): number | undefined {
         return this._frequencyWindow;
     }
 
-    public set frequencyWindow(val: number) {
+    public set frequencyWindow(val: number | undefined) {
         if (isNull(val)) {
             this._frequencyWindow = 1000;
         } else if (val && typeof val === "number" && val > 0) {

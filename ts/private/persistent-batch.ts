@@ -13,7 +13,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     private _inputQueue: I[] = [];
     private _outputPromises: Array<ResolvablePromise<O>> = [];
     private _generator: (input: I[]) => Promise<Array<O | Error>>;
-    private _runTimeout: NodeJS.Timer;
+    private _runTimeout?: NodeJS.Timer;
     private _running: boolean = false;
 
     constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
@@ -113,7 +113,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         if (this._inputQueue.length >= this._maxBatchSize) {
             if (this._runTimeout) {
                 clearTimeout(this._runTimeout);
-                this._runTimeout = null;
+                this._runTimeout = undefined;
             }
             this._running = true;
             this._task.resume();
@@ -127,7 +127,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             // Run the batch, but with a delay
             this._running = true;
             this._runTimeout = setTimeout(() => {
-                this._runTimeout = null;
+                this._runTimeout = undefined;
                 this._task.resume();
             }, this._queuingDelay);
         }

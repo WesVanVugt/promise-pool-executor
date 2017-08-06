@@ -31,7 +31,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     data?: T;
 }
 
-export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
+export interface LinearTaskOptions<T, R> extends TaskOptionsBase, FrequencyLimit, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -75,8 +75,8 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 }
 
 export class PromisePoolExecutor implements PromisePoolGroup {
-    private _nextTriggerTime: number;
-    private _nextTriggerTimeout: any;
+    private _nextTriggerTime?: number;
+    private _nextTriggerTimeout?: any;
     /**
      * All tasks which are active or waiting.
      */
@@ -99,6 +99,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
                     concurrencyLimit: options,
                 };
             }
+        } else {
+            groupOptions = {};
         }
 
         this._globalGroup = this.addGroup(groupOptions) as PromisePoolGroupPrivate;
@@ -108,27 +110,27 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
-    public get concurrencyLimit(): number {
+    public get concurrencyLimit(): number | undefined {
         return this._globalGroup.concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number) {
+    public set concurrencyLimit(val: number | undefined) {
         this._globalGroup.concurrencyLimit = val;
     }
 
-    public get frequencyLimit(): number {
+    public get frequencyLimit(): number | undefined {
         return this._globalGroup.frequencyLimit;
     }
 
-    public set frequencyLimit(val: number) {
+    public set frequencyLimit(val: number | undefined) {
         this._globalGroup.frequencyLimit = val;
     }
 
-    public get frequencyWindow(): number {
+    public get frequencyWindow(): number | undefined {
         return this._globalGroup.frequencyWindow;
     }
 
-    public set frequencyWindow(val: number) {
+    public set frequencyWindow(val: number | undefined) {
         this._globalGroup.frequencyWindow = val;
     }
 
@@ -150,7 +152,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
     }
 
-    public addGroup(options: PromisePoolGroupOptions): PromisePoolGroup {
+    public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
         return new PromisePoolGroupPrivate(
             this,
             () => this._triggerNextTick(),
@@ -194,7 +196,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * @return A promise which resolves to the result of the task.
      */
     public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
-        const data: T = options.data;
+        const data: T | undefined = options.data;
         return this.addGenericTask<R, R>({
             generator() {
                 return options.generator.call(this, data);

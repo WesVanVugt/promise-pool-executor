@@ -20,7 +20,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _taskGroup: PromisePoolGroupPrivate;
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
-    private _result: R[] = [];
+    private _result?: R[] = [];
     private _returnResult: any;
     private _state: TaskState;
     private _rejection?: TaskError;
@@ -103,27 +103,27 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         }
     }
 
-    public get concurrencyLimit(): number {
+    public get concurrencyLimit(): number | undefined {
         return this._taskGroup.concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number) {
+    public set concurrencyLimit(val: number | undefined) {
         this._taskGroup.concurrencyLimit = val;
     }
 
-    public get frequencyLimit(): number {
+    public get frequencyLimit(): number | undefined {
         return this._taskGroup.frequencyLimit;
     }
 
-    public set frequencyLimit(val: number) {
+    public set frequencyLimit(val: number | undefined) {
         this._taskGroup.frequencyLimit = val;
     }
 
-    public get frequencyWindow(): number {
+    public get frequencyWindow(): number | undefined {
         return this._taskGroup.frequencyWindow;
     }
 
-    public set frequencyWindow(val: number) {
+    public set frequencyWindow(val: number | undefined) {
         this._taskGroup.frequencyWindow = val;
     }
 
@@ -283,7 +283,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             });
             // Avoid storing the result if it is undefined.
             // Some tasks may have countless iterations and never return anything, so this could eat memory.
-            if (result !== undefined) {
+            if (result !== undefined && this._result) {
                 this._result[resultIndex] = result;
             }
             if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
@@ -300,7 +300,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Private. Resolves the task if possible. Should only be called by end()
      */
     private _resolve(): void {
-        if (this._rejection) {
+        if (this._rejection || !this._result) {
             return;
         }
         // Set the length of the resulting array in case some undefined results affected this

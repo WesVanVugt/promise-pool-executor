@@ -1,20 +1,15 @@
-import { PromisePoolGroupPrivate } from "../private/group";
 import {
     ActivePromiseCount,
-    ConcurrencyLimit,
     FreeSlots,
-    FrequencyLimit,
-    PromiseLimits,
     PromisePoolGroup,
     PromisePoolGroupOptions,
 } from "./group";
-import { PromisePoolExecutor } from "./pool";
 
 export interface InvocationLimit {
     /**
      * Limits the number of times a promise will be invoked.
      */
-    invocationLimit: number;
+    invocationLimit?: number;
 }
 
 export interface TaskOptionsBase {
@@ -66,7 +61,7 @@ export enum TaskState {
     Terminated,
 }
 
-export interface PromisePoolTask<R> extends InvocationLimit, ActivePromiseCount, PromiseLimits, FreeSlots {
+export interface PromisePoolTask<R> extends InvocationLimit, ActivePromiseCount, PromisePoolGroupOptions, FreeSlots {
     readonly invocations: number;
     readonly state: TaskState;
     pause(): void;

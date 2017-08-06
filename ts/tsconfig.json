@@ -5,6 +5,7 @@
         "module": "commonjs",
         "noImplicitAny": true,
         "noImplicitThis": true,
+        "strictNullChecks": true,
         "preserveConstEnums": true,
         "declaration": true,
         "sourceMap": false,
