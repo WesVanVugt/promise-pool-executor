@@ -20,9 +20,28 @@ export interface PromiseLimits extends ConcurrencyLimit, FrequencyLimit { }
 
 export type PromisePoolGroupOptions = Partial<PromiseLimits>;
 
-export interface PromisePoolGroup extends PromiseLimits {
-    readonly activeTaskCount: number;
+export interface ActivePromiseCount {
+    /**
+     * The number of promises which are active.
+     */
     readonly activePromiseCount: number;
+}
+
+export interface ActivePromiseCount {
+    /**
+     * The number of promises which are active.
+     */
+    readonly activePromiseCount: number;
+}
+
+export interface FreeSlots {
+    /**
+     * The number of promises which can be invoked before the concurrency limit is reached.
+     */
     readonly freeSlots: number;
+}
+
+export interface PromisePoolGroup extends PromiseLimits, ActivePromiseCount, FreeSlots {
+    readonly activeTaskCount: number;
     waitForIdle(): Promise<void>;
 }

@@ -72,7 +72,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
     data: T[];
 }
 
-export class PromisePoolExecutor {
+export class PromisePoolExecutor implements PromisePoolGroup {
     private _nextTriggerTime: number;
     private _nextTriggerTimeout: any;
     /**
@@ -107,22 +107,37 @@ export class PromisePoolExecutor {
      * The maximum number of promises which are allowed to run at one time.
      */
     public get concurrencyLimit(): number {
-        return this._globalGroup._concurrencyLimit;
+        return this._globalGroup.concurrencyLimit;
     }
 
     public set concurrencyLimit(val: number) {
-        this._globalGroup._concurrencyLimit = val;
+        this._globalGroup.concurrencyLimit = val;
     }
 
-    /**
-     * The number of promises which are active.
-     */
-    public get activePromiseCount(): number {
-        return this._globalGroup._activeTaskCount;
+    public get frequencyLimit(): number {
+        return this._globalGroup.frequencyLimit;
     }
-    /**
-     * The number of promises which can be invoked before the concurrency limit is reached.
-     */
+
+    public set frequencyLimit(val: number) {
+        this._globalGroup.frequencyLimit = val;
+    }
+
+    public get frequencyWindow(): number {
+        return this._globalGroup.frequencyWindow;
+    }
+
+    public set frequencyWindow(val: number) {
+        this._globalGroup.frequencyWindow = val;
+    }
+
+    public get activeTaskCount(): number {
+        return this._globalGroup.activeTaskCount;
+    }
+
+    public get activePromiseCount(): number {
+        return this._globalGroup.activePromiseCount;
+    }
+
     public get freeSlots(): number {
         return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
     }
