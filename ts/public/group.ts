@@ -15,12 +15,9 @@ export interface PromiseLimits {
 
 export type PromisePoolGroupOptions = Partial<PromiseLimits>;
 
-export interface PromisePoolGroup {
+export interface PromisePoolGroup extends PromiseLimits {
     readonly activeTaskCount: number;
     readonly activePromiseCount: number;
-    concurrencyLimit: number;
-    frequencyLimit: number;
-    frequencyWindow: number;
     readonly freeSlots: number;
     waitForIdle(): Promise<void>;
 }

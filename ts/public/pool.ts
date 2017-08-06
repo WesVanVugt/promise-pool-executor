@@ -4,8 +4,8 @@ import { PromisePoolTaskPrivate } from "../private/task";
 import { debug, isNull } from "../private/utils";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "./group";
 import {
-    PersistentBatcherTask,
-    PersistentBatcherTaskParams,
+    PersistentBatchTask,
+    PersistentBatchTaskOptions,
 } from "./persistent-batch";
 import {
     GenericTaskParams,
@@ -129,11 +129,11 @@ export class PromisePoolExecutor {
         return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
     }
 
-    public addGroup(params: PromisePoolGroupOptions): PromisePoolGroup {
+    public addGroup(options: PromisePoolGroupOptions): PromisePoolGroup {
         return new PromisePoolGroupPrivate(
             this,
             () => this._triggerNextTick(),
-            params,
+            options,
         );
     }
 
@@ -270,8 +270,8 @@ export class PromisePoolExecutor {
         });
     }
 
-    public addPersistentBatchTask<I, O>(params: PersistentBatcherTaskParams<I, O>): PersistentBatcherTask<I, O> {
-        return new PersistentBatchTaskPrivate(this, params);
+    public addPersistentBatchTask<I, O>(options: PersistentBatchTaskOptions<I, O>): PersistentBatchTask<I, O> {
+        return new PersistentBatchTaskPrivate(this, options);
     }
 
     /**

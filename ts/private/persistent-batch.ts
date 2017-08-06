@@ -1,10 +1,10 @@
 import { PromisePoolGroupOptions } from "../public/group";
-import { PersistentBatcherTask, PersistentBatcherTaskParams } from "../public/persistent-batch";
+import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask } from "../public/task";
 import { isNull, ResolvablePromise } from "./utils";
 
-export class PersistentBatchTaskPrivate<I, O> implements PersistentBatcherTask<I, O> {
+export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
     private _task: PromisePoolTask<any>;
     private _maxBatchSize: number = Infinity;
     private _queuingDelay: number = 1;
@@ -16,36 +16,36 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatcherTask<I
     private _runTimeout: NodeJS.Timer;
     private _running: boolean = false;
 
-    constructor(pool: PromisePoolExecutor, params: PersistentBatcherTaskParams<I, O>) {
+    constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
         const batcher = this;
-        this._generator = params.generator;
-        if (Array.isArray(params.queuingThresholds)) {
-            if (!params.queuingThresholds.length) {
-                throw new Error("params.batchThresholds must contain at least one number");
+        this._generator = options.generator;
+        if (Array.isArray(options.queuingThresholds)) {
+            if (!options.queuingThresholds.length) {
+                throw new Error("options.batchThresholds must contain at least one number");
             }
-            params.queuingThresholds.forEach((n) => {
+            options.queuingThresholds.forEach((n) => {
                 if (n < 1) {
-                    throw new Error("params.batchThresholds must not contain numbers less than 1");
+                    throw new Error("options.batchThresholds must not contain numbers less than 1");
                 }
             });
-            this._queuingThresholds = [...params.queuingThresholds];
+            this._queuingThresholds = [...options.queuingThresholds];
         } else {
             this._queuingThresholds = [1];
         }
-        if (!isNull(params.maxBatchSize)) {
-            if (params.maxBatchSize < 1) {
-                throw new Error("params.batchSize must be greater than 0");
+        if (!isNull(options.maxBatchSize)) {
+            if (options.maxBatchSize < 1) {
+                throw new Error("options.batchSize must be greater than 0");
             }
-            this._maxBatchSize = params.maxBatchSize;
+            this._maxBatchSize = options.maxBatchSize;
         }
-        if (!isNull(params.queuingDelay)) {
-            this._queuingDelay = params.queuingDelay;
+        if (!isNull(options.queuingDelay)) {
+            this._queuingDelay = options.queuingDelay;
         }
 
         this._task = pool.addGenericTask({
-            concurrencyLimit: params.concurrencyLimit,
-            frequencyLimit: params.frequencyLimit,
-            frequencyWindow: params.frequencyWindow,
+            concurrencyLimit: options.concurrencyLimit,
+            frequencyLimit: options.frequencyLimit,
+            frequencyWindow: options.frequencyWindow,
             paused: true,
             generator() {
                 batcher._running = false;
