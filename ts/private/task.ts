@@ -1,6 +1,6 @@
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { GenericTaskParams, GenericTaskParamsConverted, PromisePoolTask, TaskState } from "../public/task";
+import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
 
@@ -33,37 +33,37 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
     public constructor(
         privateOptions: GenericTaskOptionsPrivate<R>,
-        params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>,
+        options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
     ) {
         debug("Creating task");
         this._pool = privateOptions.pool;
         this._triggerCallback = privateOptions.triggerNowCallback;
         this._detachCallback = privateOptions.detach;
-        this._resultConverter = (params as GenericTaskParamsConverted<any, R>).resultConverter;
-        this._state = params.paused ? TaskState.Paused : TaskState.Active;
+        this._resultConverter = (options as GenericTaskConvertedOptions<any, R>).resultConverter;
+        this._state = options.paused ? TaskState.Paused : TaskState.Active;
 
-        if (!isNull(params.invocationLimit)) {
-            if (typeof params.invocationLimit !== "number") {
-                throw new Error("Invalid invocation limit: " + params.invocationLimit);
+        if (!isNull(options.invocationLimit)) {
+            if (typeof options.invocationLimit !== "number") {
+                throw new Error("Invalid invocation limit: " + options.invocationLimit);
             }
-            this._invocationLimit = params.invocationLimit;
+            this._invocationLimit = options.invocationLimit;
         }
         // Create a group exclusively for this task. This may throw errors.
-        this._taskGroup = new PromisePoolGroupPrivate(privateOptions.pool, privateOptions.triggerNextCallback, params);
+        this._taskGroup = new PromisePoolGroupPrivate(privateOptions.pool, privateOptions.triggerNextCallback, options);
         this._groups = [privateOptions.globalGroup, this._taskGroup];
-        if (params.groups) {
-            const groups = params.groups as PromisePoolGroupPrivate[];
+        if (options.groups) {
+            const groups = options.groups as PromisePoolGroupPrivate[];
             groups.forEach((group) => {
                 if (group._pool !== this._pool) {
-                    throw new Error("params.groups contains a group belonging to a different pool");
+                    throw new Error("options.groups contains a group belonging to a different pool");
                 }
             });
             this._groups.push(...groups);
         }
-        this._generator = params.generator;
+        this._generator = options.generator;
 
-        // Resolve the promise only after all parameters have been validated
-        if (params.invocationLimit <= 0) {
+        // Resolve the promise only after all options have been validated
+        if (options.invocationLimit <= 0) {
             this.end();
             return;
         }

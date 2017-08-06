@@ -23,9 +23,9 @@ export interface TaskGeneral {
     paused?: boolean;
 }
 
-export interface GenericTaskParamsBase extends TaskGeneral, TaskLimits { }
+export interface GenericTaskOptionsBase extends TaskGeneral, TaskLimits { }
 
-export interface GenericTaskParams<R> extends GenericTaskParamsBase {
+export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
     /**
      * Function used for creating promises to run.
      * This function will be run repeatedly until it returns null or the concurrency or invocation limit is reached.
@@ -34,7 +34,7 @@ export interface GenericTaskParams<R> extends GenericTaskParamsBase {
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | null;
 }
 
-export interface GenericTaskParamsConverted<I, R> extends GenericTaskParamsBase {
+export interface GenericTaskConvertedOptions<I, R> extends GenericTaskOptionsBase {
     generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | null;
     resultConverter: (result: I[]) => R;
 }

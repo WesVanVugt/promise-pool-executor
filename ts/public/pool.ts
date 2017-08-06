@@ -8,8 +8,8 @@ import {
     PersistentBatchTaskOptions,
 } from "./persistent-batch";
 import {
-    GenericTaskParams,
-    GenericTaskParamsConverted,
+    GenericTaskConvertedOptions,
+    GenericTaskOptions,
     InvocationLimit,
     PromisePoolTask,
     TaskGeneral,
@@ -142,9 +142,9 @@ export class PromisePoolExecutor {
      * @param params Parameters used to define the task.
      * @return A promise which resolves to an array containing the values returned by the task.
      */
-    public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
-    public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
-    public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
+    public addGenericTask<I, R>(params: GenericTaskConvertedOptions<I, R>): PromisePoolTask<R>;
+    public addGenericTask<R>(params: GenericTaskOptions<R>): PromisePoolTask<R[]>;
+    public addGenericTask<R>(params: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>): PromisePoolTask<R[]> {
         const task: PromisePoolTaskPrivate<R> = new PromisePoolTaskPrivate(
             {
                 detach: () => {
