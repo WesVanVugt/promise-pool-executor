@@ -9,10 +9,12 @@
         "preserveConstEnums": true,
         "declaration": true,
         "sourceMap": false,
-        "outDir": "../js"
+        "outDir": "../"
     },
     "include": [
         "index.ts",
         "test/index.ts"
+    ],
+    "exclude": [
     ]
 }

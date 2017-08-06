@@ -24,14 +24,15 @@
     "url": "git+https://github.com/baudzilla/promise-pool-executor"
   },
   "scripts": {
-    "build": "npm run tslint && npm run tsc",
-    "test": "./node_modules/.bin/mocha js/test/*.js --reporter spec",
+    "build": "npm run clean && npm run tslint && npm run tsc",
+    "clean": "rm -rf index.js index.d.ts private public test",
+    "test": "./node_modules/.bin/mocha test/*.js --reporter spec",
     "test-debug": "cross-env DEBUG=promise-pool-executor npm test",
     "tsc": "tsc -p ts",
     "tslint": "tslint ts/**/*.ts"
   },
-  "main": "js/index.js",
-  "typings": "js/index.d.ts",
+  "main": "index.js",
+  "typings": "index.d.ts",
   "engines": {
     "node": ">=5.0.0"
   },
