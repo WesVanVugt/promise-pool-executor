@@ -2,7 +2,11 @@ import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
 import { debug, isNull } from "../private/utils";
-import { PromisePoolGroup, PromisePoolGroupOptions } from "./group";
+import {
+    FrequencyLimit,
+    PromisePoolGroup,
+    PromisePoolGroupOptions,
+} from "./group";
 import {
     PersistentBatchTask,
     PersistentBatchTaskOptions,
@@ -12,11 +16,11 @@ import {
     GenericTaskOptions,
     InvocationLimit,
     PromisePoolTask,
-    TaskGeneral,
+    TaskOptionsBase,
     TaskState,
 } from "./task";
 
-export interface SingleTaskOptions<T, R> extends TaskGeneral {
+export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     /**
      * A function used for creating promises to run.
      */
@@ -27,7 +31,7 @@ export interface SingleTaskOptions<T, R> extends TaskGeneral {
     data?: T;
 }
 
-export interface LinearTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -35,7 +39,7 @@ export interface LinearTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOp
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
 
-export interface BatchTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param {T[]} values - Elements from {data} batched for this invocation.
@@ -55,7 +59,7 @@ export interface BatchTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOpt
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskOptions<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
+export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param value The value from {data} for this invocation.

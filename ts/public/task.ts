@@ -11,7 +11,7 @@ export interface InvocationLimit {
 
 export interface TaskLimits extends PromisePoolGroupOptions, InvocationLimit { }
 
-export interface TaskGeneral {
+export interface TaskOptionsBase {
     /**
      * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
      * to the completion of a larger task.
@@ -23,7 +23,7 @@ export interface TaskGeneral {
     paused?: boolean;
 }
 
-export interface GenericTaskOptionsBase extends TaskGeneral, TaskLimits { }
+export interface GenericTaskOptionsBase extends TaskOptionsBase, TaskLimits { }
 
 export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
     /**
