@@ -2,7 +2,7 @@ import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
 import { debug, isNull } from "../private/utils";
-import { PromisePoolGroup, PromisePoolGroupConfig } from "./group";
+import { PromisePoolGroup, PromisePoolGroupOptions } from "./group";
 import {
     PersistentBatcherTask,
     PersistentBatcherTaskParams,
@@ -27,7 +27,7 @@ export interface SingleTaskParams<T, R> extends TaskGeneral {
     data?: T;
 }
 
-export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
+export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -35,7 +35,7 @@ export interface LinearTaskParams<T, R> extends TaskGeneral, PromisePoolGroupCon
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
 
-export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
+export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param {T[]} values - Elements from {data} batched for this invocation.
@@ -55,7 +55,7 @@ export interface BatchTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConf
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupConfig, InvocationLimit {
+export interface EachTaskParams<T, R> extends TaskGeneral, PromisePoolGroupOptions, InvocationLimit {
     /**
      * A function used for creating promises to run.
      * @param value The value from {data} for this invocation.
@@ -82,20 +82,20 @@ export class PromisePoolExecutor {
      * Construct a new PromisePoolExecutor object.
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
      */
-    constructor(params?: PromisePoolGroupConfig | number) {
-        let groupParams: PromisePoolGroupConfig;
+    constructor(options?: PromisePoolGroupOptions | number) {
+        let groupOptions: PromisePoolGroupOptions;
 
-        if (!isNull(params)) {
-            if (typeof params === "object") {
-                groupParams = params;
+        if (!isNull(options)) {
+            if (typeof options === "object") {
+                groupOptions = options;
             } else {
-                groupParams = {
-                    concurrencyLimit: params,
+                groupOptions = {
+                    concurrencyLimit: options,
                 };
             }
         }
 
-        this._globalGroup = this.addGroup(groupParams) as PromisePoolGroupPrivate;
+        this._globalGroup = this.addGroup(groupOptions) as PromisePoolGroupPrivate;
         this._groupSet.add(this._globalGroup);
     }
 
@@ -129,7 +129,7 @@ export class PromisePoolExecutor {
         return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
     }
 
-    public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
+    public addGroup(params: PromisePoolGroupOptions): PromisePoolGroup {
         return new PromisePoolGroupPrivate(
             this,
             () => this._triggerNextTick(),

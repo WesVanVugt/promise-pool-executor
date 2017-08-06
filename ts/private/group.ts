@@ -1,9 +1,9 @@
-import { PromisePoolGroup, PromisePoolGroupConfig } from "../public/group";
+import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
 
 /** Internal use only */
-export class PromisePoolGroupInternal implements PromisePoolGroup {
+export class PromisePoolGroupPrivate implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
     public _concurrencyLimit: number;
     public _frequencyLimit: number;
@@ -18,16 +18,16 @@ export class PromisePoolGroupInternal implements PromisePoolGroup {
     constructor(
         pool: PromisePoolExecutor,
         triggerNextCallback: () => void,
-        params: PromisePoolGroupConfig,
+        options: PromisePoolGroupOptions,
     ) {
         this._pool = pool;
-        if (!params) {
-            params = {};
+        if (!options) {
+            options = {};
         }
         // Throw errors if applicable
-        this.concurrencyLimit = params.concurrencyLimit;
-        this.frequencyLimit = params.frequencyLimit;
-        this.frequencyWindow = params.frequencyWindow;
+        this.concurrencyLimit = options.concurrencyLimit;
+        this.frequencyLimit = options.frequencyLimit;
+        this.frequencyWindow = options.frequencyWindow;
 
         // Set the callback afterwards so it does not get triggered during creation
         this._triggerNextCallback = triggerNextCallback;

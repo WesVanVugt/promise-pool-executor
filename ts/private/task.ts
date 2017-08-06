@@ -1,4 +1,4 @@
-import { PromisePoolGroup, PromisePoolGroupConfig } from "../public/group";
+import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskParams, GenericTaskParamsConverted, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
@@ -6,7 +6,7 @@ import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
 
 const GLOBAL_GROUP_INDEX = 0;
 
-export interface GenericTaskParamsInternal<R> {
+export interface GenericTaskOptionsPrivate<R> {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupPrivate;
     triggerNextCallback: () => void;
@@ -32,13 +32,13 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _resultConverter?: (result: R[]) => any;
 
     public constructor(
-        internalPrams: GenericTaskParamsInternal<R>,
+        privateOptions: GenericTaskOptionsPrivate<R>,
         params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>,
     ) {
         debug("Creating task");
-        this._pool = internalPrams.pool;
-        this._triggerCallback = internalPrams.triggerNowCallback;
-        this._detachCallback = internalPrams.detach;
+        this._pool = privateOptions.pool;
+        this._triggerCallback = privateOptions.triggerNowCallback;
+        this._detachCallback = privateOptions.detach;
         this._resultConverter = (params as GenericTaskParamsConverted<any, R>).resultConverter;
         this._state = params.paused ? TaskState.Paused : TaskState.Active;
 
@@ -49,8 +49,8 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._invocationLimit = params.invocationLimit;
         }
         // Create a group exclusively for this task. This may throw errors.
-        this._taskGroup = new PromisePoolGroupPrivate(internalPrams.pool, internalPrams.triggerNextCallback, params);
-        this._groups = [internalPrams.globalGroup, this._taskGroup];
+        this._taskGroup = new PromisePoolGroupPrivate(privateOptions.pool, privateOptions.triggerNextCallback, params);
+        this._groups = [privateOptions.globalGroup, this._taskGroup];
         if (params.groups) {
             const groups = params.groups as PromisePoolGroupPrivate[];
             groups.forEach((group) => {

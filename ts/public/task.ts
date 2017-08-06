@@ -1,5 +1,5 @@
 import { PromisePoolGroupPrivate } from "../private/group";
-import { PromisePoolGroup, PromisePoolGroupConfig } from "./group";
+import { PromisePoolGroup, PromisePoolGroupOptions } from "./group";
 import { PromisePoolExecutor } from "./pool";
 
 export interface InvocationLimit {
@@ -9,7 +9,7 @@ export interface InvocationLimit {
     invocationLimit?: number;
 }
 
-export interface TaskLimits extends PromisePoolGroupConfig, InvocationLimit { }
+export interface TaskLimits extends PromisePoolGroupOptions, InvocationLimit { }
 
 export interface TaskGeneral {
     /**

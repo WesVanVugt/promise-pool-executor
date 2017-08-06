@@ -13,7 +13,7 @@ export interface PromiseLimits {
     frequencyWindow: number;
 }
 
-export type PromisePoolGroupConfig = Partial<PromiseLimits>;
+export type PromisePoolGroupOptions = Partial<PromiseLimits>;
 
 export interface PromisePoolGroup {
     readonly activeTaskCount: number;

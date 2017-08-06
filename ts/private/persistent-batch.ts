@@ -1,10 +1,10 @@
-import { PromisePoolGroupConfig } from "../public/group";
+import { PromisePoolGroupOptions } from "../public/group";
 import { PersistentBatcherTask, PersistentBatcherTaskParams } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask } from "../public/task";
 import { isNull, ResolvablePromise } from "./utils";
 
-export class PersistentBatchTaskInternal<I, O> implements PersistentBatcherTask<I, O> {
+export class PersistentBatchTaskPrivate<I, O> implements PersistentBatcherTask<I, O> {
     private _task: PromisePoolTask<any>;
     private _maxBatchSize: number = Infinity;
     private _queuingDelay: number = 1;

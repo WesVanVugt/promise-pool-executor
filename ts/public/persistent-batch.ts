@@ -1,6 +1,6 @@
-import { PromisePoolGroupConfig } from "./group";
+import { PromisePoolGroupOptions } from "./group";
 
-export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupConfig {
+export interface PersistentBatcherTaskParams<I, O> extends PromisePoolGroupOptions {
     maxBatchSize?: number;
     queuingDelay?: number;
     queuingThresholds?: number[];
