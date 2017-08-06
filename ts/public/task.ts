@@ -1,4 +1,4 @@
-import { PromisePoolGroupInternal } from "../private/group";
+import { PromisePoolGroupPrivate } from "../private/group";
 import { PromisePoolGroup, PromisePoolGroupConfig } from "./group";
 import { PromisePoolExecutor } from "./pool";
 

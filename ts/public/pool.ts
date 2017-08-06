@@ -1,6 +1,6 @@
-import { PromisePoolGroupInternal } from "../private/group";
-import { PersistentBatchTaskInternal } from "../private/persistent-batch";
-import { PromisePoolTaskInternal } from "../private/task";
+import { PromisePoolGroupPrivate } from "../private/group";
+import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
+import { PromisePoolTaskPrivate } from "../private/task";
 import { debug, isNull } from "../private/utils";
 import { PromisePoolGroup, PromisePoolGroupConfig } from "./group";
 import {
@@ -74,9 +74,9 @@ export class PromisePoolExecutor {
     /**
      * All tasks which are active or waiting.
      */
-    private _tasks: Array<PromisePoolTaskInternal<any>> = [];
-    private _globalGroup: PromisePoolGroupInternal;
-    private _groupSet: Set<PromisePoolGroupInternal> = new Set();
+    private _tasks: Array<PromisePoolTaskPrivate<any>> = [];
+    private _globalGroup: PromisePoolGroupPrivate;
+    private _groupSet: Set<PromisePoolGroupPrivate> = new Set();
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -95,7 +95,7 @@ export class PromisePoolExecutor {
             }
         }
 
-        this._globalGroup = this.addGroup(groupParams) as PromisePoolGroupInternal;
+        this._globalGroup = this.addGroup(groupParams) as PromisePoolGroupPrivate;
         this._groupSet.add(this._globalGroup);
     }
 
@@ -130,7 +130,7 @@ export class PromisePoolExecutor {
     }
 
     public addGroup(params: PromisePoolGroupConfig): PromisePoolGroup {
-        return new PromisePoolGroupInternal(
+        return new PromisePoolGroupPrivate(
             this,
             () => this._triggerNextTick(),
             params,
@@ -145,7 +145,7 @@ export class PromisePoolExecutor {
     public addGenericTask<I, R>(params: GenericTaskParamsConverted<I, R>): PromisePoolTask<R>;
     public addGenericTask<R>(params: GenericTaskParams<R>): PromisePoolTask<R[]>;
     public addGenericTask<R>(params: GenericTaskParams<R> | GenericTaskParamsConverted<any, R>): PromisePoolTask<R[]> {
-        const task: PromisePoolTaskInternal<R> = new PromisePoolTaskInternal(
+        const task: PromisePoolTaskPrivate<R> = new PromisePoolTaskPrivate(
             {
                 detach: () => {
                     this._removeTask(task);
@@ -271,7 +271,7 @@ export class PromisePoolExecutor {
     }
 
     public addPersistentBatchTask<I, O>(params: PersistentBatcherTaskParams<I, O>): PersistentBatcherTask<I, O> {
-        return new PersistentBatchTaskInternal(this, params);
+        return new PersistentBatchTaskPrivate(this, params);
     }
 
     /**
@@ -322,7 +322,7 @@ export class PromisePoolExecutor {
         this._clearTriggerTimeout();
 
         let taskIndex: number = 0;
-        let task: PromisePoolTaskInternal<any[]>;
+        let task: PromisePoolTaskPrivate<any[]>;
         let soonest: number = Infinity;
         let busyTime: boolean | number;
 
@@ -359,7 +359,7 @@ export class PromisePoolExecutor {
         }
     }
 
-    private _removeTask(task: PromisePoolTaskInternal<any>) {
+    private _removeTask(task: PromisePoolTaskPrivate<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
             debug("Task removed");

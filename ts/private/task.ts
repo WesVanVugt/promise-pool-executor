@@ -1,23 +1,23 @@
 import { PromisePoolGroup, PromisePoolGroupConfig } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskParams, GenericTaskParamsConverted, PromisePoolTask, TaskState } from "../public/task";
-import { PromisePoolGroupInternal } from "./group";
+import { PromisePoolGroupPrivate } from "./group";
 import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
 
 const GLOBAL_GROUP_INDEX = 0;
 
 export interface GenericTaskParamsInternal<R> {
     pool: PromisePoolExecutor;
-    globalGroup: PromisePoolGroupInternal;
+    globalGroup: PromisePoolGroupPrivate;
     triggerNextCallback: () => void;
     triggerNowCallback: () => void;
     detach: () => void;
 }
 
-export class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
-    private _groups: PromisePoolGroupInternal[];
+export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
+    private _groups: PromisePoolGroupPrivate[];
     private _generator: (invocation: number) => Promise<R> | null;
-    private _taskGroup: PromisePoolGroupInternal;
+    private _taskGroup: PromisePoolGroupPrivate;
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
     private _result: R[] = [];
@@ -28,7 +28,7 @@ export class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
     private _promises: Array<ResolvablePromise<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
-    private _detachCallback: (groups: PromisePoolGroupInternal[]) => void;
+    private _detachCallback: (groups: PromisePoolGroupPrivate[]) => void;
     private _resultConverter?: (result: R[]) => any;
 
     public constructor(
@@ -49,10 +49,10 @@ export class PromisePoolTaskInternal<R> implements PromisePoolTask<any> {
             this._invocationLimit = params.invocationLimit;
         }
         // Create a group exclusively for this task. This may throw errors.
-        this._taskGroup = new PromisePoolGroupInternal(internalPrams.pool, internalPrams.triggerNextCallback, params);
+        this._taskGroup = new PromisePoolGroupPrivate(internalPrams.pool, internalPrams.triggerNextCallback, params);
         this._groups = [internalPrams.globalGroup, this._taskGroup];
         if (params.groups) {
-            const groups = params.groups as PromisePoolGroupInternal[];
+            const groups = params.groups as PromisePoolGroupPrivate[];
             groups.forEach((group) => {
                 if (group._pool !== this._pool) {
                     throw new Error("params.groups contains a group belonging to a different pool");
