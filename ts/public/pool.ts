@@ -47,7 +47,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
      */
     generator: (
         this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number,
-    ) => Promise<R> | undefined;
+    ) => Promise<R> | undefined | void;
     /**
      * An array to be divided up and passed to {generator}.
      */
@@ -67,7 +67,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | undefined;
+    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | undefined | void;
     /**
      * An array of elements to be individually passed to {generator}.
      */

@@ -1,6 +1,6 @@
 export interface ConcurrencyLimit {
     /**
-     * Limits the number of promises that can be run in parallel.
+     * The maximum number of promises which are allowed to run at one time.
      */
     concurrencyLimit: number;
 }

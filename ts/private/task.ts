@@ -17,7 +17,7 @@ export interface GenericTaskOptionsPrivate<R> {
 
 export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _groups: PromisePoolGroupPrivate[];
-    private _generator: (invocation: number) => Promise<R> | undefined;
+    private _generator: (invocation: number) => Promise<R> | undefined | void;
     private _taskGroup: PromisePoolGroupPrivate;
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
