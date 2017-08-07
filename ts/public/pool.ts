@@ -155,12 +155,6 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     public get freeSlots(): number {
         return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
     }
-    /**
-     * Returns true if the pool is idling (no active or queued promises).
-     */
-    public get idling(): boolean {
-        return this._globalGroup._activeTaskCount === 0 && this._tasks.length === 0;
-    }
 
     public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
         return new PromisePoolGroupPrivate(
