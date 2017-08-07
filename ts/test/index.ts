@@ -3,6 +3,24 @@ import * as Debug from "debug";
 import * as Pool from "../index";
 const debug = Debug("promise-pool-executor");
 
+// Verify that the types needed can be imported
+type TypingImportTest = Pool.PromisePoolExecutor
+    // Group
+    | Pool.PromisePoolGroup
+    | Pool.PromisePoolGroupOptions
+    // General Tasks
+    | Pool.PromisePoolTask<any>
+    | Pool.GenericTaskOptions<any>
+    | Pool.GenericTaskConvertedOptions<any, any>
+    | Pool.SingleTaskOptions<any, any>
+    | Pool.LinearTaskOptions<any, any>
+    | Pool.BatchTaskOptions<any, any>
+    | Pool.EachTaskOptions<any, any>
+    | Pool.TaskState
+    // Persistent Batch Task
+    | Pool.PersistentBatchTask<any, any>
+    | Pool.PersistentBatchTaskOptions<any, any>;
+
 /**
  * Milliseconds per tick.
  */
