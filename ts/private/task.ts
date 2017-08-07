@@ -1,3 +1,5 @@
+import * as nextTick from "next-tick";
+
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
@@ -372,7 +374,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
         if (!taskError.handled) {
             // Wait a tick to see if the error gets handled
-            process.nextTick(() => {
+            nextTick(() => {
                 if (!taskError.handled) {
                     // Unhandled promise rejection
                     debug(`${DEBUG_PREFIX}Unhandled promise rejection!`);
