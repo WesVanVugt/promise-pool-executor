@@ -270,7 +270,7 @@ describe("Frequency", () => {
             invocationLimit: 3,
         }).promise().then((results) => {
             expectTimes(results, [0, 0, 1], "Timing Results");
-            expect((group as any)._frequencyStarts).to.have.lengthOf(1);
+            expect((group as any)._frequencyStarts).to.have.length.of.at.least(1);
         });
     });
 
@@ -522,23 +522,31 @@ describe("Exception Handling", () => {
 });
 
 describe("Miscellaneous Features", () => {
-    it("End Task", () => {
-        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+    describe("End Task", () => {
+        it("From Generator With No Promise", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
-        return pool.addGenericTask({
-            generator(index) {
-                if (index >= 2) {
+            return pool.addGenericTask({
+                generator(index) {
                     this.end();
-                }
-                return wait(tick)
-                    .then(() => {
-                        return Date.now() - start;
-                    });
-            },
-        }).promise().then((results) => {
-            // The task must return the expected non-array result
-            expectTimes(results, [1, 1, 1], "Timing Results");
+                },
+            }).promise().then((results) => {
+                expect(results).to.have.lengthOf(0);
+            });
+        });
+
+        it("From Generator With Promise", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            return pool.addGenericTask({
+                generator(index) {
+                    this.end();
+                    // Add one final promise after ending the task
+                    return Promise.resolve(1);
+                },
+            }).promise().then((results) => {
+                expect(results).to.deep.equal([1]);
+            });
         });
     });
 

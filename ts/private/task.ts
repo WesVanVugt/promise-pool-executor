@@ -25,7 +25,11 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _returnResult: any;
     private _state: TaskState;
     private _rejection?: TaskError;
-    private _init: boolean;
+    /**
+     * Set to true while the generator function is being run. Prevents the task from being terminated since a final
+     * promise may be generated.
+     */
+    private _generating: boolean;
     private _promises: Array<ResolvablePromise<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
@@ -187,7 +191,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
         debug(`${DEBUG_PREFIX}Ending`);
-        if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
+        if (!this._generating && this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
             debug(`${DEBUG_PREFIX}State: Terminated`);
             this._state = TaskState.Terminated;
 
@@ -248,14 +252,17 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         debug(`${DEBUG_PREFIX}Running generator`);
 
         let promise: Promise<any>;
+        this._generating = true; // prevent task termination
         try {
             promise = this._generator.call(this, this._invocations);
         } catch (err) {
+            this._generating = false;
             this._reject(err);
             return;
         }
+        this._generating = false;
         if (isNull(promise)) {
-            if (this._state === TaskState.Active) {
+            if (this._state !== TaskState.Paused) {
                 this.end();
             }
             // Remove the task if needed and start the next task
