@@ -9,7 +9,6 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     private _maxBatchSize: number = Infinity;
     private _queuingDelay: number = 1;
     private _queuingThresholds: number[];
-    private _activePromiseCount: number = 0;
     private _inputQueue: I[] = [];
     private _outputPromises: Array<ResolvablePromise<O>> = [];
     private _generator: (input: I[]) => Promise<Array<O | Error>>;
@@ -49,7 +48,6 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             paused: true,
             generator() {
                 batcher._running = false;
-                batcher._activePromiseCount++;
                 const inputs = batcher._inputQueue.splice(0, batcher._maxBatchSize);
                 const outputPromises = batcher._outputPromises.splice(0, batcher._maxBatchSize);
 
@@ -87,9 +85,8 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                         promise.reject(err);
                     });
                 }).then(() => {
-                    batcher._activePromiseCount--;
                     // Since we may be operating at a lower queuing threshold now, we should try run again
-                    batcher._run();
+                    batcher._run(true);
                 });
             },
         });
@@ -153,7 +150,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         this._inputQueue.length = 0;
     }
 
-    private _run(): void {
+    private _run(promiseEnding: boolean = false): void {
         // If the queue has reached the maximum batch size, start it immediately
         if (this._inputQueue.length >= this._maxBatchSize) {
             if (this._runTimeout) {
@@ -167,7 +164,9 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         if (this._running) {
             return;
         }
-        const thresholdIndex: number = Math.min(this._activePromiseCount, this._queuingThresholds.length - 1);
+        const thresholdIndex: number = Math.min(
+            this._task.activePromiseCount + (promiseEnding ? -1 : 0), this._queuingThresholds.length - 1,
+        );
         if (this._inputQueue.length >= this._queuingThresholds[thresholdIndex]) {
             // Run the batch, but with a delay
             this._running = true;
