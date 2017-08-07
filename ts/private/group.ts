@@ -125,16 +125,16 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     }
 
     /**
-     * Returns false if the group is available, true if the group is busy for an indeterminate time, or the timestamp
+     * Returns 0 if the group is available, Infinity if the group is busy for an indeterminate time, or the timestamp
      * of when the group will become available.
      */
-    public _busyTime(): boolean | number {
+    public _busyTime(): number {
         if (this._activePromiseCount >= this._concurrencyLimit) {
-            return true;
+            return Infinity;
         } else if (this._frequencyLimit && this._frequencyStarts.length >= this._frequencyLimit) {
             return this._frequencyStarts[0] + this._frequencyWindow;
         }
-        return false;
+        return 0;
     }
 
     /**

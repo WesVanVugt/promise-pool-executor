@@ -209,26 +209,22 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     }
 
     /**
-     * Private. Returns false if the task is ready, true if the task is busy with an indeterminate ready time, or the
+     * Private. Returns 0 if the task is ready, Infinity if the task is busy with an indeterminate ready time, or the
      * timestamp for when the task will be ready.
      */
-    public _busyTime(): boolean | number {
+    public _busyTime(): number {
         if (this._state !== TaskState.Active) {
-            return true;
+            return Infinity;
         }
 
         let time: number = 0;
         for (const group of this._groups) {
-            const busyTime: boolean | number = group._busyTime();
-            if (typeof busyTime === "number") {
-                if (busyTime > time) {
-                    time = busyTime;
-                }
-            } else if (busyTime) {
-                return true;
+            const busyTime: number = group._busyTime();
+            if (busyTime > time) {
+                time = busyTime;
             }
         }
-        return time ? time : false;
+        return time;
     }
 
     public _cleanFrequencyStarts(now: number): void {

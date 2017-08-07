@@ -365,22 +365,20 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         let taskIndex: number = 0;
         let task: PromisePoolTaskPrivate<any[]>;
         let soonest: number = Infinity;
-        let busyTime: boolean | number;
+        let busyTime: number;
 
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
             debug(`${DEBUG_PREFIX}BusyTime: ${busyTime}`);
 
-            if (busyTime === true) {
+            if (!busyTime) {
+                task._run();
+            } else {
                 taskIndex++;
-            } else if (busyTime) {
                 if (busyTime < soonest) {
                     soonest = busyTime;
                 }
-                taskIndex++;
-            } else {
-                task._run();
             }
         }
         this._triggering = false;
