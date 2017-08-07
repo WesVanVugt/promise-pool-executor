@@ -2,21 +2,21 @@ export interface ConcurrencyLimit {
     /**
      * Limits the number of instances of a promise which can be run in parallel.
      */
-    concurrencyLimit?: number;
+    concurrencyLimit: number;
 }
 
 export interface FrequencyLimit {
     /**
      * The number of times a promise can be invoked within the time specified by {frequencyWindow}.
      */
-    frequencyLimit?: number;
+    frequencyLimit: number;
     /**
      * The time window in milliseconds to use for {frequencyLimit}.
      */
-    frequencyWindow?: number;
+    frequencyWindow: number;
 }
 
-export interface PromisePoolGroupOptions extends ConcurrencyLimit, FrequencyLimit { }
+export interface PromisePoolGroupOptions extends Partial<ConcurrencyLimit>, Partial<FrequencyLimit> { }
 
 export interface ActivePromiseCount {
     /**

@@ -31,7 +31,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     data?: T;
 }
 
-export interface LinearTaskOptions<T, R> extends TaskOptionsBase, FrequencyLimit, InvocationLimit {
+export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
@@ -112,27 +112,27 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     /**
      * The maximum number of promises which are allowed to run at one time.
      */
-    public get concurrencyLimit(): number | undefined {
+    public get concurrencyLimit(): number {
         return this._globalGroup.concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number | undefined) {
+    public set concurrencyLimit(val: number) {
         this._globalGroup.concurrencyLimit = val;
     }
 
-    public get frequencyLimit(): number | undefined {
+    public get frequencyLimit(): number {
         return this._globalGroup.frequencyLimit;
     }
 
-    public set frequencyLimit(val: number | undefined) {
+    public set frequencyLimit(val: number) {
         this._globalGroup.frequencyLimit = val;
     }
 
-    public get frequencyWindow(): number | undefined {
+    public get frequencyWindow(): number {
         return this._globalGroup.frequencyWindow;
     }
 
-    public set frequencyWindow(val: number | undefined) {
+    public set frequencyWindow(val: number) {
         this._globalGroup.frequencyWindow = val;
     }
 

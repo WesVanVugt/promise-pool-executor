@@ -112,27 +112,27 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         return this._task.activePromiseCount;
     }
 
-    public get concurrencyLimit(): number | undefined {
+    public get concurrencyLimit(): number {
         return this._task.concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number | undefined) {
+    public set concurrencyLimit(val: number) {
         this._task.concurrencyLimit = val;
     }
 
-    public get frequencyLimit(): number | undefined {
+    public get frequencyLimit(): number {
         return this._task.frequencyLimit;
     }
 
-    public set frequencyLimit(val: number | undefined) {
+    public set frequencyLimit(val: number) {
         this._task.frequencyLimit = val;
     }
 
-    public get frequencyWindow(): number | undefined {
+    public get frequencyWindow(): number {
         return this._task.frequencyWindow;
     }
 
-    public set frequencyWindow(val: number | undefined) {
+    public set frequencyWindow(val: number) {
         this._task.frequencyWindow = val;
     }
 
@@ -186,7 +186,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             activePromiseCount, this._queuingThresholds.length - 1,
         );
         if (this._inputQueue.length >= this._queuingThresholds[thresholdIndex]) {
-            if (activePromiseCount >= (this._task.concurrencyLimit as any)) { // TODO: Fix this typing
+            if (activePromiseCount >= this._task.concurrencyLimit) {
                 debug(`${DEBUG_PREFIX}Hit concurrency limit.`);
                 return;
             }

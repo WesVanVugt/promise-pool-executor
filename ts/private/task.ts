@@ -104,27 +104,27 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         }
     }
 
-    public get concurrencyLimit(): number | undefined {
+    public get concurrencyLimit(): number {
         return this._taskGroup.concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number | undefined) {
+    public set concurrencyLimit(val: number) {
         this._taskGroup.concurrencyLimit = val;
     }
 
-    public get frequencyLimit(): number | undefined {
+    public get frequencyLimit(): number {
         return this._taskGroup.frequencyLimit;
     }
 
-    public set frequencyLimit(val: number | undefined) {
+    public set frequencyLimit(val: number) {
         this._taskGroup.frequencyLimit = val;
     }
 
-    public get frequencyWindow(): number | undefined {
+    public get frequencyWindow(): number {
         return this._taskGroup.frequencyWindow;
     }
 
-    public set frequencyWindow(val: number | undefined) {
+    public set frequencyWindow(val: number) {
         this._taskGroup.frequencyWindow = val;
     }
 

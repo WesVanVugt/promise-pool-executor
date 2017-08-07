@@ -25,9 +25,9 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
             options = {};
         }
         // Throw errors if applicable
-        this.concurrencyLimit = options.concurrencyLimit;
-        this.frequencyLimit = options.frequencyLimit;
-        this.frequencyWindow = options.frequencyWindow;
+        this.concurrencyLimit = options.concurrencyLimit as number;
+        this.frequencyLimit = options.frequencyLimit as number;
+        this.frequencyWindow = options.frequencyWindow as number;
 
         // Set the callback afterwards so it does not get triggered during creation
         this._triggerNextCallback = triggerNextCallback;
@@ -41,11 +41,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         return this._activePromiseCount;
     }
 
-    public get concurrencyLimit(): number | undefined {
+    public get concurrencyLimit(): number {
         return this._concurrencyLimit;
     }
 
-    public set concurrencyLimit(val: number | undefined) {
+    public set concurrencyLimit(val: number) {
         if (isNull(val)) {
             this._concurrencyLimit = Infinity;
         } else if (val && typeof val === "number" && val > 0) {
@@ -58,11 +58,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         }
     }
 
-    public get frequencyLimit(): number | undefined {
+    public get frequencyLimit(): number {
         return this._frequencyLimit;
     }
 
-    public set frequencyLimit(val: number | undefined) {
+    public set frequencyLimit(val: number) {
         if (isNull(val)) {
             this._frequencyLimit = Infinity;
         } else if (val && typeof val === "number" && val > 0) {
@@ -75,11 +75,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         }
     }
 
-    public get frequencyWindow(): number | undefined {
+    public get frequencyWindow(): number {
         return this._frequencyWindow;
     }
 
-    public set frequencyWindow(val: number | undefined) {
+    public set frequencyWindow(val: number) {
         if (isNull(val)) {
             this._frequencyWindow = 1000;
         } else if (val && typeof val === "number" && val > 0) {
