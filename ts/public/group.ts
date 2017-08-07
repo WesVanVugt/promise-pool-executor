@@ -25,13 +25,6 @@ export interface ActivePromiseCount {
     readonly activePromiseCount: number;
 }
 
-export interface ActivePromiseCount {
-    /**
-     * The number of promises which are active.
-     */
-    readonly activePromiseCount: number;
-}
-
 export interface FreeSlots {
     /**
      * The number of promises which can be invoked before the concurrency limit is reached.
