@@ -74,6 +74,8 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
     data: T[];
 }
 
+const DEBUG_PREFIX: string = "[Pool] ";
+
 export class PromisePoolExecutor implements PromisePoolGroup {
     private _nextTriggerTime?: number;
     private _nextTriggerTimeout?: any;
@@ -341,7 +343,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * Private Method: Triggers promises to start.
      */
     private _triggerNow(): void {
-        debug("Trigger promises");
+        debug(`${DEBUG_PREFIX}Trigger promises`);
         this._cleanFrequencyStarts();
 
         this._clearTriggerTimeout();
@@ -354,7 +356,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
-            debug(`BusyTime: ${busyTime}`);
+            debug(`${DEBUG_PREFIX}BusyTime: ${busyTime}`);
 
             if (busyTime === true) {
                 taskIndex++;
@@ -387,7 +389,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     private _removeTask(task: PromisePoolTaskPrivate<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
-            debug("Task removed");
+            debug(`${DEBUG_PREFIX}Task removed`);
             this._tasks.splice(i, 1);
         }
     }

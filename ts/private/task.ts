@@ -5,6 +5,7 @@ import { PromisePoolGroupPrivate } from "./group";
 import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
 
 const GLOBAL_GROUP_INDEX = 0;
+const DEBUG_PREFIX: string = "[Task] ";
 
 export interface GenericTaskOptionsPrivate<R> {
     pool: PromisePoolExecutor;
@@ -35,7 +36,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         privateOptions: GenericTaskOptionsPrivate<R>,
         options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
     ) {
-        debug("Creating task");
+        debug(`${DEBUG_PREFIX}Creating task`);
         this._pool = privateOptions.pool;
         this._triggerCallback = privateOptions.triggerNowCallback;
         this._detachCallback = privateOptions.detach;
@@ -163,6 +164,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public pause(): void {
         if (this._state === TaskState.Active) {
+            debug(`${DEBUG_PREFIX}State: Paused`);
             this._state = TaskState.Paused;
         }
     }
@@ -172,6 +174,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public resume(): void {
         if (this._state === TaskState.Paused) {
+            debug(`${DEBUG_PREFIX}State: Active`);
             this._state = TaskState.Active;
             this._triggerCallback();
         }
@@ -183,8 +186,9 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
-        debug("Ending task");
+        debug(`${DEBUG_PREFIX}Ending`);
         if (this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
+            debug(`${DEBUG_PREFIX}State: Terminated`);
             this._state = TaskState.Terminated;
 
             if (this._taskGroup._activeTaskCount > 0) {
@@ -195,6 +199,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             }
             this._resolve();
         } else if (this._state < TaskState.Exhausted) {
+            debug(`${DEBUG_PREFIX}State: Exhausted`);
             this._state = TaskState.Exhausted;
         }
     }
@@ -240,7 +245,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this.end();
             return;
         }
-        debug("Running task");
+        debug(`${DEBUG_PREFIX}Running generator`);
 
         let promise: Promise<any>;
         try {
@@ -278,9 +283,11 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._reject(err);
             // Resolve
         }).then((result) => {
+            debug(`${DEBUG_PREFIX}Promise ended.`);
             this._groups.forEach((group) => {
                 group._activePromiseCount--;
             });
+            debug(`${DEBUG_PREFIX}Promise Count: ${this._taskGroup._activePromiseCount}`);
             // Avoid storing the result if it is undefined.
             // Some tasks may have countless iterations and never return anything, so this could eat memory.
             if (result !== undefined && this._result) {
@@ -289,7 +296,6 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
                 this.end();
             }
-            debug("Promise Count: " + this._taskGroup._activePromiseCount);
 
             // Remove the task if needed and start the next task
             this._triggerCallback();
@@ -332,7 +338,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _reject(err: any) {
         // Check if the task has already failed
         if (this._rejection) {
-            debug("This task already failed!");
+            debug(`${DEBUG_PREFIX}This task already failed!`);
             // Unhandled promise rejection
             Promise.reject(err);
             return;
@@ -363,7 +369,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             process.nextTick(() => {
                 if (!taskError.handled) {
                     // Unhandled promise rejection
-                    debug("Unhandled promise rejection!");
+                    debug(`${DEBUG_PREFIX}Unhandled promise rejection!`);
                     Promise.reject(taskError.error);
                 }
             });
