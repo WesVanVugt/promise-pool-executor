@@ -1,6 +1,6 @@
 export interface ConcurrencyLimit {
     /**
-     * Limits the number of instances of a promise which can be run in parallel.
+     * Limits the number of promises that can be run in parallel.
      */
     concurrencyLimit: number;
 }
@@ -27,12 +27,15 @@ export interface ActivePromiseCount {
 
 export interface FreeSlots {
     /**
-     * The number of promises which can be invoked before the concurrency limit is reached.
+     * The number of promises which can be created before reaching the configured limits.
      */
     readonly freeSlots: number;
 }
 
 export interface PromisePoolGroup extends PromisePoolGroupOptions, ActivePromiseCount, FreeSlots {
+    /**
+     * The number of tasks currently in an active state.
+     */
     readonly activeTaskCount: number;
     waitForIdle(): Promise<void>;
 }

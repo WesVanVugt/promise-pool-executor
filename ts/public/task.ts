@@ -9,15 +9,16 @@ import {
 
 export interface InvocationLimit {
     /**
-     * Limits the number of times a promise will be invoked.
+     * Limits the number of times the generator function will be invoked.
      */
     invocationLimit: number;
 }
 
 export interface TaskOptionsBase {
     /**
-     * An array of values, each of which identifies a group the task belongs to. These groups can be used to respond
-     * to the completion of a larger task.
+     * An array of groups, each of which can be used to impose additional restrictions of the task, or a subset of
+     * tasks within the pool. Groups can also be used to respond to the completion of larger tasks comprised of
+     * smaller task components.
      */
     groups?: PromisePoolGroup[];
     /**
