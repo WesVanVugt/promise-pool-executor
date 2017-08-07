@@ -95,6 +95,38 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         });
     }
 
+    public get activePromiseCount(): number {
+        return this._task.activePromiseCount;
+    }
+
+    public get concurrencyLimit(): number | undefined {
+        return this._task.concurrencyLimit;
+    }
+
+    public set concurrencyLimit(val: number | undefined) {
+        this._task.concurrencyLimit = val;
+    }
+
+    public get frequencyLimit(): number | undefined {
+        return this._task.frequencyLimit;
+    }
+
+    public set frequencyLimit(val: number | undefined) {
+        this._task.frequencyLimit = val;
+    }
+
+    public get frequencyWindow(): number | undefined {
+        return this._task.frequencyWindow;
+    }
+
+    public set frequencyWindow(val: number | undefined) {
+        this._task.frequencyWindow = val;
+    }
+
+    public get freeSlots(): number {
+        return this._task.freeSlots;
+    }
+
     public get state(): TaskState {
         return this._task.state;
     }

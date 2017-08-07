@@ -1,4 +1,4 @@
-import { PromisePoolGroupOptions } from "./group";
+import { ActivePromiseCount, FreeSlots, PromisePoolGroupOptions } from "./group";
 import { TaskStateProperty } from "./task";
 
 export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOptions {
@@ -8,7 +8,8 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
     generator: (this: PersistentBatchTaskOptions<I, O>, input: I[]) => Promise<Array<O | Error>>;
 }
 
-export interface PersistentBatchTask<I, O> extends TaskStateProperty {
+export interface PersistentBatchTask<I, O> extends
+    ActivePromiseCount, PromisePoolGroupOptions, FreeSlots, TaskStateProperty {
     getResult(input: I): Promise<O>;
     end(): void;
 }
