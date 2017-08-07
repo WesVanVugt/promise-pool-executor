@@ -941,6 +941,28 @@ describe("Task Secializations", () => {
                 expect(runCount).to.equal(2, "runCount");
             });
         });
+        it("Delay After Hitting Concurrency Limit", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            let runCount: number = 0;
+            const task = pool.addPersistentBatchTask<undefined, undefined>({
+                concurrencyLimit: 1,
+                generator: (input) => {
+                    runCount++;
+                    return wait(3 * tick).then(() => new Array(input.length));
+                },
+                queuingDelay: tick,
+            });
+            const start: number = Date.now();
+            return Promise.all([
+                task.getResult(undefined).then(() => {
+                    return task.getResult(undefined);
+                }),
+                wait(2 * tick).then(() => task.getResult(undefined)),
+            ].map((promise) => promise.then(() => Date.now() - start))).then((results) => {
+                expectTimes(results, [8, 8], "Timing Results");
+                expect(runCount).to.equal(2, "runCount");
+            });
+        });
         describe("queueingThresholds", () => {
             it("Core Functionality", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();

@@ -2,7 +2,9 @@ import { PromisePoolGroupOptions } from "../public/group";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask, TaskState } from "../public/task";
-import { isNull, ResolvablePromise } from "./utils";
+import { debug, isNull, ResolvablePromise } from "./utils";
+
+const DEBUG_PREFIX: string = "[PersistentBatchTask] ";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
     private _task: PromisePoolTask<any>;
@@ -12,8 +14,8 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     private _inputQueue: I[] = [];
     private _outputPromises: Array<ResolvablePromise<O>> = [];
     private _generator: (input: I[]) => Promise<Array<O | Error>>;
-    private _runTimeout?: NodeJS.Timer;
-    private _running: boolean = false;
+    private _waitTimeout?: any;
+    private _waiting: boolean = false;
 
     constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
         const batcher = this;
@@ -24,7 +26,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             }
             options.queuingThresholds.forEach((n) => {
                 if (n < 1) {
-                    throw new Error("options.batchThresholds must not contain numbers less than 1");
+                    throw new Error("options.batchThresholds must only contain numbers greater than 0");
                 }
             });
             this._queuingThresholds = [...options.queuingThresholds];
@@ -38,6 +40,9 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             this._maxBatchSize = options.maxBatchSize;
         }
         if (!isNull(options.queuingDelay)) {
+            if (options.queuingDelay < 0) {
+                throw new Error("options.queuingDelay must be greater than or equal to 0");
+            }
             this._queuingDelay = options.queuingDelay;
         }
 
@@ -47,16 +52,26 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             frequencyWindow: options.frequencyWindow,
             paused: true,
             generator() {
-                batcher._running = false;
+                if (!batcher._waiting) {
+                    debug(`${DEBUG_PREFIX}Persistent batch task limit passed.`);
+                    batcher._run();
+                    // If the batch is not ready to launch, or is launching on a delay, then pause and return
+                    if (!batcher._waiting || batcher._waitTimeout) {
+                        batcher._task.pause();
+                        return;
+                    }
+                }
+                batcher._waiting = false;
                 const inputs = batcher._inputQueue.splice(0, batcher._maxBatchSize);
                 const outputPromises = batcher._outputPromises.splice(0, batcher._maxBatchSize);
 
                 // Prepare for the next iteration, pausing the task if needed
                 batcher._run();
-                if (!batcher._running || batcher._runTimeout) {
+                if (!batcher._waiting || batcher._waitTimeout) {
                     batcher._task.pause();
                 }
 
+                debug(`${DEBUG_PREFIX}Running batch of ${inputs.length}.`);
                 let batchPromise;
                 try {
                     batchPromise = batcher._generator.call(this, inputs);
@@ -68,6 +83,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 }
 
                 return batchPromise.then((outputs) => {
+                    debug(`${DEBUG_PREFIX}Promise resolved.`);
                     if (outputs.length !== outputPromises.length) {
                         // TODO: Add a test for this
                         throw new Error("Generator function output length does not equal the input length.");
@@ -132,8 +148,8 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         if (this._task.state >= TaskState.Exhausted) {
             return Promise.reject(new Error("This task has ended and cannot process more items"));
         }
-
         const index = this._inputQueue.length;
+        debug(`${DEBUG_PREFIX}Queuing request at index ${index}.`);
         this._inputQueue[index] = input;
         const promise = new ResolvablePromise<O>();
         this._outputPromises[index] = promise;
@@ -153,25 +169,34 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     private _run(promiseEnding: boolean = false): void {
         // If the queue has reached the maximum batch size, start it immediately
         if (this._inputQueue.length >= this._maxBatchSize) {
-            if (this._runTimeout) {
-                clearTimeout(this._runTimeout);
-                this._runTimeout = undefined;
+            debug(`${DEBUG_PREFIX}Queue reached maxBatchSize, launching immediately.`);
+            if (this._waitTimeout) {
+                clearTimeout(this._waitTimeout);
             }
-            this._running = true;
+            this._waitTimeout = undefined;
+            this._waiting = true;
             this._task.resume();
             return;
         }
-        if (this._running) {
+        if (this._waiting) {
             return;
         }
+        const activePromiseCount = this._task.activePromiseCount + (promiseEnding ? -1 : 0);
         const thresholdIndex: number = Math.min(
-            this._task.activePromiseCount + (promiseEnding ? -1 : 0), this._queuingThresholds.length - 1,
+            activePromiseCount, this._queuingThresholds.length - 1,
         );
         if (this._inputQueue.length >= this._queuingThresholds[thresholdIndex]) {
+            if (activePromiseCount >= (this._task.concurrencyLimit as any)) { // TODO: Fix this typing
+                debug(`${DEBUG_PREFIX}Hit concurrency limit.`);
+                return;
+            }
             // Run the batch, but with a delay
-            this._running = true;
-            this._runTimeout = setTimeout(() => {
-                this._runTimeout = undefined;
+            this._waiting = true;
+            debug(`${DEBUG_PREFIX}Running in ${this._queuingDelay}ms (thresholdIndex ${thresholdIndex}).`);
+            // Tests showed that nextTick would commonly run before promises could resolve.
+            // SetImmediate would run later than setTimeout as well.
+            this._waitTimeout = setTimeout(() => {
+                this._waitTimeout = undefined;
                 this._task.resume();
             }, this._queuingDelay);
         }

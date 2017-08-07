@@ -13,7 +13,8 @@
     },
     "include": [
         "index.ts",
-        "test/index.ts"
+        "test/index.ts",
+        "typings/**/*"
     ],
     "exclude": [
     ]
