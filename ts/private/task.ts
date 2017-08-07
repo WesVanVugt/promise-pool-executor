@@ -268,7 +268,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         }
         this._groups.forEach((group) => {
             group._activePromiseCount++;
-            if (group._frequencyLimit) {
+            if (group._frequencyLimit !== Infinity) {
                 group._frequencyStarts.push(Date.now());
             }
         });

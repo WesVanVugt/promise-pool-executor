@@ -270,6 +270,17 @@ describe("Frequency", () => {
             invocationLimit: 3,
         }).promise().then((results) => {
             expectTimes(results, [0, 0, 1], "Timing Results");
+            expect((group as any)._frequencyStarts).to.have.lengthOf(1);
+        });
+    });
+
+    it("Should Not Collect Timestamps If Not Set", () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+        return pool.addGenericTask({
+            generator: () => Promise.resolve(),
+            invocationLimit: 1,
+        }).promise().then(() => {
+            expect((pool as any)._globalGroup._frequencyStarts).to.have.lengthOf(0);
         });
     });
 });
