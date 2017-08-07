@@ -243,6 +243,9 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Private. Invokes the task.
      */
     public _run(): void {
+        if (this._generating) {
+            throw new Error("Internal Error: Task is already being run");
+        }
         if (this._invocations >= this._invocationLimit) {
             // TODO: Make a test for this
             // This may detach / resolve the task if no promises are active

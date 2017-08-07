@@ -84,7 +84,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      */
     private _tasks: Array<PromisePoolTaskPrivate<any>> = [];
     private _globalGroup: PromisePoolGroupPrivate;
-    private _groupSet: Set<PromisePoolGroupPrivate> = new Set();
+    /**
+     * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
+     */
+    private _triggering: boolean;
+    /**
+     * Gets set when trying to trigger the tasks while they are already being triggerd.
+     */
+    private _triggerAgain: boolean;
 
     /**
      * Construct a new PromisePoolExecutor object.
@@ -106,7 +113,6 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         }
 
         this._globalGroup = this.addGroup(groupOptions) as PromisePoolGroupPrivate;
-        this._groupSet.add(this._globalGroup);
     }
 
     /**
@@ -343,6 +349,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * Private Method: Triggers promises to start.
      */
     private _triggerNow(): void {
+        if (this._triggering) {
+            debug(`${DEBUG_PREFIX}Setting triggerAgain flag.`);
+            this._triggerAgain = true;
+            return;
+        }
+
+        this._triggering = true;
+        this._triggerAgain = false;
         debug(`${DEBUG_PREFIX}Trigger promises`);
         this._cleanFrequencyStarts();
 
@@ -368,6 +382,10 @@ export class PromisePoolExecutor implements PromisePoolGroup {
             } else {
                 task._run();
             }
+        }
+        this._triggering = false;
+        if (this._triggerAgain) {
+            return this._triggerNow();
         }
 
         let time: number;

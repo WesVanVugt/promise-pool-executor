@@ -527,7 +527,7 @@ describe("Miscellaneous Features", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             return pool.addGenericTask({
-                generator(index) {
+                generator() {
                     this.end();
                 },
             }).promise().then((results) => {
@@ -539,7 +539,7 @@ describe("Miscellaneous Features", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             return pool.addGenericTask({
-                generator(index) {
+                generator() {
                     this.end();
                     // Add one final promise after ending the task
                     return Promise.resolve(1);
@@ -547,6 +547,25 @@ describe("Miscellaneous Features", () => {
             }).promise().then((results) => {
                 expect(results).to.deep.equal([1]);
             });
+        });
+    });
+
+    it("Generator Recursion Prevention", () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+        let runCount: number = 0;
+
+        return pool.addGenericTask({
+            generator() {
+                runCount++;
+                // Add a task, triggering it to run
+                pool.addGenericTask({
+                    generator: () => {
+                        // do nothing
+                    },
+                });
+            },
+        }).promise().then(() => {
+            expect(runCount).to.equal(1, "runCount");
         });
     });
 
