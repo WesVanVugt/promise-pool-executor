@@ -1,7 +1,7 @@
 import { PromisePoolGroupOptions } from "../public/group";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
-import { PromisePoolTask } from "../public/task";
+import { PromisePoolTask, TaskState } from "../public/task";
 import { isNull, ResolvablePromise } from "./utils";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
@@ -93,6 +93,10 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 });
             },
         });
+    }
+
+    public get state(): TaskState {
+        return this._task.state;
     }
 
     public getResult(input: I): Promise<O> {

@@ -61,9 +61,13 @@ export enum TaskState {
     Terminated,
 }
 
-export interface PromisePoolTask<R> extends InvocationLimit, ActivePromiseCount, PromisePoolGroupOptions, FreeSlots {
-    readonly invocations: number;
+export interface TaskStateProperty {
     readonly state: TaskState;
+}
+
+export interface PromisePoolTask<R> extends
+    InvocationLimit, ActivePromiseCount, PromisePoolGroupOptions, FreeSlots, TaskStateProperty {
+    readonly invocations: number;
     pause(): void;
     resume(): void;
     end(): void;

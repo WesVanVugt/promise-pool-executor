@@ -941,6 +941,16 @@ describe("Task Secializations", () => {
                 expect(runCount).to.equal(2, "runCount");
             });
         });
+        it("End Task", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+            const task = pool.addPersistentBatchTask<undefined, undefined>({
+                generator: (input) => {
+                    return Promise.resolve([]);
+                },
+            });
+            task.end();
+            expect(task.state === Pool.TaskState.Terminated);
+        });
         describe("queueingThresholds", () => {
             it("Core Functionality", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
