@@ -4,7 +4,7 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
     maxBatchSize?: number;
     queuingDelay?: number;
     queuingThresholds?: number[];
-    generator: (input: I[]) => Promise<Array<O | Error>>;
+    generator: (this: PersistentBatchTaskOptions<I, O>, input: I[]) => Promise<Array<O | Error>>;
 }
 
 export interface PersistentBatchTask<I, O> {

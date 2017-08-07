@@ -61,7 +61,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 
                 let batchPromise;
                 try {
-                    batchPromise = batcher._generator(inputs);
+                    batchPromise = batcher._generator.call(this, inputs);
                     if (!(batchPromise instanceof Promise)) {
                         batchPromise = Promise.resolve(batchPromise);
                     }
