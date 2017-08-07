@@ -100,6 +100,10 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     }
 
     public getResult(input: I): Promise<O> {
+        if (this._task.state >= TaskState.Exhausted) {
+            return Promise.reject(new Error("This task has ended and cannot process more items"));
+        }
+
         const index = this._inputQueue.length;
         this._inputQueue[index] = input;
         const promise = new ResolvablePromise<O>();
@@ -110,6 +114,11 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 
     public end(): void {
         this._task.end();
+        this._outputPromises.forEach((promise) => {
+            promise.reject(new Error("This task has ended and cannot process more items"));
+        });
+        this._outputPromises.length = 0;
+        this._inputQueue.length = 0;
     }
 
     private _run(): void {

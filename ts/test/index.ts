@@ -941,16 +941,6 @@ describe("Task Secializations", () => {
                 expect(runCount).to.equal(2, "runCount");
             });
         });
-        it("End Task", () => {
-            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-            const task = pool.addPersistentBatchTask<undefined, undefined>({
-                generator: (input) => {
-                    return Promise.resolve([]);
-                },
-            });
-            task.end();
-            expect(task.state === Pool.TaskState.Terminated);
-        });
         describe("queueingThresholds", () => {
             it("Core Functionality", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
@@ -1078,6 +1068,23 @@ describe("Task Secializations", () => {
                 })).then((results) => {
                     expect(results).to.deep.equal([false, false, false]);
                 });
+            });
+            it("End Task", () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const task = pool.addPersistentBatchTask<undefined, undefined>({
+                    generator: (input) => {
+                        return wait(tick).then(() => []);
+                    },
+                });
+                const firstPromise = task.getResult(undefined);
+                task.end();
+                expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
+
+                return Promise.all([firstPromise, task.getResult(undefined)].map((promise) => {
+                    promise.catch((err) => err).then((result) => {
+                        expect(result).to.be.an.instanceof(Error);
+                    });
+                }));
             });
         });
     });
