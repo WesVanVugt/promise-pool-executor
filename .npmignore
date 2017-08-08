@@ -1,4 +1,8 @@
 **/*
-!js/index.js
-!js/index.d.ts
+!index.js
+!index.d.ts
+!private/*.js
+!public/*
 !README.md
+!UPGRADING.md
+!CHANGELOG.md
