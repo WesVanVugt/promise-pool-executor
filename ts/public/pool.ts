@@ -36,7 +36,9 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
-     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each call.
+     * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
+     * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
+     * promise returned.
      */
     generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
 }
@@ -44,6 +46,7 @@ export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<Freque
 export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
+     * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
@@ -51,7 +54,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
         this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number,
     ) => Promise<R> | undefined | void;
     /**
-     * An array to be divided up and passed to {generator}.
+     * An array containing data to be divided into batches and passed to {generator}.
      */
     data: T[];
     /**
@@ -66,6 +69,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
 export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions {
     /**
      * A function used for creating promises to run.
+     * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
@@ -118,7 +122,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * The maximum number of promises which are allowed to run at one time.
+     * The maximum number of promises allowed to be active simultaneously in the pool.
      */
     public get concurrencyLimit(): number {
         return this._globalGroup.concurrencyLimit;
@@ -128,6 +132,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         this._globalGroup.concurrencyLimit = val;
     }
 
+    /**
+     * The maximum number promises allowed to be generated within the time window specified by {frequencyWindow}.
+     */
     public get frequencyLimit(): number {
         return this._globalGroup.frequencyLimit;
     }
@@ -136,6 +143,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         this._globalGroup.frequencyLimit = val;
     }
 
+    /**
+     * The time window in milliseconds to use for {frequencyLimit}.
+     */
     public get frequencyWindow(): number {
         return this._globalGroup.frequencyWindow;
     }
@@ -144,18 +154,30 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         this._globalGroup.frequencyWindow = val;
     }
 
+    /**
+     * The number of tasks active in the pool.
+     */
     public get activeTaskCount(): number {
         return this._globalGroup.activeTaskCount;
     }
 
+    /**
+     * The number of promises active in the pool.
+     */
     public get activePromiseCount(): number {
         return this._globalGroup.activePromiseCount;
     }
 
+    /**
+     * The number of promises which can be created before reaching the pool's configured limits.
+     */
     public get freeSlots(): number {
         return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
     }
 
+    /**
+     * Adds a group to the pool.
+     */
     public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
         return new PromisePoolGroupPrivate(
             this,
@@ -165,11 +187,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * General-purpose function for adding a task.
-     * @param options Options used to define the task.
-     * @return A promise which resolves to an array containing the values returned by the task.
+     * Adds a general-purpose task to the pool. The resulting task can be resolved to an array containing the results
+     * of the task, or a modified result using the resultConverter option.
      */
     public addGenericTask<I, R>(options: GenericTaskConvertedOptions<I, R>): PromisePoolTask<R>;
+    /**
+     * Adds a general-purpose task to the pool. The resulting task can be resolved to an array containing the results
+     * of the task, or a modified result using the resultConverter option.
+     */
     public addGenericTask<R>(options: GenericTaskOptions<R>): PromisePoolTask<R[]>;
     public addGenericTask<R>(
         options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
@@ -194,9 +219,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * Runs a task once while obeying the concurrency limit set for the pool.
-     * @param options Options used to define the task.
-     * @return A promise which resolves to the result of the task.
+     * Adds a task with a single promise. The resulting task can be resolved to the result of this promise.
      */
     public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
         const data: T | undefined = options.data;
@@ -213,8 +236,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * Runs a task with a concurrency limit of 1.
-     * @return A promise which resolves to an array containing the results of the task.
+     * Adds a task with a concurrency limit of 1. The resulting task can be resolved to an array containing the
+     * results of the task.
      */
     public addLinearTask<T, R>(options: LinearTaskOptions<T, R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
@@ -229,10 +252,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * Runs a task for batches of elements in array, specifying the batch size to use per invocation.
-     * @param options Parameters used to define the task.
-     * @return A promise which resolves to an array containing the results of the task. Each element in the array
-     * corresponds to one invocation.
+     * Adds a task which generates a promise for batches of elements from an array. The resulting task can be
+     * resolved to an array containing the results of the task.
      */
     public addBatchTask<T, R>(options: BatchTaskOptions<T, R>): PromisePoolTask<R[]> {
         let index: number = 0;
@@ -282,9 +303,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     }
 
     /**
-     * Runs a task for each element in an array.
-     * @param options
-     * @return A promise which resolves to an array containing the results of the task.
+     * Adds a task which generates a promise for each element in an array. The resulting task can be resolved to
+     * an array containing the results of the task.
      */
     public addEachTask<T, R>(options: EachTaskOptions<T, R>): PromisePoolTask<R[]> {
         const data = options.data;
@@ -307,6 +327,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         });
     }
 
+    /**
+     * Adds a task which can be used to combine multiple requests into batches to improve efficiency.
+     */
     public addPersistentBatchTask<I, O>(options: PersistentBatchTaskOptions<I, O>): PersistentBatchTask<I, O> {
         return new PersistentBatchTaskPrivate(this, options);
     }

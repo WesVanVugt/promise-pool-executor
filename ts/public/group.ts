@@ -1,13 +1,13 @@
 export interface ConcurrencyLimit {
     /**
-     * The maximum number of promises which are allowed to run at one time.
+     * The maximum number of promises allowed to be active simultaneously.
      */
     concurrencyLimit: number;
 }
 
 export interface FrequencyLimit {
     /**
-     * The number of times a promise can be invoked within the time specified by {frequencyWindow}.
+     * The maximum number promises allowed to be generated within the time window specified by {frequencyWindow}.
      */
     frequencyLimit: number;
     /**
@@ -20,7 +20,7 @@ export interface PromisePoolGroupOptions extends Partial<ConcurrencyLimit>, Part
 
 export interface ActivePromiseCount {
     /**
-     * The number of promises which are active.
+     * The number of promises currently active.
      */
     readonly activePromiseCount: number;
 }
@@ -34,8 +34,11 @@ export interface FreeSlots {
 
 export interface PromisePoolGroup extends PromisePoolGroupOptions, ActivePromiseCount, FreeSlots {
     /**
-     * The number of tasks currently in an active state.
+     * The number of tasks currently active or paused.
      */
     readonly activeTaskCount: number;
+    /**
+     * Returns a promise which resolves when no tasks are currently active or paused.
+     */
     waitForIdle(): Promise<void>;
 }

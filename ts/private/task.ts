@@ -165,7 +165,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     }
 
     /**
-     * Pauses a running task, preventing any additional promises from being generated.
+     * Pauses an active task, preventing any additional promises from being generated.
      */
     public pause(): void {
         if (this._state === TaskState.Active) {
@@ -175,7 +175,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     }
 
     /**
-     * Pauses resumed a paused task, allowing for the generation of additional promises.
+     * Resumes a paused task, allowing for the generation of additional promises.
      */
     public resume(): void {
         if (this._state === TaskState.Paused) {
