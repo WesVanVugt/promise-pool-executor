@@ -2,6 +2,10 @@
 
 A module for managing ES6 promise concurrency, frequency, and efficiency.
 
+For release notes, see the [CHANGELOG](https://github.com/baudzilla/promise-pool-executor/blob/master/CHANGELOG.md).
+
+If you are upgrading from version 0.x to 1.0, please see the [NOTES](https://github.com/baudzilla/promise-pool-executor/blob/master/UPGRADING.md) for information on how to migrate existing code to work with the new major version.
+
 ## Installation
 
 npm install promise-pool-executor
