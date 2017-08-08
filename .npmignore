@@ -1,6 +1,7 @@
 **/*
-!js/index.js
-!js/index.d.ts
-!js/private/*.js
-!js/public/*
+!index.js
+!index.d.ts
+!private/*.js
+!public/*
 !README.md
+!UPGRADING.md
