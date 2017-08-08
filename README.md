@@ -114,7 +114,7 @@ Promise.all(promises).then((results) => {
   * options.**data** - An array containing data to be divided into batches and passed to the generator function.
   * options.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
-  * options.**generator** - A function which returns a new promise each time it is run. Is passed arguments for the current element of options.data, and the element's index.
+  * options.**generator** - A function which returns a new promise or undefined each time it is run. If the function returns undefined, the task will be flagged as completed unless it is in a paused state. Called with "this" set as the PromisePoolTask object and passed arguments for the current elements of options.data, the first element's index, and the invocation number.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
   * options.**invocationLimit** - The maximum number of times the task can be invoked *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
@@ -123,7 +123,7 @@ Promise.all(promises).then((results) => {
   * options.**data** - An array, each element of which will be passed to the generator function.
   * options.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
-  * options.**generator** - A function which returns a new promise each time it is run. Optionally accepts a first argument for the current element of options.data, and a second argument for the element's index.
+  * options.**generator** - A function which returns a new promise or undefined each time it is run. If the function returns undefined, the task will be flagged as completed unless it is in a paused state. Called with "this" set as the PromisePoolTask object and passed arguments for the current element of options.data, and the element's index.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
   * options.**invocationLimit** - The maximum number of times the task can be invoked *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
@@ -131,7 +131,7 @@ Promise.all(promises).then((results) => {
   * options.**concurrencyLimit** - The maximum number of promises that can be active simultaneously for the task *(optional)*.
   * options.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
-  * options.**generator** - A function which returns a new promise each time it is run, or null to indicate the task is completed.
+  * options.**generator** - A function which returns a new promise or undefined each time it is run. If the function returns undefined, the task will be flagged as completed unless it is in a paused state. Called with "this" set as the PromisePoolTask object and passed an argument for the invocation number.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
   * options.**invocationLimit** - The maximum number of times the task can be invoked *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
@@ -141,7 +141,7 @@ Promise.all(promises).then((results) => {
   * options.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
 * pool.**addLinearTask(options)** - Adds a task with a concurrency limit of 1. Returns a PromisePoolTask object which can be resolved to an array containing the results of the task.
-  * options.**generator** - A function which returns a new promise each time it is run, or null to indicate the task is completed.
+  * options.**generator** - A function which returns a new promise or undefined each time it is run. If the function returns undefined, the task will be flagged as completed unless it is in a paused state. Called with "this" set as the PromisePoolTask object and passed an argument for invocation number.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
   * options.**invocationLimit** - The maximum number of times the task can be invoked *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
@@ -149,12 +149,12 @@ Promise.all(promises).then((results) => {
   * options.**concurrencyLimit** - The maximum number of promises that can be active simultaneously for the group *(optional)*.
   * options.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
-  * options.**generator** - A function which accepts an array of request values, returning a promise which resolves to an array of response values. The request and response arrays must be of equal length. To reject an individual request, return an Error object (or class which extends Error) at the corresponding element in the response array.
+  * options.**generator** - A function which is passed an array of request values, returning a promise which resolves to an array of response values. The request and response arrays must be of equal length. To reject an individual request, return an Error object (or class which extends Error) at the corresponding element in the response array.
   * options.**maxBatchSize** - A number indicating the maximum number of requests that can be combined in a single batch *(optional)*.
   * options.**queuingDelay** - The number of milliseconds to wait before running a batch of requests. This is used to allow time for the requests to queue up. Defaults to 1ms. This delay does not apply if the limit set by options.maxBatchSize is reached *(optional)*.
   * options.**queuingThresholds** - An array containing the number of requests that must be queued in order to trigger a batch request at each level of concurrency. For example [1, 5], would require at least 1 queued request when no batch requests are active, and 5 queued requests when 1 (or more) batch requests are active. Defaults to [1]. Note that the delay imposed by options.queuingDelay still applies when a batch request is triggered *(optional)*.
 * pool.**addSingleTask(options)** - Adds a task with a single promise. Returns a [PromisePoolTask object](#object-promisepooltask), which can be resolved to the result of the task by using task.promise().
-  * options.**generator** - A function which returns a promise.
+  * options.**generator** - A function which returns a promise. Is passed the value of options.data as the first argument.
   * options.**data** - A variable which gets passed as the first argument to the generator function *(optional)*.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
@@ -186,6 +186,8 @@ A task which can generate promises within a pool.
 * task.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by task.frequencyWindow.
 * task.**frequencyWindow** - The time window in milliseconds to use for task.frequencyLimit.
 * task.**freeSlots** - The number of promises which can be created before reaching the task's configured limits *(read-only)*.
+* task.**invocationLimit** - The maximum number of times the task can be invoked.
+* task.**invocations** - The number of times the task has been invoked *(read-only)*.
 * task.**state** - An enumeration representing the current state of the task *(read-only)*.
   * TaskState.**Active** - The task will create promises as permitted by the configured limits.
   * TaskState.**Paused** - No action will be taken until task.resume() or task.end() is called.
