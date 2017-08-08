@@ -13,7 +13,7 @@ Promises can be added to the pool in the form of tasks. Tasks use a "generator" 
 ### pool.addEachTask
 
 This type of task creates a promise for each element in an array.
-```
+```javascript
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a concurrency limit of 2
 let pool = new PromisePool.PromisePoolExecutor({
@@ -32,7 +32,7 @@ pool.addEachTask({
 ### pool.addSingleTask
 
 This type of task creates a single promise.
-```
+```javascript
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a no limits set
 let pool = new PromisePool.PromisePoolExecutor();
@@ -48,7 +48,7 @@ pool.addSingleTask({
 ### pool.addGenericTask
 
 Add a general-purpose task.
-```
+```javascript
 let PromisePool = require('promise-pool-executor');
 // Create a pool with a frequency limit of 1 promise per second
 let pool = new PromisePool.PromisePoolExecutor({
@@ -72,7 +72,7 @@ pool.addGenericTask({
 
 This type of task can be used to combine requests into batches with the aim of improving efficiency.
 Typically this would be used to combine requests to a website or database to reduce the time required to complete the requests.
-```
+```javascript
 let PromisePool = require('promise-pool-executor');
 // Create a pool with no limits set
 let pool = new PromisePool.PromisePoolExecutor();
