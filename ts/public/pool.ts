@@ -63,7 +63,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
     batchSize: number | ((elements: number, freeSlots: number) => number);
 }
 
-export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
+export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions {
     /**
      * A function used for creating promises to run.
      * @param value The value from {data} for this invocation.
@@ -201,9 +201,10 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      */
     public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
         const data: T | undefined = options.data;
+        const generator = options.generator;
         return this.addGenericTask<R, R>({
             generator() {
-                return options.generator.call(this, data);
+                return generator.call(this, data);
             },
             groups: options.groups,
             invocationLimit: 1,
@@ -244,18 +245,21 @@ export class PromisePoolExecutor implements PromisePoolGroup {
             throw new Error("Invalid batch size: " + options.batchSize);
         }
 
+        const data = options.data;
+        const generator = options.generator;
+        const batchSizeOption = options.batchSize;
         return this.addGenericTask({
             concurrencyLimit: options.concurrencyLimit,
             frequencyLimit: options.frequencyLimit,
             frequencyWindow: options.frequencyWindow,
             generator(invocation) {
-                if (index >= options.data.length) {
-                    return;
+                if (index >= data.length) {
+                    return; // No data to process
                 }
                 const oldIndex: number = index;
-                if (typeof options.batchSize === "function") {
-                    const batchSize: number = options.batchSize(
-                        options.data.length - oldIndex,
+                if (typeof batchSizeOption === "function") {
+                    const batchSize: number = batchSizeOption(
+                        data.length - oldIndex,
                         this.freeSlots,
                     );
                     // Unacceptable values: NaN, <=0, type not number
@@ -264,10 +268,13 @@ export class PromisePoolExecutor implements PromisePoolGroup {
                     }
                     index += batchSize;
                 } else {
-                    index += options.batchSize;
+                    index += batchSizeOption;
+                }
+                if (index >= data.length) {
+                    this.end(); // last batch
                 }
 
-                return options.generator.call(this, options.data.slice(oldIndex, index), oldIndex, invocation);
+                return generator.call(this, data.slice(oldIndex, index), oldIndex, invocation);
             },
             groups: options.groups,
             invocationLimit: options.invocationLimit,
@@ -281,20 +288,22 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * @return A promise which resolves to an array containing the results of the task.
      */
     public addEachTask<T, R>(options: EachTaskOptions<T, R>): PromisePoolTask<R[]> {
+        const data = options.data;
         return this.addGenericTask({
             concurrencyLimit: options.concurrencyLimit,
             frequencyLimit: options.frequencyLimit,
             frequencyWindow: options.frequencyWindow,
             groups: options.groups,
-            invocationLimit: options.invocationLimit,
             paused: options.paused,
             generator(index) {
-                if (index >= options.data.length) {
-                    return;
+                if (index >= data.length - 1) {
+                    if (index >= data.length) {
+                        return; // No element to process
+                    }
+                    // Last element
+                    this.end();
                 }
-                const oldIndex: number = index;
-                index++;
-                return options.generator.call(this, options.data[oldIndex], oldIndex);
+                return options.generator.call(this, data[index], index);
             },
         });
     }
