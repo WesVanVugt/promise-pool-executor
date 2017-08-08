@@ -34,7 +34,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _promises: Array<ResolvablePromise<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
-    private _detachCallback: (groups: PromisePoolGroupPrivate[]) => void;
+    private _detachCallback: () => void;
     private _resultConverter?: (result: R[]) => any;
 
     public constructor(
@@ -200,7 +200,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
                 this._groups.forEach((group) => {
                     group._decrementTasks();
                 });
-                this._detachCallback(this._groups);
+                this._detachCallback();
             }
             this._resolve();
         } else if (this._state < TaskState.Exhausted) {
