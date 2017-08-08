@@ -8,15 +8,15 @@ npm install promise-pool-executor
 
 ## Examples
 
-Promises can be added to the pool in the form of tasks. Tasks use a "generator" function to create promises which fill the task's pool.
+Promises can be added to the pool in the form of tasks. Tasks use a "generator" function to create promises which fill the task's pool. Limits on the number of promises created can be imposed for the entire pool, an individual task, or a group of tasks.
 
 ### pool.addEachTask
 
 This type of task creates a promise for each element in an array.
 ```javascript
-let PromisePool = require('promise-pool-executor');
+const PromisePool = require('promise-pool-executor');
 // Create a pool with a concurrency limit of 2
-let pool = new PromisePool.PromisePoolExecutor({
+const pool = new PromisePool.PromisePoolExecutor({
     concurrencyLimit: 2
 });
 pool.addEachTask({
@@ -33,9 +33,9 @@ pool.addEachTask({
 
 This type of task creates a single promise.
 ```javascript
-let PromisePool = require('promise-pool-executor');
+const PromisePool = require('promise-pool-executor');
 // Create a pool with a no limits set
-let pool = new PromisePool.PromisePoolExecutor();
+const pool = new PromisePool.PromisePoolExecutor();
 pool.addSingleTask({
     generator: () => {
         return Promise.resolve('finished');
@@ -49,9 +49,9 @@ pool.addSingleTask({
 
 Add a general-purpose task.
 ```javascript
-let PromisePool = require('promise-pool-executor');
+const PromisePool = require('promise-pool-executor');
 // Create a pool with a frequency limit of 1 promise per second
-let pool = new PromisePool.PromisePoolExecutor({
+const pool = new PromisePool.PromisePoolExecutor({
     frequencyLimit: 1,
     frequencyWindow: 1000,
 });
@@ -73,11 +73,11 @@ pool.addGenericTask({
 This type of task can be used to combine requests into batches with the aim of improving efficiency.
 Typically this would be used to combine requests to a website or database to reduce the time required to complete the requests.
 ```javascript
-let PromisePool = require('promise-pool-executor');
+const PromisePool = require('promise-pool-executor');
 // Create a pool with no limits set
-let pool = new PromisePool.PromisePoolExecutor();
+const pool = new PromisePool.PromisePoolExecutor();
 let runCount = 0;
-let persistentBatchTask = pool.addPersistentBatchTask({
+const persistentBatchTask = pool.addPersistentBatchTask({
     generator: (data) => {
         runCount++;
         return Promise.resolve(data.map(() => {
@@ -85,10 +85,13 @@ let persistentBatchTask = pool.addPersistentBatchTask({
         }));
     }
 });
-let inputs = [1, 3, 5, 7];
-let promises = inputs.map((input) => persistentBatchTask.getResult(input));
+const inputs = [1, 3, 5, 7];
+// Start a series of individual requests
+const promises = inputs.map((input) => persistentBatchTask.getResult(input));
+// Wait for all the requests to complete
 Promise.all(promises).then((results) => {
     console.log(results); // [ 2, 4, 6, 8 ]
+    // The requests were still done in a single run
     console.log(runCount); // 1
 });
 ```
@@ -102,9 +105,9 @@ Promise.all(promises).then((results) => {
 * pool.**activePromiseCount** - The number of promises active in the pool *(read-only)*.
 * pool.**activeTaskCount** - The number of tasks active in the pool *(read-only)*.
 * pool.**concurrencyLimit** - The maximum number of promises which are allowed to run in the pool at one time.
+* pool.**freeSlots** - The number of promises which can be created before reaching the pool's configured limits *(read-only)*.
 * pool.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by pool.frequencyWindow.
 * pool.**frequencyWindow** - The time window in milliseconds to use for pool.frequencyLimit.
-* pool.**freeSlots** - The number of promises which can be created before reaching the pool's configured limits *(read-only)*.
 
 #### Methods
 
@@ -125,7 +128,6 @@ Promise.all(promises).then((results) => {
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
   * options.**generator** - A function which returns a new promise or undefined each time it is run. If the function returns undefined, the task will be flagged as completed unless it is in a paused state. Called with "this" set as the PromisePoolTask object and passed arguments for the current element of options.data, and the element's index.
   * options.**groups** - An array of groups to assign the task to. Groups are created using pool.addGroup(options) *(optional)*.
-  * options.**invocationLimit** - The maximum number of times the task can be invoked *(optional)*.
   * options.**paused** - Starts the task in a paused state *(optional)*.
 * pool.**addGenericTask(options)** - Adds a general-purpose task to the pool. Returns a [PromisePoolTask object](#object-promisepooltask), which can be resolved to an array containing the results of the task by using task.promise(). If options.resultConverter is provided, the results may be modified before being returned.
   * options.**concurrencyLimit** - The maximum number of promises that can be active simultaneously for the task *(optional)*.
@@ -168,9 +170,9 @@ A group that tasks can be assigned to. Groups can impose limits on tasks assigne
 * group.**activePromiseCount** - The number of promises active in the group *(read-only)*.
 * group.**activeTaskCount** - The number of tasks active in the group *(read-only)*.
 * group.**concurrencyLimit** - The maximum number of promises which are allowed to run in the group at one time.
+* group.**freeSlots** - The number of promises which can be created before reaching the group's configured limits *(read-only)*.
 * group.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by group.frequencyWindow.
 * group.**frequencyWindow** - The time window in milliseconds to use for group.frequencyLimit.
-* group.**freeSlots** - The number of promises which can be created before reaching the group's configured limits *(read-only)*.
 
 #### Methods
 
@@ -183,9 +185,9 @@ A task which can generate promises within a pool.
 
 * task.**activePromiseCount** - The number of promises active in the task *(read-only)*.
 * task.**concurrencyLimit** - The maximum number of promises which are allowed to run in the task at one time.
+* task.**freeSlots** - The number of promises which can be created before reaching the task's configured limits *(read-only)*.
 * task.**frequencyLimit** - The maximum number of times a promise can be invoked within the time window specified by task.frequencyWindow.
 * task.**frequencyWindow** - The time window in milliseconds to use for task.frequencyLimit.
-* task.**freeSlots** - The number of promises which can be created before reaching the task's configured limits *(read-only)*.
 * task.**invocationLimit** - The maximum number of times the task can be invoked.
 * task.**invocations** - The number of times the task has been invoked *(read-only)*.
 * task.**state** - An enumeration representing the current state of the task *(read-only)*.

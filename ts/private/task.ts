@@ -242,6 +242,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public _run(): void {
         if (this._generating) {
+            // This should never happen
             throw new Error("Internal Error: Task is already being run");
         }
         if (this._invocations >= this._invocationLimit) {

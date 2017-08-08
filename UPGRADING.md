@@ -19,12 +19,16 @@ pool.addGenericTask({
 
 ## 2. Group and task IDs have been removed
 
-Instead, use the properties and methods on the PromisePoolGroup and PromisePoolTask objects to interact with them. Groups will need to be explicitly created using the pool.addGroup() method.
+Instead, use the properties and methods on the PromisePoolGroup and PromisePoolTask objects to interact with them. Groups will need to be explicitly created using the pool.addGroup() method. PromisePoolTask objects can also be accessed within generator functions via the "this" keyword.
 
-## 3. pool.getTaskStatus has been removed
+## 3. pool.stopTask has been removed
+
+Instead, use the end() method on the corresponding PromisePoolTask object. Within generator functions, this can be done by using this.end().
+
+## 4. pool.getTaskStatus has been removed
 
 Instead, use the properties on the PromisePoolTask objects to get the status of the task.
 
-## 4. params.noPromise has been removed
+## 5. params.noPromise has been removed
 
 It was no longer needed since simply not calling the promise method would have the same effect.
