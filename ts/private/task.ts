@@ -12,7 +12,6 @@ const DEBUG_PREFIX: string = "[Task] ";
 export interface GenericTaskOptionsPrivate<R> {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupPrivate;
-    triggerNextCallback: () => void;
     triggerNowCallback: () => void;
     detach: () => void;
 }
@@ -56,7 +55,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._invocationLimit = options.invocationLimit;
         }
         // Create a group exclusively for this task. This may throw errors.
-        this._taskGroup = new PromisePoolGroupPrivate(privateOptions.pool, privateOptions.triggerNextCallback, options);
+        this._taskGroup = privateOptions.pool.addGroup(options) as PromisePoolGroupPrivate;
         this._groups = [privateOptions.globalGroup, this._taskGroup];
         if (options.groups) {
             const groups = options.groups as PromisePoolGroupPrivate[];

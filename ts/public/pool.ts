@@ -181,7 +181,6 @@ export class PromisePoolExecutor implements PromisePoolGroup {
                 },
                 globalGroup: this._globalGroup,
                 pool: this,
-                triggerNextCallback: () => this._triggerNextTick(),
                 triggerNowCallback: () => this._triggerNow(),
             },
             options,
