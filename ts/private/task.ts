@@ -192,6 +192,13 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
         debug(`${DEBUG_PREFIX}Ending`);
+        if (this._state < TaskState.Exhausted) {
+            debug(`${DEBUG_PREFIX}State: Exhausted`);
+            this._state = TaskState.Exhausted;
+            if (this._taskGroup._activeTaskCount > 0) {
+                this._detachCallback();
+            }
+        }
         if (!this._generating && this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
             debug(`${DEBUG_PREFIX}State: Terminated`);
             this._state = TaskState.Terminated;
@@ -200,12 +207,8 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
                 this._groups.forEach((group) => {
                     group._decrementTasks();
                 });
-                this._detachCallback();
             }
             this._resolve();
-        } else if (this._state < TaskState.Exhausted) {
-            debug(`${DEBUG_PREFIX}State: Exhausted`);
-            this._state = TaskState.Exhausted;
         }
     }
 
