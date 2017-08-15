@@ -13,7 +13,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
     private _queuingThresholds: number[];
     private _inputQueue: I[] = [];
     private _outputPromises: Array<ResolvablePromise<O>> = [];
-    private _generator: (input: I[]) => Promise<Array<O | Error>>;
+    private _generator: (input: I[]) => Array<O | Error> | PromiseLike<Array<O | Error>>;
     private _waitTimeout?: any;
     private _waiting: boolean = false;
 
@@ -72,7 +72,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 }
 
                 debug(`${DEBUG_PREFIX}Running batch of ${inputs.length}.`);
-                let batchPromise;
+                let batchPromise: Promise<Array<O | Error>>;
                 try {
                     batchPromise = batcher._generator.call(this, inputs);
                     if (!(batchPromise instanceof Promise)) {
@@ -83,6 +83,9 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 }
 
                 return batchPromise.then((outputs) => {
+                    if (!Array.isArray(outputs)) {
+                        throw new Error("Invalid type returned from generator.");
+                    }
                     debug(`${DEBUG_PREFIX}Promise resolved.`);
                     if (outputs.length !== outputPromises.length) {
                         // TODO: Add a test for this

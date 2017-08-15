@@ -36,7 +36,7 @@ export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
      * promise returned.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R> | undefined | void;
+    generator(this: PromisePoolTask<any[]>, invocation: number): R | PromiseLike<R> | undefined | null | void;
 }
 
 export interface GenericTaskConvertedOptions<I, R> extends GenericTaskOptionsBase {
@@ -46,11 +46,11 @@ export interface GenericTaskConvertedOptions<I, R> extends GenericTaskOptionsBas
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
      * promise returned.
      */
-    generator: (this: PromisePoolTask<any>, invocation: number) => Promise<I> | undefined | void;
+    generator(this: PromisePoolTask<any>, invocation: number): I | PromiseLike<I> | undefined | null | void;
     /**
      * Converts the results of the task upon completion.
      */
-    resultConverter: (result: I[]) => R;
+    resultConverter(result: I[]): R;
 }
 
 export enum TaskState {
