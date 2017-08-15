@@ -73,6 +73,9 @@ class PersistentBatchTaskPrivate {
                     batchPromise = Promise.reject(err);
                 }
                 return batchPromise.then((outputs) => {
+                    if (!Array.isArray(outputs)) {
+                        throw new Error("Invalid type returned from generator.");
+                    }
                     utils_1.debug(`${DEBUG_PREFIX}Promise resolved.`);
                     if (outputs.length !== outputPromises.length) {
                         // TODO: Add a test for this

@@ -3,13 +3,13 @@ import { PersistentBatchTask, PersistentBatchTaskOptions } from "./persistent-ba
 import { GenericTaskConvertedOptions, GenericTaskOptions, InvocationLimit, PromisePoolTask, TaskOptionsBase } from "./task";
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     /**
-     * A function used for creating promises to run.
-     */
-    generator: (this: PromisePoolTask<any>, data: T) => Promise<R>;
-    /**
      * Optional data to pass to the generator function as a parameter.
      */
     data?: T;
+    /**
+     * A function used for creating promises to run.
+     */
+    generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
 export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
@@ -18,7 +18,7 @@ export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<Freque
      * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
      * promise returned.
      */
-    generator: (this: PromisePoolTask<any[]>, invocation: number) => Promise<R>;
+    generator: (this: PromisePoolTask<any[]>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
 }
 export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
     /**
@@ -27,7 +27,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
      * @param {T[]} values - Elements from {data} batched for this invocation.
      * @param startIndex The original index for the first element in {values}.
      */
-    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number) => Promise<R> | undefined | void;
+    generator: (this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number) => R | PromiseLike<R> | undefined | null | void;
     /**
      * An array containing data to be divided into batches and passed to {generator}.
      */
@@ -42,16 +42,16 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
 }
 export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions {
     /**
+     * An array of elements to be individually passed to {generator}.
+     */
+    data: T[];
+    /**
      * A function used for creating promises to run.
      * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
      * @param value The value from {data} for this invocation.
      * @param index The original index which {value} was stored at.
      */
-    generator: (this: PromisePoolTask<any[]>, value: T, index: number) => Promise<R> | undefined | void;
-    /**
-     * An array of elements to be individually passed to {generator}.
-     */
-    data: T[];
+    generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
 export declare class PromisePoolExecutor implements PromisePoolGroup {
     private _nextTriggerTime?;

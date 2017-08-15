@@ -9,9 +9,9 @@ const debug = Debug("promise-pool-executor");
  */
 const tick = 50;
 /**
- * Milliseconds tolerance for tests, above or below the target.
+ * Milliseconds tolerance for tests above the target.
  */
-const tolerance = 20;
+const tolerance = 30;
 /**
  * Returns a promise which waits the specified amount of time before resolving.
  */
@@ -31,7 +31,7 @@ function wait(time) {
 function expectTimes(resultTimes, targetTicks, message) {
     chai_1.expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
     resultTimes.forEach((val, i) => {
-        chai_1.expect(val).to.be.within(targetTicks[i] * tick - tolerance, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
+        chai_1.expect(val).to.be.within(targetTicks[i] * tick, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
     });
 }
 /**
