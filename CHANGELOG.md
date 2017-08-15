@@ -1,5 +1,8 @@
 # Changelog for promise-pool-executor
 
+## 1.0.2 (2017-08-14)
+* feature: Made generator function typings compatible with a wider variety of outputs.
+
 ## 1.0.0 (2017-08-07)
 * feature: Added PromisePoolTask and PromisePoolGroup objects which can be interacted with directly, instead of by using IDs.
 * feature: Added PersistentBatchTask feature.

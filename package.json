@@ -1,6 +1,6 @@
 {
   "name": "promise-pool-executor",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A module for managing ES6 promise concurrency, frequency, and efficiency.",
   "keywords": [
     "promise",
