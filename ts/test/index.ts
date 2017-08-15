@@ -26,9 +26,9 @@ type TypingImportTest = Pool.PromisePoolExecutor
  */
 const tick: number = 50;
 /**
- * Milliseconds tolerance for tests, above or below the target.
+ * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 20;
+const tolerance: number = 30;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -51,7 +51,7 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
     resultTimes.forEach((val, i) => {
         expect(val).to.be.within(
-            targetTicks[i] * tick - tolerance, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
+            targetTicks[i] * tick, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
         );
     });
 }
