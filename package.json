@@ -29,7 +29,7 @@
   "scripts": {
     "build": "npm run clean && npm run tslint && npm run tsc",
     "clean": "rm -rf index.js index.d.ts private public test",
-    "test": "./node_modules/.bin/mocha test/*.js --reporter spec --colors",
+    "test": "./node_modules/.bin/mocha test/*.js --reporter spec",
     "test-debug": "cross-env DEBUG=promise-pool-executor npm test",
     "tsc": "tsc -p ts",
     "tslint": "tslint ts/**/*.ts"
@@ -41,22 +41,18 @@
   },
   "dependencies": {
     "debug": "^2.6.8",
-    "next-tick": "^1.0.0",
-    "p-defer": "^1.0.0",
-    "promise-batcher": "file:promise-batcher-0.1.0.tgz"
+    "next-tick": "^1.0.0"
   },
   "devDependencies": {
-    "@types/chai-as-promised": "^7.1.0",
+    "@types/chai": "^4.0.1",
     "@types/debug": "0.0.29",
-    "@types/mocha": "^2.2.43",
-    "@types/node": "^6.0.88",
-    "@types/p-defer": "^1.0.0",
-    "chai": "^4.1.2",
-    "chai-as-promised": "^7.1.1",
-    "cross-env": "^5.0.5",
-    "mocha": "^3.5.3",
-    "tslint": "^5.7.0",
-    "typescript": "^2.5.2"
+    "@types/mocha": "^2.2.41",
+    "@types/node": "^6.0.69",
+    "chai": "^4.1.0",
+    "cross-env": "^5.0.1",
+    "mocha": "^3.4.2",
+    "tslint": "^5.5.0",
+    "typescript": "^2.4.2"
   },
   "license": "MIT",
   "public": true
