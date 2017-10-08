@@ -3,10 +3,10 @@
     "compilerOptions": {
         "target": "es6",
         "module": "commonjs",
-        "noImplicitAny": true,
-        "noImplicitThis": true,
-        "strictNullChecks": true,
+        "strict": true,
         "preserveConstEnums": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
         "declaration": true,
         "sourceMap": false,
         "outDir": "../"
@@ -16,6 +16,5 @@
         "test/index.ts",
         "typings/**/*"
     ],
-    "exclude": [
-    ]
+    "exclude": []
 }

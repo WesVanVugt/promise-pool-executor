@@ -1,6 +1,5 @@
 import defer = require("defer-promise");
 import * as nextTick from "next-tick";
-import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
@@ -9,7 +8,7 @@ import { debug, isNull, TaskError } from "./utils";
 const GLOBAL_GROUP_INDEX = 0;
 const DEBUG_PREFIX: string = "[Task] ";
 
-export interface GenericTaskOptionsPrivate<R> {
+export interface GenericTaskOptionsPrivate {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupPrivate;
     triggerNowCallback: () => void;
@@ -38,7 +37,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _resultConverter?: (result: R[]) => any;
 
     public constructor(
-        privateOptions: GenericTaskOptionsPrivate<R>,
+        privateOptions: GenericTaskOptionsPrivate,
         options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
     ) {
         debug(`${DEBUG_PREFIX}Creating task`);

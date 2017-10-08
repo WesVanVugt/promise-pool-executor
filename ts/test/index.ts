@@ -1,10 +1,14 @@
+import * as chai from "chai";
 import { expect } from "chai";
+import * as chaiAsPromised from "chai-as-promised";
 import * as Debug from "debug";
 import * as Pool from "../index";
 const debug = Debug("promise-pool-executor");
+chai.use(chaiAsPromised);
 
 // Verify that the types needed can be imported
-type TypingImportTest = Pool.PromisePoolExecutor
+
+const typingImportTest: Pool.PromisePoolExecutor
     // Group
     | Pool.PromisePoolGroup
     | Pool.PromisePoolGroupOptions
@@ -13,22 +17,26 @@ type TypingImportTest = Pool.PromisePoolExecutor
     | Pool.GenericTaskOptions<any>
     | Pool.GenericTaskConvertedOptions<any, any>
     | Pool.SingleTaskOptions<any, any>
-    | Pool.LinearTaskOptions<any, any>
+    | Pool.LinearTaskOptions<any>
     | Pool.BatchTaskOptions<any, any>
     | Pool.EachTaskOptions<any, any>
     | Pool.TaskState
     // Persistent Batch Task
     | Pool.PersistentBatchTask<any, any>
-    | Pool.PersistentBatchTaskOptions<any, any>;
+    | Pool.PersistentBatchTaskOptions<any, any> = undefined as any;
+
+if (typingImportTest) {
+    // satisfy TypeScript's need to use the variable
+}
 
 /**
  * Milliseconds per tick.
  */
-const tick: number = 50;
+const tick: number = 100;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 30;
+const tolerance: number = 60;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -37,7 +45,7 @@ function wait(time: number): Promise<void> {
     if (time <= 0) {
         return Promise.resolve();
     }
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
         setTimeout(() => {
             resolve();
         }, time);
@@ -51,7 +59,7 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
     resultTimes.forEach((val, i) => {
         expect(val).to.be.within(
-            targetTicks[i] * tick, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
+            targetTicks[i] * tick - 1, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
         );
     });
 }
@@ -232,7 +240,7 @@ describe("Frequency", () => {
 
             const start: number = Date.now();
             return pool.addGenericTask({
-                generator: (i) => {
+                generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
@@ -242,7 +250,7 @@ describe("Frequency", () => {
                 return wait(tick * 2);
             }).then(() => {
                 return pool.addGenericTask({
-                    generator: (i) => {
+                    generator: () => {
                         return Promise.resolve(Date.now() - start);
                     },
                     invocationLimit: 3,
@@ -298,7 +306,7 @@ describe("Exception Handling", () => {
         }).promise().catch((err) => {
             expect(err).to.equal(error);
             caught = true;
-        }).then((results) => {
+        }).then(() => {
             expect(caught).to.equal(true, "Must throw an error");
         });
     });
@@ -318,7 +326,7 @@ describe("Exception Handling", () => {
         }).promise().catch((err) => {
             expect(err).to.equal(error);
             caught = true;
-        }).then((results) => {
+        }).then(() => {
             expect(caught).to.equal(true, "Must throw an error");
         });
     });
@@ -490,7 +498,7 @@ describe("Exception Handling", () => {
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -514,7 +522,7 @@ describe("Exception Handling", () => {
             ).catch((err) => {
                 expect(err).to.equal(error);
                 caught = true;
-            }).then((results) => {
+            }).then(() => {
                 expect(caught).to.equal(true, "Must throw an error");
             });
         });
@@ -573,13 +581,10 @@ describe("Miscellaneous Features", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const start: number = Date.now();
-        let paused: boolean = false;
         const task = pool.addGenericTask({
             generator(index) {
-                if (index === 1 && !paused) {
-                    paused = true;
+                if (index === 0) {
                     this.pause();
-                    return;
                 }
                 return wait(tick)
                     .then(() => {
@@ -600,12 +605,11 @@ describe("Miscellaneous Features", () => {
     it("Get Task Status", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
         return pool.addGenericTask({
             concurrencyLimit: 5,
             frequencyLimit: 5,
             frequencyWindow: 1000,
-            generator(index) {
+            generator() {
                 return wait(tick)
                     .then(() => {
                         return {
@@ -813,7 +817,7 @@ describe("Task Secializations", () => {
 
         const start: number = Date.now();
         return pool.addLinearTask({
-            generator: (element) => {
+            generator: () => {
                 return wait(tick)
                     .then(() => {
                         return Date.now() - start;
@@ -904,7 +908,7 @@ describe("Task Secializations", () => {
                     expect(output).to.equal(String(input), "Outputs");
                     expectTimes([Date.now() - start], [1], "Timing Results");
                 });
-            })).then((outputs) => {
+            })).then(() => {
                 expect(runCount).to.equal(1, "runCount");
                 // Verify that the task is not storing the results, which would waste memory.
                 expect((task as any)._task._result.length).to.equal(0);
@@ -952,7 +956,7 @@ describe("Task Secializations", () => {
                         expect(output).to.equal(String(input), "Outputs");
                         expectTimes([Date.now() - start], [1], "Timing Results");
                     });
-                })).then((outputs) => {
+                })).then(() => {
                     expect(runCount).to.equal(2, "runCount");
                 });
             });
@@ -1007,6 +1011,7 @@ describe("Task Secializations", () => {
                     return wait(3 * tick).then(() => new Array(input.length));
                 },
                 queuingDelay: tick,
+                queuingThresholds: [1, Infinity],
             });
             const start: number = Date.now();
             return Promise.all([
@@ -1150,7 +1155,7 @@ describe("Task Secializations", () => {
             it("End Task", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: (input) => {
+                    generator: () => {
                         return wait(tick).then(() => []);
                     },
                 });

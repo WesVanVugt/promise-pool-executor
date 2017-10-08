@@ -1,7 +1,7 @@
 import defer = require("defer-promise");
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { debug, isNull, TaskError } from "./utils";
+import { isNull, TaskError } from "./utils";
 
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
