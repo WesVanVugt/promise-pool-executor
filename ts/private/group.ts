@@ -1,6 +1,7 @@
+import defer = require("defer-promise");
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
+import { debug, isNull, TaskError } from "./utils";
 
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
@@ -11,7 +12,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     public _frequencyStarts: number[] = [];
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
-    private _promises: Array<ResolvablePromise<void>> = [];
+    private _deferreds: Array<Deferred<void>> = [];
     private _rejection?: TaskError;
     private _triggerNextCallback: () => void;
 
@@ -141,11 +142,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
      * Resolves all pending waitForIdle promises.
      */
     public _resolve() {
-        if (!this._rejection && this._promises.length) {
-            this._promises.forEach((promise) => {
-                promise.resolve();
+        if (!this._rejection && this._deferreds.length) {
+            this._deferreds.forEach((deferred) => {
+                deferred.resolve();
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
     }
 
@@ -157,12 +158,12 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
             return;
         }
         this._rejection = err;
-        if (this._promises.length) {
+        if (this._deferreds.length) {
             err.handled = true;
-            this._promises.forEach((promise) => {
-                promise.reject(err.error);
+            this._deferreds.forEach((deferred) => {
+                deferred.reject(err.error);
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
         // The group error state should reset on the next tick
         process.nextTick(() => {
@@ -182,9 +183,9 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
             return Promise.resolve();
         }
 
-        const promise: ResolvablePromise<void> = new ResolvablePromise();
-        this._promises.push(promise);
-        return promise.promise;
+        const deferred: Deferred<void> = defer();
+        this._deferreds.push(deferred);
+        return deferred.promise;
     }
 
     public _incrementTasks(): void {

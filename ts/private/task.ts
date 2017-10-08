@@ -1,10 +1,10 @@
+import defer = require("defer-promise");
 import * as nextTick from "next-tick";
-
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
+import { debug, isNull, TaskError } from "./utils";
 
 const GLOBAL_GROUP_INDEX = 0;
 const DEBUG_PREFIX: string = "[Task] ";
@@ -31,7 +31,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * promise may be generated.
      */
     private _generating: boolean;
-    private _promises: Array<ResolvablePromise<any>> = [];
+    private _deferreds: Array<Deferred<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
     private _detachCallback: () => void;
@@ -159,9 +159,9 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             return Promise.resolve(this._returnResult);
         }
 
-        const promise: ResolvablePromise<any> = new ResolvablePromise();
-        this._promises.push(promise);
-        return promise.promise;
+        const deferred: Deferred<any> = defer();
+        this._deferreds.push(deferred);
+        return deferred.promise;
     }
 
     /**
@@ -338,11 +338,11 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         // discard the original array to free memory
         this._result = undefined;
 
-        if (this._promises.length) {
-            this._promises.forEach((promise) => {
-                promise.resolve(this._returnResult);
+        if (this._deferreds.length) {
+            this._deferreds.forEach((deferred) => {
+                deferred.resolve(this._returnResult);
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
     }
 
@@ -364,12 +364,12 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         // This may detach the task
         this.end();
 
-        if (this._promises.length) {
+        if (this._deferreds.length) {
             taskError.handled = true;
-            this._promises.forEach((promise) => {
-                promise.reject(taskError.error);
+            this._deferreds.forEach((deferred) => {
+                deferred.reject(taskError.error);
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
         this._groups.forEach((group) => {
             group._reject(taskError);
