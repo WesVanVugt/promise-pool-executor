@@ -390,6 +390,75 @@ describe("Exception Handling", () => {
             });
             return expectUnhandledRejection(error);
         });
+
+        it("Multi-rejection", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const errors = [new Error("first"), new Error("second")];
+            errors.forEach((err, i) => {
+                // Create a task which fails without the test handling the error
+                pool.addGenericTask({
+                    generator: () => {
+                        return wait(i ? tick : 1).then(() => {
+                            throw err;
+                        });
+                    },
+                    invocationLimit: 1,
+                });
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => expectUnhandledRejection(errors[1]));
+        });
+
+        // This scenario creates two tasks at the same time
+        // The first task rejects but is handled, while the second remains unhandled.
+        it("Handled Rejection Followed By Unhandled Rejection", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const errors = [new Error("first"), new Error("second")];
+            // Create a task which will reject later without being handled
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => Promise.reject(errors[1]));
+                },
+                invocationLimit: 1,
+            });
+
+            return expect(pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => Promise.reject(errors[0]));
+                },
+                invocationLimit: 1,
+            }).promise()).to.be.rejectedWith(errors[0]).then(() => {
+                return expectUnhandledRejection(errors[1]);
+            });
+        });
+
+        it("Unhandled Followed By Rejection With pool.waitForIdle", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const errors = [new Error("first"), new Error("second")];
+            pool.addGenericTask({
+                generator: () => Promise.reject(errors[0]),
+                invocationLimit: 1,
+            });
+            // Keep the global group busy so the error will not clear
+            pool.addGenericTask({
+                generator: () => wait(tick),
+                invocationLimit: 1,
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => {
+                    pool.addGenericTask({
+                        generator: () => {
+                            throw errors[1];
+                        },
+                        invocationLimit: 1,
+                    });
+                    return expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]);
+                    // Wait to ensure the task does not throw an unhandled rejection
+                }).then(() => wait(tick));
+        });
     });
 
     describe("pool.waitForIdle", () => {
@@ -419,6 +488,42 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
             });
             return expect(pool.waitForIdle()).to.be.rejectedWith(error);
+        });
+
+        // In this scenario, a child task fails after its parent does. In this case, only the first error should
+        // be received, and the second should be handled by the pool.
+        it("Child Task Rejection Shadowed By Parent Rejection", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const error = new Error("Parent error");
+            let thrown = false;
+            const start: number = Date.now();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            generator: () => {
+                                return wait(tick).then(() => {
+                                    thrown = true;
+                                    throw new Error("Child task error");
+                                });
+                            },
+                            invocationLimit: 1,
+                        });
+                        debug("About to throw");
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+            });
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error)
+                .then(() => {
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                    expect(thrown).to.equal(false, "Child task must throw yet");
+                    return wait(tick * 2);
+                }).then(() => {
+                    expect(thrown).to.equal(true, "Child task must throw error");
+                });
         });
 
         describe("Clearing After Delay", () => {
