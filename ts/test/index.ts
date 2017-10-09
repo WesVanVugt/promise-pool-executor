@@ -64,37 +64,30 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     });
 }
 
+function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
+    process.removeListener("unhandledRejection", unhandledRejectionListener);
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            resetUnhandledRejectionListener();
+            resolve();
+        }, delay);
+
+        process.prependOnceListener("unhandledRejection", (err: any) => {
+            clearTimeout(timeout);
+            debug("Caught unhandledRejection");
+            resetUnhandledRejectionListener();
+            reject(err);
+        });
+    });
+}
+
 /**
  * Expects an unhandled promise rejection.
  * @param expectedError The error expected to be received with the rejection (optional).
  */
-function expectUnhandledRejection(expectedError?: any, delay?: number): Promise<void> {
-    process.removeListener("unhandledRejection", unhandledRejectionListener);
-
-    let reAdded: boolean = false;
-    let error: any;
-    process.prependOnceListener("unhandledRejection", (err: any) => {
-        if (!reAdded) {
-            debug("Caught unhandled");
-            error = err;
-            // Catch any extra unhandled rejections which could occur before
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-        }
-    });
-
-    return wait(delay || tick).then(() => {
-        if (!reAdded) {
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-            throw new Error("Expected unhandledRejection to be thrown.");
-        }
-        if (expectedError) {
-            expect(error).to.equal(expectedError);
-        } else {
-            expect(error).to.be.instanceof(Error);
-        }
-    });
+async function expectUnhandledRejection(expectedError: any, delay: number = tick * 2): Promise<void> {
+    await expect(waitForUnhandledRejection(delay)).to.be.rejectedWith(expectedError);
 }
 
 /**
@@ -110,15 +103,17 @@ function sum(nums: number[]): number {
 }
 
 function unhandledRejectionListener(err: any) {
-    debug("unhandledRejectionListener: " + err.stack);
+    debug("unhandledRejectionListener: %O", err);
     // Fail the test
-    throw new Error("UnhandledPromiseRejection: " + err.message);
+    throw err;
 }
 
-beforeEach(() => {
+function resetUnhandledRejectionListener(): void {
     process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
-});
+}
+
+beforeEach(resetUnhandledRejectionListener);
 
 describe("Concurrency", () => {
     it("No Limit", () => {
