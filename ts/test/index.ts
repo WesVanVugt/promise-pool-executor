@@ -379,22 +379,16 @@ describe("Exception Handling", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const errors: Error[] = [new Error("First"), new Error("Second")];
-            let caught: Error;
-            pool.addGenericTask({
+            return expect(pool.addGenericTask({
                 generator: (i) => {
                     return wait(i ? tick : 1).then(() => {
                         throw errors[i];
                     });
                 },
                 invocationLimit: 2,
-            }).promise().catch((err) => {
-                caught = err;
-            });
-            return expectUnhandledRejection(
-                errors[1], tick * 2,
-            ).then(() => {
-                expect(caught).to.equal(errors[0]);
-            });
+            }).promise()).to.be.rejectedWith(errors[0])
+                // Wait to ensure that the second rejection happens within the scope of this test without issue
+                .then(() => wait(tick * 2));
         });
     });
 

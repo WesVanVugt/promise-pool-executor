@@ -192,7 +192,6 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
-        debug("Ending");
         if (this._state < TaskState.Exhausted) {
             debug("State: %o", "Exhausted");
             this._state = TaskState.Exhausted;
@@ -350,9 +349,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _reject(err: any) {
         // Check if the task has already failed
         if (this._rejection) {
-            debug("This task already failed!");
-            // Unhandled promise rejection
-            Promise.reject(err);
+            debug("This task already failed. Redundant error: %O", err);
             return;
         }
 
