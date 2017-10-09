@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const defer = require("defer-promise");
 const utils_1 = require("./utils");
 /** Internal use only */
 class PromisePoolGroupPrivate {
@@ -7,7 +8,21 @@ class PromisePoolGroupPrivate {
         this._frequencyStarts = [];
         this._activeTaskCount = 0;
         this._activePromiseCount = 0;
-        this._promises = [];
+        this._deferreds = [];
+        /**
+         * This flag prevents a rejection from being removed before nextTick is called.
+         * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
+         */
+        this._recentRejection = false;
+        /**
+         * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
+         * within the group as handled.
+         */
+        this._locallyHandled = false;
+        /**
+         * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
+         */
+        this._secondaryRejections = [];
         this._pool = pool;
         if (!options) {
             options = {};
@@ -119,11 +134,11 @@ class PromisePoolGroupPrivate {
      * Resolves all pending waitForIdle promises.
      */
     _resolve() {
-        if (!this._rejection && this._promises.length) {
-            this._promises.forEach((promise) => {
-                promise.resolve();
+        if (!this._rejection && this._deferreds.length) {
+            this._deferreds.forEach((deferred) => {
+                deferred.resolve();
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
     }
     /**
@@ -131,19 +146,36 @@ class PromisePoolGroupPrivate {
      */
     _reject(err) {
         if (this._rejection) {
+            if (this._locallyHandled) {
+                err.handled = true;
+            }
+            else if (!err.handled) {
+                this._secondaryRejections.push(err);
+            }
             return;
         }
-        this._rejection = err;
-        if (this._promises.length) {
-            err.handled = true;
-            this._promises.forEach((promise) => {
-                promise.reject(err.error);
-            });
-            this._promises.length = 0;
+        else {
+            this._rejection = err;
+            if (this._deferreds.length) {
+                this._locallyHandled = true;
+                this._rejection.handled = true;
+                this._deferreds.forEach((deferred) => {
+                    deferred.reject(err.error);
+                });
+                this._deferreds.length = 0;
+            }
         }
+        this._recentRejection = true;
         // The group error state should reset on the next tick
         process.nextTick(() => {
-            delete this._rejection;
+            this._recentRejection = false;
+            if (this._activeTaskCount < 1) {
+                this._rejection = undefined;
+                this._locallyHandled = false;
+                if (this._secondaryRejections.length) {
+                    this._secondaryRejections.length = 0;
+                }
+            }
         });
     }
     /**
@@ -151,15 +183,22 @@ class PromisePoolGroupPrivate {
      */
     waitForIdle() {
         if (this._rejection) {
+            this._locallyHandled = true;
             this._rejection.handled = true;
+            if (this._secondaryRejections.length) {
+                this._secondaryRejections.forEach((rejection) => {
+                    rejection.handled = true;
+                });
+                this._secondaryRejections.length = 0;
+            }
             return Promise.reject(this._rejection.error);
         }
         if (this._activeTaskCount <= 0) {
             return Promise.resolve();
         }
-        const promise = new utils_1.ResolvablePromise();
-        this._promises.push(promise);
-        return promise.promise;
+        const deferred = defer();
+        this._deferreds.push(deferred);
+        return deferred.promise;
     }
     _incrementTasks() {
         this._activeTaskCount++;
@@ -169,7 +208,14 @@ class PromisePoolGroupPrivate {
      */
     _decrementTasks() {
         this._activeTaskCount--;
-        if (this._activeTaskCount < 1) {
+        if (this._activeTaskCount > 0) {
+            return;
+        }
+        if (this._rejection && !this._recentRejection) {
+            this._rejection = undefined;
+            this._locallyHandled = false;
+        }
+        else {
             this._resolve();
         }
     }

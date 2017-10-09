@@ -11,7 +11,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
      */
     generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
-export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
+export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
@@ -120,7 +120,7 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
      * Adds a task with a concurrency limit of 1. The resulting task can be resolved to an array containing the
      * results of the task.
      */
-    addLinearTask<T, R>(options: LinearTaskOptions<T, R>): PromisePoolTask<R[]>;
+    addLinearTask<R>(options: LinearTaskOptions<R>): PromisePoolTask<R[]>;
     /**
      * Adds a task which generates a promise for batches of elements from an array. The resulting task can be
      * resolved to an array containing the results of the task.
