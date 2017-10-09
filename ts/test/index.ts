@@ -319,6 +319,22 @@ describe("Exception Handling", () => {
         }).promise()).to.be.rejectedWith(error);
     });
 
+    it("Multi-rejection", () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        const errors: Error[] = [new Error("First"), new Error("Second")];
+        return expect(pool.addGenericTask({
+            generator: (i) => {
+                return wait(i ? tick : 1).then(() => {
+                    throw errors[i];
+                });
+            },
+            invocationLimit: 2,
+        }).promise()).to.be.rejectedWith(errors[0])
+            // Wait to ensure that the second rejection happens within the scope of this test without issue
+            .then(() => wait(tick * 2));
+    });
+
     describe("Invalid Configuration", () => {
         it("Invalid Parameters", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
@@ -373,22 +389,6 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
             });
             return expectUnhandledRejection(error);
-        });
-
-        it("Multi-rejection", () => {
-            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-
-            const errors: Error[] = [new Error("First"), new Error("Second")];
-            return expect(pool.addGenericTask({
-                generator: (i) => {
-                    return wait(i ? tick : 1).then(() => {
-                        throw errors[i];
-                    });
-                },
-                invocationLimit: 2,
-            }).promise()).to.be.rejectedWith(errors[0])
-                // Wait to ensure that the second rejection happens within the scope of this test without issue
-                .then(() => wait(tick * 2));
         });
     });
 
