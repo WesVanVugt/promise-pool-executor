@@ -1,9 +1,9 @@
+import Debug = require("debug");
 import * as nextTick from "next-tick";
-
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
-import { debug, isNull } from "../private/utils";
+import { isNull } from "../private/utils";
 import {
     FrequencyLimit,
     PromisePoolGroup,
@@ -21,6 +21,9 @@ import {
     TaskOptionsBase,
     TaskState,
 } from "./task";
+
+const debug = Debug("promise-pool-executor:pool");
+debug("booting %o", "promise-pool-executor");
 
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     /**
@@ -79,8 +82,6 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
      */
     generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
-
-const DEBUG_PREFIX: string = "[Pool] ";
 
 export class PromisePoolExecutor implements PromisePoolGroup {
     private _nextTriggerTime?: number;
@@ -377,14 +378,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      */
     private _triggerNow(): void {
         if (this._triggering) {
-            debug(`${DEBUG_PREFIX}Setting triggerAgain flag.`);
+            debug("Setting triggerAgain flag.");
             this._triggerAgain = true;
             return;
         }
 
         this._triggering = true;
         this._triggerAgain = false;
-        debug(`${DEBUG_PREFIX}Trigger promises`);
+        debug("Trigger promises");
         this._cleanFrequencyStarts();
 
         this._clearTriggerTimeout();
@@ -397,7 +398,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
-            debug(`${DEBUG_PREFIX}BusyTime: ${busyTime}`);
+            debug("BusyTime: %o", busyTime);
 
             if (!busyTime) {
                 task._run();
@@ -432,7 +433,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     private _removeTask(task: PromisePoolTaskPrivate<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
-            debug(`${DEBUG_PREFIX}Task removed`);
+            debug("Task removed");
             this._tasks.splice(i, 1);
         }
     }

@@ -29,8 +29,8 @@
   "scripts": {
     "build": "npm run clean && npm run tslint && npm run tsc",
     "clean": "rm -rf index.js index.d.ts private public test",
-    "test": "./node_modules/.bin/mocha test/*.js --reporter spec --colors",
-    "test-debug": "cross-env DEBUG=promise-pool-executor npm test",
+    "test": "mocha test/*.js --reporter spec --colors",
+    "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
     "tsc": "tsc -p ts",
     "tslint": "tslint ts/**/*.ts"
   },

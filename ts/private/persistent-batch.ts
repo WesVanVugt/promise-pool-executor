@@ -4,8 +4,6 @@ import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persi
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask, TaskState } from "../public/task";
 
-const DEBUG_PREFIX: string = "[PersistentBatchTask] ";
-
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
     private _batcher: Batcher<I, O>;
     private _generator: (input: I[]) => Array<O | Error> | PromiseLike<Array<O | Error>>;
@@ -20,7 +18,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
         this._batcher = new Batcher<I, O>({
             batchingFunction: (inputs) => {
                 if (!taskDeferred) {
-                    throw new Error(DEBUG_PREFIX + "Expected taskPromise to be set (internal error).");
+                    throw new Error("Expected taskPromise to be set (internal error).");
                 }
                 const localTaskDeferred = taskDeferred;
                 taskDeferred = undefined;
@@ -42,7 +40,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             },
             delayFunction: () => {
                 if (delayDeferred) {
-                    throw new Error(DEBUG_PREFIX + "Expected delayDeferred not to be set (internal error).");
+                    throw new Error("Expected delayDeferred not to be set (internal error).");
                 }
                 if (this._task.state >= TaskState.Exhausted) {
                     throw new Error("This task has ended and cannot process more items");
@@ -70,7 +68,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             generator: () => {
                 this._task.pause();
                 if (taskDeferred) {
-                    immediate = new Error(DEBUG_PREFIX + "Expected taskDeferred not to be set (internal error).");
+                    immediate = new Error("Expected taskDeferred not to be set (internal error).");
                     return;
                 }
                 taskDeferred = defer();

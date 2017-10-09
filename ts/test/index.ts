@@ -3,11 +3,11 @@ import { expect } from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import * as Debug from "debug";
 import * as Pool from "../index";
-const debug = Debug("promise-pool-executor");
+
+const debug = Debug("promise-pool-executor:test");
 chai.use(chaiAsPromised);
 
 // Verify that the types needed can be imported
-
 const typingImportTest: Pool.PromisePoolExecutor
     // Group
     | Pool.PromisePoolGroup
