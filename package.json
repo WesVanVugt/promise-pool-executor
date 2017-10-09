@@ -29,7 +29,8 @@
   "scripts": {
     "build": "npm run clean && npm run tslint && npm run tsc",
     "clean": "rm -rf index.js index.d.ts private public test",
-    "test": "mocha test/*.js --reporter spec --colors",
+    "postinstall": "npm run build",
+    "test": "mocha test/*.js --reporter spec --colors --check-leaks",
     "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
     "tsc": "tsc -p ts",
     "tslint": "tslint ts/**/*.ts"
@@ -53,7 +54,7 @@
     "chai": "^4.1.2",
     "chai-as-promised": "^7.1.1",
     "cross-env": "^5.0.5",
-    "mocha": "^3.5.3",
+    "mocha": "^4.0.1",
     "tslint": "^5.7.0",
     "typescript": "^2.5.3"
   },
