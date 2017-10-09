@@ -298,37 +298,25 @@ describe("Exception Handling", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const error: Error = new Error();
-        let caught: boolean = false;
-        return pool.addGenericTask({
+        return expect(pool.addGenericTask({
             generator: () => {
                 throw error;
             },
-        }).promise().catch((err) => {
-            expect(err).to.equal(error);
-            caught = true;
-        }).then(() => {
-            expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
     });
 
     it("Promise Rejection", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const error: Error = new Error();
-        let caught: boolean = false;
-        return pool.addGenericTask({
+        return expect(pool.addGenericTask({
             generator: () => {
                 return wait(1).then(() => {
                     throw error;
                 });
             },
             invocationLimit: 1,
-        }).promise().catch((err) => {
-            expect(err).to.equal(error);
-            caught = true;
-        }).then(() => {
-            expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
     });
 
     describe("Invalid Configuration", () => {
@@ -415,27 +403,19 @@ describe("Exception Handling", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             pool.addGenericTask({
                 generator: () => {
                     throw error;
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
 
         it("Promise Rejection", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             pool.addGenericTask({
                 generator: () => {
                     return wait(1).then(() => {
@@ -444,38 +424,26 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
 
         describe("Clearing After Delay", () => {
             it("Promise Rejection", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const error: Error = new Error();
-                let caught: boolean = false;
-                pool.addGenericTask({
-                    generator: () => {
-                        return wait(1).then(() => {
-                            throw error;
-                        });
-                    },
-                    invocationLimit: 1,
-                }).promise().catch((err) => {
-                    expect(err).to.equal(error);
-                    caught = true;
-                });
-                return wait(tick).then(() => {
-                    return pool.waitForIdle();
-                }).catch(() => {
-                    throw new Error("Error did not clear");
-                }).then(() => {
-                    expect(caught).to.equal(true, "Must throw an error");
-                });
+                return Promise.all([
+                    expect(pool.addGenericTask({
+                        generator: () => {
+                            return wait(1).then(() => {
+                                throw error;
+                            });
+                        },
+                        invocationLimit: 1,
+                    }).promise()).to.be.rejectedWith(error),
+                    wait(tick).then(() => pool.waitForIdle()).catch(() => {
+                        throw new Error("Error did not clear");
+                    }),
+                ]);
             });
         });
     });
@@ -485,7 +453,6 @@ describe("Exception Handling", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             const group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -494,20 +461,13 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
 
         it("Promise Rejection", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             const group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -518,13 +478,7 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
     });
 });
