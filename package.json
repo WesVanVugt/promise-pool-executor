@@ -6,16 +6,16 @@
     "promise",
     "promises",
     "concurrency",
+    "frequency",
+    "typescript",
+    "throttle",
+    "batching",
     "es6",
     "async",
     "await",
     "pool",
     "queue",
-    "throttle",
-    "limit",
-    "frequency",
-    "window",
-    "batching"
+    "limit"
   ],
   "bugs": {
     "url": "https://github.com/baudzilla/promise-pool-executor/issues",
