@@ -36,7 +36,7 @@ const tick: number = 100;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 60;
+const tolerance: number = 80;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
