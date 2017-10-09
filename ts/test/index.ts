@@ -1164,9 +1164,7 @@ describe("Task Secializations", () => {
                 expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
 
                 return Promise.all([firstPromise, task.getResult(undefined)].map((promise) => {
-                    promise.catch((err) => err).then((result) => {
-                        expect(result).to.be.an.instanceof(Error);
-                    });
+                    return expect(promise).to.be.rejectedWith(Error);
                 }));
             });
         });
