@@ -1,21 +1,21 @@
 {
   "name": "promise-pool-executor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A module for managing ES6 promise concurrency, frequency, and efficiency.",
   "keywords": [
     "promise",
     "promises",
     "concurrency",
+    "frequency",
+    "typescript",
+    "throttle",
+    "batching",
     "es6",
     "async",
     "await",
     "pool",
     "queue",
-    "throttle",
-    "limit",
-    "frequency",
-    "window",
-    "batching"
+    "limit"
   ],
   "bugs": {
     "url": "https://github.com/baudzilla/promise-pool-executor/issues",
@@ -29,8 +29,9 @@
   "scripts": {
     "build": "npm run clean && npm run tslint && npm run tsc",
     "clean": "rm -rf index.js index.d.ts private public test",
-    "test": "./node_modules/.bin/mocha test/*.js --reporter spec",
-    "test-debug": "cross-env DEBUG=promise-pool-executor npm test",
+    "postinstall": "npm run build",
+    "test": "mocha test/*.js --reporter spec --colors --check-leaks",
+    "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
     "tsc": "tsc -p ts",
     "tslint": "tslint ts/**/*.ts"
   },
@@ -40,19 +41,22 @@
     "node": ">=5.0.0"
   },
   "dependencies": {
-    "debug": "^2.6.8",
-    "next-tick": "^1.0.0"
+    "debug": "^3.1.0",
+    "defer-promise": "^1.0.1",
+    "next-tick": "^1.0.0",
+    "promise-batcher": "^0.1.0"
   },
   "devDependencies": {
-    "@types/chai": "^4.0.1",
-    "@types/debug": "0.0.29",
-    "@types/mocha": "^2.2.41",
-    "@types/node": "^6.0.69",
-    "chai": "^4.1.0",
-    "cross-env": "^5.0.1",
-    "mocha": "^3.4.2",
-    "tslint": "^5.5.0",
-    "typescript": "^2.4.2"
+    "@types/chai-as-promised": "^7.1.0",
+    "@types/debug": "^0.0.30",
+    "@types/mocha": "^2.2.43",
+    "@types/node": "^8.0.31",
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "cross-env": "^5.0.5",
+    "mocha": "^4.0.1",
+    "tslint": "^5.7.0",
+    "typescript": "^2.5.3"
   },
   "license": "MIT",
   "public": true

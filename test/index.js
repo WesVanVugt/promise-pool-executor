@@ -1,17 +1,33 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+const chai = require("chai");
 const chai_1 = require("chai");
+const chaiAsPromised = require("chai-as-promised");
 const Debug = require("debug");
 const Pool = require("../index");
-const debug = Debug("promise-pool-executor");
+const debug = Debug("promise-pool-executor:test");
+chai.use(chaiAsPromised);
+// Verify that the types needed can be imported
+const typingImportTest = undefined;
+if (typingImportTest) {
+    // satisfy TypeScript's need to use the variable
+}
 /**
  * Milliseconds per tick.
  */
-const tick = 50;
+const tick = 100;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance = 30;
+const tolerance = 80;
 /**
  * Returns a promise which waits the specified amount of time before resolving.
  */
@@ -19,7 +35,7 @@ function wait(time) {
     if (time <= 0) {
         return Promise.resolve();
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         setTimeout(() => {
             resolve();
         }, time);
@@ -31,38 +47,31 @@ function wait(time) {
 function expectTimes(resultTimes, targetTicks, message) {
     chai_1.expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
     resultTimes.forEach((val, i) => {
-        chai_1.expect(val).to.be.within(targetTicks[i] * tick, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
+        chai_1.expect(val).to.be.within(targetTicks[i] * tick - 1, targetTicks[i] * tick + tolerance, message + " (" + i + ")");
+    });
+}
+function waitForUnhandledRejection(delay = tick * 2) {
+    process.removeListener("unhandledRejection", unhandledRejectionListener);
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            resetUnhandledRejectionListener();
+            resolve();
+        }, delay);
+        process.prependOnceListener("unhandledRejection", (err) => {
+            clearTimeout(timeout);
+            debug("Caught unhandledRejection");
+            resetUnhandledRejectionListener();
+            reject(err);
+        });
     });
 }
 /**
  * Expects an unhandled promise rejection.
  * @param expectedError The error expected to be received with the rejection (optional).
  */
-function expectUnhandledRejection(expectedError, delay) {
-    process.removeListener("unhandledRejection", unhandledRejectionListener);
-    let reAdded = false;
-    let error;
-    process.prependOnceListener("unhandledRejection", (err) => {
-        if (!reAdded) {
-            debug("Caught unhandled");
-            error = err;
-            // Catch any extra unhandled rejections which could occur before
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-        }
-    });
-    return wait(delay || tick).then(() => {
-        if (!reAdded) {
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-            throw new Error("Expected unhandledRejection to be thrown.");
-        }
-        if (expectedError) {
-            chai_1.expect(error).to.equal(expectedError);
-        }
-        else {
-            chai_1.expect(error).to.be.instanceof(Error);
-        }
+function expectUnhandledRejection(expectedError, delay = tick * 2) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield chai_1.expect(waitForUnhandledRejection(delay)).to.be.rejectedWith(expectedError);
     });
 }
 /**
@@ -77,14 +86,15 @@ function sum(nums) {
     return total;
 }
 function unhandledRejectionListener(err) {
-    debug("unhandledRejectionListener: " + err.stack);
+    debug("unhandledRejectionListener: %O", err);
     // Fail the test
-    throw new Error("UnhandledPromiseRejection: " + err.message);
+    throw err;
 }
-beforeEach(() => {
+function resetUnhandledRejectionListener() {
     process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
-});
+}
+beforeEach(resetUnhandledRejectionListener);
 describe("Concurrency", () => {
     it("No Limit", () => {
         const pool = new Pool.PromisePoolExecutor();
@@ -192,7 +202,7 @@ describe("Frequency", () => {
             });
             const start = Date.now();
             return pool.addGenericTask({
-                generator: (i) => {
+                generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
@@ -202,7 +212,7 @@ describe("Frequency", () => {
                 return wait(tick * 2);
             }).then(() => {
                 return pool.addGenericTask({
-                    generator: (i) => {
+                    generator: () => {
                         return Promise.resolve(Date.now() - start);
                     },
                     invocationLimit: 3,
@@ -245,35 +255,36 @@ describe("Exception Handling", () => {
     it("Generator Function (synchronous)", () => {
         const pool = new Pool.PromisePoolExecutor();
         const error = new Error();
-        let caught = false;
-        return pool.addGenericTask({
+        return chai_1.expect(pool.addGenericTask({
             generator: () => {
                 throw error;
             },
-        }).promise().catch((err) => {
-            chai_1.expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            chai_1.expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
     });
     it("Promise Rejection", () => {
         const pool = new Pool.PromisePoolExecutor();
         const error = new Error();
-        let caught = false;
-        return pool.addGenericTask({
+        return chai_1.expect(pool.addGenericTask({
             generator: () => {
                 return wait(1).then(() => {
                     throw error;
                 });
             },
             invocationLimit: 1,
-        }).promise().catch((err) => {
-            chai_1.expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            chai_1.expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
+    });
+    it("Multi-rejection", () => {
+        const pool = new Pool.PromisePoolExecutor();
+        const errors = [new Error("First"), new Error("Second")];
+        return chai_1.expect(pool.addGenericTask({
+            generator: (i) => {
+                return wait(i ? tick : 1).then(() => {
+                    throw errors[i];
+                });
+            },
+            invocationLimit: 2,
+        }).promise()).to.be.rejectedWith(errors[0])
+            .then(() => wait(tick * 2));
     });
     describe("Invalid Configuration", () => {
         it("Invalid Parameters", () => {
@@ -325,45 +336,82 @@ describe("Exception Handling", () => {
         });
         it("Multi-rejection", () => {
             const pool = new Pool.PromisePoolExecutor();
-            const errors = [new Error("First"), new Error("Second")];
-            let caught;
+            const errors = [new Error("first"), new Error("second")];
+            errors.forEach((err, i) => {
+                // Create a task which fails without the test handling the error
+                pool.addGenericTask({
+                    generator: () => {
+                        return wait(i ? tick : 1).then(() => {
+                            throw err;
+                        });
+                    },
+                    invocationLimit: 1,
+                });
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => expectUnhandledRejection(errors[1]));
+        });
+        // This scenario creates two tasks at the same time
+        // The first task rejects but is handled, while the second remains unhandled.
+        it("Handled Rejection Followed By Unhandled Rejection", () => {
+            const pool = new Pool.PromisePoolExecutor();
+            const errors = [new Error("first"), new Error("second")];
+            // Create a task which will reject later without being handled
             pool.addGenericTask({
-                generator: (i) => {
-                    return wait(i ? tick : 1).then(() => {
-                        throw errors[i];
-                    });
+                generator: () => {
+                    return wait(tick).then(() => Promise.reject(errors[1]));
                 },
-                invocationLimit: 2,
-            }).promise().catch((err) => {
-                caught = err;
+                invocationLimit: 1,
             });
-            return expectUnhandledRejection(errors[1], tick * 2).then(() => {
-                chai_1.expect(caught).to.equal(errors[0]);
+            return chai_1.expect(pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => Promise.reject(errors[0]));
+                },
+                invocationLimit: 1,
+            }).promise()).to.be.rejectedWith(errors[0]).then(() => {
+                return expectUnhandledRejection(errors[1]);
             });
+        });
+        it("Unhandled Followed By Rejection With pool.waitForIdle", () => {
+            const pool = new Pool.PromisePoolExecutor();
+            const errors = [new Error("first"), new Error("second")];
+            pool.addGenericTask({
+                generator: () => Promise.reject(errors[0]),
+                invocationLimit: 1,
+            });
+            // Keep the global group busy so the error will not clear
+            pool.addGenericTask({
+                generator: () => wait(tick),
+                invocationLimit: 1,
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => {
+                pool.addGenericTask({
+                    generator: () => {
+                        throw errors[1];
+                    },
+                    invocationLimit: 1,
+                });
+                return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]);
+                // Wait to ensure the task does not throw an unhandled rejection
+            }).then(() => wait(tick));
         });
     });
     describe("pool.waitForIdle", () => {
         it("Generator Function (synchronous)", () => {
             const pool = new Pool.PromisePoolExecutor();
             const error = new Error();
-            let caught = false;
             pool.addGenericTask({
                 generator: () => {
                     throw error;
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle().catch((err) => {
-                chai_1.expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                chai_1.expect(caught).to.equal(true, "Must throw an error");
-            });
+            return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
         it("Promise Rejection", () => {
             const pool = new Pool.PromisePoolExecutor();
             const error = new Error();
-            let caught = false;
             pool.addGenericTask({
                 generator: () => {
                     return wait(1).then(() => {
@@ -372,36 +420,59 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle().catch((err) => {
-                chai_1.expect(err).to.equal(error);
-                caught = true;
+            return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(error);
+        });
+        // In this scenario, a child task fails after its parent does. In this case, only the first error should
+        // be received, and the second should be handled by the pool.
+        it("Child Task Rejection Shadowed By Parent Rejection", () => {
+            const pool = new Pool.PromisePoolExecutor();
+            const error = new Error("Parent error");
+            let thrown = false;
+            const start = Date.now();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            generator: () => {
+                                return wait(tick).then(() => {
+                                    thrown = true;
+                                    throw new Error("Child task error");
+                                });
+                            },
+                            invocationLimit: 1,
+                        });
+                        debug("About to throw");
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+            });
+            return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(error)
+                .then(() => {
+                expectTimes([Date.now() - start], [1], "Timing Results");
+                chai_1.expect(thrown).to.equal(false, "Child task must throw yet");
+                return wait(tick * 2);
             }).then(() => {
-                chai_1.expect(caught).to.equal(true, "Must throw an error");
+                chai_1.expect(thrown).to.equal(true, "Child task must throw error");
             });
         });
         describe("Clearing After Delay", () => {
             it("Promise Rejection", () => {
                 const pool = new Pool.PromisePoolExecutor();
                 const error = new Error();
-                let caught = false;
-                pool.addGenericTask({
-                    generator: () => {
-                        return wait(1).then(() => {
-                            throw error;
-                        });
-                    },
-                    invocationLimit: 1,
-                }).promise().catch((err) => {
-                    chai_1.expect(err).to.equal(error);
-                    caught = true;
-                });
-                return wait(tick).then(() => {
-                    return pool.waitForIdle();
-                }).catch(() => {
-                    throw new Error("Error did not clear");
-                }).then(() => {
-                    chai_1.expect(caught).to.equal(true, "Must throw an error");
-                });
+                return Promise.all([
+                    chai_1.expect(pool.addGenericTask({
+                        generator: () => {
+                            return wait(1).then(() => {
+                                throw error;
+                            });
+                        },
+                        invocationLimit: 1,
+                    }).promise()).to.be.rejectedWith(error),
+                    wait(tick).then(() => pool.waitForIdle()).catch(() => {
+                        throw new Error("Error did not clear");
+                    }),
+                ]);
             });
         });
     });
@@ -409,7 +480,6 @@ describe("Exception Handling", () => {
         it("Generator Function (synchronous)", () => {
             const pool = new Pool.PromisePoolExecutor();
             const error = new Error();
-            let caught = false;
             const group = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -418,17 +488,11 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle().catch((err) => {
-                chai_1.expect(err).to.equal(error);
-                caught = true;
-            }).then((results) => {
-                chai_1.expect(caught).to.equal(true, "Must throw an error");
-            });
+            return chai_1.expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
         it("Promise Rejection", () => {
             const pool = new Pool.PromisePoolExecutor();
             const error = new Error();
-            let caught = false;
             const group = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -439,12 +503,7 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle().catch((err) => {
-                chai_1.expect(err).to.equal(error);
-                caught = true;
-            }).then((results) => {
-                chai_1.expect(caught).to.equal(true, "Must throw an error");
-            });
+            return chai_1.expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
     });
 });
@@ -493,13 +552,10 @@ describe("Miscellaneous Features", () => {
     it("Pause/Resume Task", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
-        let paused = false;
         const task = pool.addGenericTask({
             generator(index) {
-                if (index === 1 && !paused) {
-                    paused = true;
+                if (index === 0) {
                     this.pause();
-                    return;
                 }
                 return wait(tick)
                     .then(() => {
@@ -518,12 +574,11 @@ describe("Miscellaneous Features", () => {
     });
     it("Get Task Status", () => {
         const pool = new Pool.PromisePoolExecutor();
-        const start = Date.now();
         return pool.addGenericTask({
             concurrencyLimit: 5,
             frequencyLimit: 5,
             frequencyWindow: 1000,
-            generator(index) {
+            generator() {
                 return wait(tick)
                     .then(() => {
                     return {
@@ -711,7 +766,7 @@ describe("Task Secializations", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
         return pool.addLinearTask({
-            generator: (element) => {
+            generator: () => {
                 return wait(tick)
                     .then(() => {
                     return Date.now() - start;
@@ -794,7 +849,7 @@ describe("Task Secializations", () => {
                     chai_1.expect(output).to.equal(String(input), "Outputs");
                     expectTimes([Date.now() - start], [1], "Timing Results");
                 });
-            })).then((outputs) => {
+            })).then(() => {
                 chai_1.expect(runCount).to.equal(1, "runCount");
                 // Verify that the task is not storing the results, which would waste memory.
                 chai_1.expect(task._task._result.length).to.equal(0);
@@ -842,7 +897,7 @@ describe("Task Secializations", () => {
                         chai_1.expect(output).to.equal(String(input), "Outputs");
                         expectTimes([Date.now() - start], [1], "Timing Results");
                     });
-                })).then((outputs) => {
+                })).then(() => {
                     chai_1.expect(runCount).to.equal(2, "runCount");
                 });
             });
@@ -896,6 +951,7 @@ describe("Task Secializations", () => {
                     return wait(3 * tick).then(() => new Array(input.length));
                 },
                 queuingDelay: tick,
+                queuingThresholds: [1, Infinity],
             });
             const start = Date.now();
             return Promise.all([
@@ -1035,7 +1091,7 @@ describe("Task Secializations", () => {
             it("End Task", () => {
                 const pool = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask({
-                    generator: (input) => {
+                    generator: () => {
                         return wait(tick).then(() => []);
                     },
                 });
@@ -1043,9 +1099,7 @@ describe("Task Secializations", () => {
                 task.end();
                 chai_1.expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
                 return Promise.all([firstPromise, task.getResult(undefined)].map((promise) => {
-                    promise.catch((err) => err).then((result) => {
-                        chai_1.expect(result).to.be.an.instanceof(Error);
-                    });
+                    return chai_1.expect(promise).to.be.rejectedWith(Error);
                 }));
             });
         });

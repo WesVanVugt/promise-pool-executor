@@ -1,15 +1,16 @@
+import * as Debug from "debug";
+import defer = require("defer-promise");
 import * as nextTick from "next-tick";
-
-import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { debug, isNull, ResolvablePromise, TaskError } from "./utils";
+import { isNull, TaskError } from "./utils";
+
+const debug = Debug("promise-pool-executor:task");
 
 const GLOBAL_GROUP_INDEX = 0;
-const DEBUG_PREFIX: string = "[Task] ";
 
-export interface GenericTaskOptionsPrivate<R> {
+export interface GenericTaskOptionsPrivate {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupPrivate;
     triggerNowCallback: () => void;
@@ -31,17 +32,17 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * promise may be generated.
      */
     private _generating: boolean;
-    private _promises: Array<ResolvablePromise<any>> = [];
+    private _deferreds: Array<Deferred<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
     private _detachCallback: () => void;
     private _resultConverter?: (result: R[]) => any;
 
     public constructor(
-        privateOptions: GenericTaskOptionsPrivate<R>,
+        privateOptions: GenericTaskOptionsPrivate,
         options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
     ) {
-        debug(`${DEBUG_PREFIX}Creating task`);
+        debug("Creating task");
         this._pool = privateOptions.pool;
         this._triggerCallback = privateOptions.triggerNowCallback;
         this._detachCallback = privateOptions.detach;
@@ -159,9 +160,9 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             return Promise.resolve(this._returnResult);
         }
 
-        const promise: ResolvablePromise<any> = new ResolvablePromise();
-        this._promises.push(promise);
-        return promise.promise;
+        const deferred: Deferred<any> = defer();
+        this._deferreds.push(deferred);
+        return deferred.promise;
     }
 
     /**
@@ -169,7 +170,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public pause(): void {
         if (this._state === TaskState.Active) {
-            debug(`${DEBUG_PREFIX}State: Paused`);
+            debug("State: %o", "Paused");
             this._state = TaskState.Paused;
         }
     }
@@ -179,7 +180,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public resume(): void {
         if (this._state === TaskState.Paused) {
-            debug(`${DEBUG_PREFIX}State: Active`);
+            debug("State: %o", "Active");
             this._state = TaskState.Active;
             this._triggerCallback();
         }
@@ -191,16 +192,15 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public end(): void {
         // Note that this does not trigger more tasks to run. It can resolve a task though.
-        debug(`${DEBUG_PREFIX}Ending`);
         if (this._state < TaskState.Exhausted) {
-            debug(`${DEBUG_PREFIX}State: Exhausted`);
+            debug("State: %o", "Exhausted");
             this._state = TaskState.Exhausted;
             if (this._taskGroup._activeTaskCount > 0) {
                 this._detachCallback();
             }
         }
         if (!this._generating && this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
-            debug(`${DEBUG_PREFIX}State: Terminated`);
+            debug("State: %o", "Terminated");
             this._state = TaskState.Terminated;
 
             if (this._taskGroup._activeTaskCount > 0) {
@@ -253,7 +253,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this.end();
             return;
         }
-        debug(`${DEBUG_PREFIX}Running generator`);
+        debug("Running generator");
 
         let promise: Promise<any>;
         this._generating = true; // prevent task termination
@@ -294,11 +294,11 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this._reject(err);
             // Resolve
         }).then((result) => {
-            debug(`${DEBUG_PREFIX}Promise ended.`);
+            debug("Promise ended.");
             this._groups.forEach((group) => {
                 group._activePromiseCount--;
             });
-            debug(`${DEBUG_PREFIX}Promise Count: ${this._taskGroup._activePromiseCount}`);
+            debug("Promise Count: %o", this._taskGroup._activePromiseCount);
             // Avoid storing the result if it is undefined.
             // Some tasks may have countless iterations and never return anything, so this could eat memory.
             if (result !== undefined && this._result) {
@@ -338,20 +338,18 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         // discard the original array to free memory
         this._result = undefined;
 
-        if (this._promises.length) {
-            this._promises.forEach((promise) => {
-                promise.resolve(this._returnResult);
+        if (this._deferreds.length) {
+            this._deferreds.forEach((deferred) => {
+                deferred.resolve(this._returnResult);
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
     }
 
     private _reject(err: any) {
         // Check if the task has already failed
         if (this._rejection) {
-            debug(`${DEBUG_PREFIX}This task already failed!`);
-            // Unhandled promise rejection
-            Promise.reject(err);
+            debug("This task already failed. Redundant error: %O", err);
             return;
         }
 
@@ -364,12 +362,12 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         // This may detach the task
         this.end();
 
-        if (this._promises.length) {
+        if (this._deferreds.length) {
             taskError.handled = true;
-            this._promises.forEach((promise) => {
-                promise.reject(taskError.error);
+            this._deferreds.forEach((deferred) => {
+                deferred.reject(taskError.error);
             });
-            this._promises.length = 0;
+            this._deferreds.length = 0;
         }
         this._groups.forEach((group) => {
             group._reject(taskError);
@@ -380,7 +378,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             nextTick(() => {
                 if (!taskError.handled) {
                     // Unhandled promise rejection
-                    debug(`${DEBUG_PREFIX}Unhandled promise rejection!`);
+                    debug("Unhandled promise rejection!");
                     Promise.reject(taskError.error);
                 }
             });

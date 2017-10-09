@@ -1,5 +1,11 @@
 # Changelog for promise-pool-executor
 
+## 1.0.3 (2017-10-09)
+* bugfix: Updated error handling when multiple errors occur on the same task or group.
+* misc: Updated debug logging to be divided up by module.
+* misc: Moved persistent-batcher support to promise-batcher package.
+* misc: Moved deferred support to defer-promise package.
+
 ## 1.0.2 (2017-08-14)
 * feature: Made generator function typings compatible with a wider variety of outputs.
 

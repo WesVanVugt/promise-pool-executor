@@ -10,8 +10,26 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
     _frequencyStarts: number[];
     _activeTaskCount: number;
     _activePromiseCount: number;
-    private _promises;
+    private _deferreds;
+    /**
+     * This flag prevents a rejection from being removed before nextTick is called.
+     * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
+     */
+    private _recentRejection;
+    /**
+     * The error that the pool was rejected with.
+     * Clears when activePromiseCount reaches 0 and recentRejection is false.
+     */
     private _rejection?;
+    /**
+     * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
+     * within the group as handled.
+     */
+    private _locallyHandled;
+    /**
+     * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
+     */
+    private _secondaryRejections;
     private _triggerNextCallback;
     constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions);
     readonly activeTaskCount: number;

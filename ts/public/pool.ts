@@ -1,9 +1,9 @@
+import Debug = require("debug");
 import * as nextTick from "next-tick";
-
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
-import { debug, isNull } from "../private/utils";
+import { isNull } from "../private/utils";
 import {
     FrequencyLimit,
     PromisePoolGroup,
@@ -22,6 +22,9 @@ import {
     TaskState,
 } from "./task";
 
+const debug = Debug("promise-pool-executor:pool");
+debug("booting %o", "promise-pool-executor");
+
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     /**
      * Optional data to pass to the generator function as a parameter.
@@ -33,7 +36,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
     generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
 
-export interface LinearTaskOptions<T, R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
+export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
     /**
      * A function used for creating promises to run.
      * If the function returns undefined, the task will be flagged as completed unless it is in a paused state.
@@ -79,8 +82,6 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
      */
     generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
-
-const DEBUG_PREFIX: string = "[Pool] ";
 
 export class PromisePoolExecutor implements PromisePoolGroup {
     private _nextTriggerTime?: number;
@@ -239,7 +240,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * Adds a task with a concurrency limit of 1. The resulting task can be resolved to an array containing the
      * results of the task.
      */
-    public addLinearTask<T, R>(options: LinearTaskOptions<T, R>): PromisePoolTask<R[]> {
+    public addLinearTask<R>(options: LinearTaskOptions<R>): PromisePoolTask<R[]> {
         return this.addGenericTask({
             concurrencyLimit: 1,
             frequencyLimit: options.frequencyLimit,
@@ -377,14 +378,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      */
     private _triggerNow(): void {
         if (this._triggering) {
-            debug(`${DEBUG_PREFIX}Setting triggerAgain flag.`);
+            debug("Setting triggerAgain flag.");
             this._triggerAgain = true;
             return;
         }
 
         this._triggering = true;
         this._triggerAgain = false;
-        debug(`${DEBUG_PREFIX}Trigger promises`);
+        debug("Trigger promises");
         this._cleanFrequencyStarts();
 
         this._clearTriggerTimeout();
@@ -397,7 +398,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
-            debug(`${DEBUG_PREFIX}BusyTime: ${busyTime}`);
+            debug("BusyTime: %o", busyTime);
 
             if (!busyTime) {
                 task._run();
@@ -432,7 +433,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     private _removeTask(task: PromisePoolTaskPrivate<any>) {
         const i: number = this._tasks.indexOf(task);
         if (i !== -1) {
-            debug(`${DEBUG_PREFIX}Task removed`);
+            debug("Task removed");
             this._tasks.splice(i, 1);
         }
     }

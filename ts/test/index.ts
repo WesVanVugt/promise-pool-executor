@@ -1,10 +1,14 @@
+import * as chai from "chai";
 import { expect } from "chai";
+import * as chaiAsPromised from "chai-as-promised";
 import * as Debug from "debug";
 import * as Pool from "../index";
-const debug = Debug("promise-pool-executor");
+
+const debug = Debug("promise-pool-executor:test");
+chai.use(chaiAsPromised);
 
 // Verify that the types needed can be imported
-type TypingImportTest = Pool.PromisePoolExecutor
+const typingImportTest: Pool.PromisePoolExecutor
     // Group
     | Pool.PromisePoolGroup
     | Pool.PromisePoolGroupOptions
@@ -13,22 +17,26 @@ type TypingImportTest = Pool.PromisePoolExecutor
     | Pool.GenericTaskOptions<any>
     | Pool.GenericTaskConvertedOptions<any, any>
     | Pool.SingleTaskOptions<any, any>
-    | Pool.LinearTaskOptions<any, any>
+    | Pool.LinearTaskOptions<any>
     | Pool.BatchTaskOptions<any, any>
     | Pool.EachTaskOptions<any, any>
     | Pool.TaskState
     // Persistent Batch Task
     | Pool.PersistentBatchTask<any, any>
-    | Pool.PersistentBatchTaskOptions<any, any>;
+    | Pool.PersistentBatchTaskOptions<any, any> = undefined as any;
+
+if (typingImportTest) {
+    // satisfy TypeScript's need to use the variable
+}
 
 /**
  * Milliseconds per tick.
  */
-const tick: number = 50;
+const tick: number = 100;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 30;
+const tolerance: number = 80;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -37,7 +45,7 @@ function wait(time: number): Promise<void> {
     if (time <= 0) {
         return Promise.resolve();
     }
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
         setTimeout(() => {
             resolve();
         }, time);
@@ -51,8 +59,26 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     expect(resultTimes).to.have.lengthOf(targetTicks.length, message);
     resultTimes.forEach((val, i) => {
         expect(val).to.be.within(
-            targetTicks[i] * tick, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
+            targetTicks[i] * tick - 1, targetTicks[i] * tick + tolerance, message + " (" + i + ")",
         );
+    });
+}
+
+function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
+    process.removeListener("unhandledRejection", unhandledRejectionListener);
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            resetUnhandledRejectionListener();
+            resolve();
+        }, delay);
+
+        process.prependOnceListener("unhandledRejection", (err: any) => {
+            clearTimeout(timeout);
+            debug("Caught unhandledRejection");
+            resetUnhandledRejectionListener();
+            reject(err);
+        });
     });
 }
 
@@ -60,33 +86,8 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
  * Expects an unhandled promise rejection.
  * @param expectedError The error expected to be received with the rejection (optional).
  */
-function expectUnhandledRejection(expectedError?: any, delay?: number): Promise<void> {
-    process.removeListener("unhandledRejection", unhandledRejectionListener);
-
-    let reAdded: boolean = false;
-    let error: any;
-    process.prependOnceListener("unhandledRejection", (err: any) => {
-        if (!reAdded) {
-            debug("Caught unhandled");
-            error = err;
-            // Catch any extra unhandled rejections which could occur before
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-        }
-    });
-
-    return wait(delay || tick).then(() => {
-        if (!reAdded) {
-            process.addListener("unhandledRejection", unhandledRejectionListener);
-            reAdded = true;
-            throw new Error("Expected unhandledRejection to be thrown.");
-        }
-        if (expectedError) {
-            expect(error).to.equal(expectedError);
-        } else {
-            expect(error).to.be.instanceof(Error);
-        }
-    });
+async function expectUnhandledRejection(expectedError: any, delay: number = tick * 2): Promise<void> {
+    await expect(waitForUnhandledRejection(delay)).to.be.rejectedWith(expectedError);
 }
 
 /**
@@ -102,15 +103,17 @@ function sum(nums: number[]): number {
 }
 
 function unhandledRejectionListener(err: any) {
-    debug("unhandledRejectionListener: " + err.stack);
+    debug("unhandledRejectionListener: %O", err);
     // Fail the test
-    throw new Error("UnhandledPromiseRejection: " + err.message);
+    throw err;
 }
 
-beforeEach(() => {
+function resetUnhandledRejectionListener(): void {
     process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
-});
+}
+
+beforeEach(resetUnhandledRejectionListener);
 
 describe("Concurrency", () => {
     it("No Limit", () => {
@@ -232,7 +235,7 @@ describe("Frequency", () => {
 
             const start: number = Date.now();
             return pool.addGenericTask({
-                generator: (i) => {
+                generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
@@ -242,7 +245,7 @@ describe("Frequency", () => {
                 return wait(tick * 2);
             }).then(() => {
                 return pool.addGenericTask({
-                    generator: (i) => {
+                    generator: () => {
                         return Promise.resolve(Date.now() - start);
                     },
                     invocationLimit: 3,
@@ -290,37 +293,41 @@ describe("Exception Handling", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const error: Error = new Error();
-        let caught: boolean = false;
-        return pool.addGenericTask({
+        return expect(pool.addGenericTask({
             generator: () => {
                 throw error;
             },
-        }).promise().catch((err) => {
-            expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
     });
 
     it("Promise Rejection", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const error: Error = new Error();
-        let caught: boolean = false;
-        return pool.addGenericTask({
+        return expect(pool.addGenericTask({
             generator: () => {
                 return wait(1).then(() => {
                     throw error;
                 });
             },
             invocationLimit: 1,
-        }).promise().catch((err) => {
-            expect(err).to.equal(error);
-            caught = true;
-        }).then((results) => {
-            expect(caught).to.equal(true, "Must throw an error");
-        });
+        }).promise()).to.be.rejectedWith(error);
+    });
+
+    it("Multi-rejection", () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+        const errors: Error[] = [new Error("First"), new Error("Second")];
+        return expect(pool.addGenericTask({
+            generator: (i) => {
+                return wait(i ? tick : 1).then(() => {
+                    throw errors[i];
+                });
+            },
+            invocationLimit: 2,
+        }).promise()).to.be.rejectedWith(errors[0])
+            // Wait to ensure that the second rejection happens within the scope of this test without issue
+            .then(() => wait(tick * 2));
     });
 
     describe("Invalid Configuration", () => {
@@ -382,23 +389,70 @@ describe("Exception Handling", () => {
         it("Multi-rejection", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const errors: Error[] = [new Error("First"), new Error("Second")];
-            let caught: Error;
+            const errors = [new Error("first"), new Error("second")];
+            errors.forEach((err, i) => {
+                // Create a task which fails without the test handling the error
+                pool.addGenericTask({
+                    generator: () => {
+                        return wait(i ? tick : 1).then(() => {
+                            throw err;
+                        });
+                    },
+                    invocationLimit: 1,
+                });
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => expectUnhandledRejection(errors[1]));
+        });
+
+        // This scenario creates two tasks at the same time
+        // The first task rejects but is handled, while the second remains unhandled.
+        it("Handled Rejection Followed By Unhandled Rejection", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const errors = [new Error("first"), new Error("second")];
+            // Create a task which will reject later without being handled
             pool.addGenericTask({
-                generator: (i) => {
-                    return wait(i ? tick : 1).then(() => {
-                        throw errors[i];
-                    });
+                generator: () => {
+                    return wait(tick).then(() => Promise.reject(errors[1]));
                 },
-                invocationLimit: 2,
-            }).promise().catch((err) => {
-                caught = err;
+                invocationLimit: 1,
             });
-            return expectUnhandledRejection(
-                errors[1], tick * 2,
-            ).then(() => {
-                expect(caught).to.equal(errors[0]);
+
+            return expect(pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => Promise.reject(errors[0]));
+                },
+                invocationLimit: 1,
+            }).promise()).to.be.rejectedWith(errors[0]).then(() => {
+                return expectUnhandledRejection(errors[1]);
             });
+        });
+
+        it("Unhandled Followed By Rejection With pool.waitForIdle", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const errors = [new Error("first"), new Error("second")];
+            pool.addGenericTask({
+                generator: () => Promise.reject(errors[0]),
+                invocationLimit: 1,
+            });
+            // Keep the global group busy so the error will not clear
+            pool.addGenericTask({
+                generator: () => wait(tick),
+                invocationLimit: 1,
+            });
+            return expectUnhandledRejection(errors[0])
+                .then(() => {
+                    pool.addGenericTask({
+                        generator: () => {
+                            throw errors[1];
+                        },
+                        invocationLimit: 1,
+                    });
+                    return expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]);
+                    // Wait to ensure the task does not throw an unhandled rejection
+                }).then(() => wait(tick));
         });
     });
 
@@ -407,27 +461,19 @@ describe("Exception Handling", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             pool.addGenericTask({
                 generator: () => {
                     throw error;
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
 
         it("Promise Rejection", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             pool.addGenericTask({
                 generator: () => {
                     return wait(1).then(() => {
@@ -436,38 +482,62 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then(() => {
-                expect(caught).to.equal(true, "Must throw an error");
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
+        });
+
+        // In this scenario, a child task fails after its parent does. In this case, only the first error should
+        // be received, and the second should be handled by the pool.
+        it("Child Task Rejection Shadowed By Parent Rejection", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const error = new Error("Parent error");
+            let thrown = false;
+            const start: number = Date.now();
+            pool.addGenericTask({
+                generator: () => {
+                    return wait(tick).then(() => {
+                        pool.addGenericTask({
+                            generator: () => {
+                                return wait(tick).then(() => {
+                                    thrown = true;
+                                    throw new Error("Child task error");
+                                });
+                            },
+                            invocationLimit: 1,
+                        });
+                        debug("About to throw");
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
             });
+            return expect(pool.waitForIdle()).to.be.rejectedWith(error)
+                .then(() => {
+                    expectTimes([Date.now() - start], [1], "Timing Results");
+                    expect(thrown).to.equal(false, "Child task must throw yet");
+                    return wait(tick * 2);
+                }).then(() => {
+                    expect(thrown).to.equal(true, "Child task must throw error");
+                });
         });
 
         describe("Clearing After Delay", () => {
             it("Promise Rejection", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const error: Error = new Error();
-                let caught: boolean = false;
-                pool.addGenericTask({
-                    generator: () => {
-                        return wait(1).then(() => {
-                            throw error;
-                        });
-                    },
-                    invocationLimit: 1,
-                }).promise().catch((err) => {
-                    expect(err).to.equal(error);
-                    caught = true;
-                });
-                return wait(tick).then(() => {
-                    return pool.waitForIdle();
-                }).catch(() => {
-                    throw new Error("Error did not clear");
-                }).then(() => {
-                    expect(caught).to.equal(true, "Must throw an error");
-                });
+                return Promise.all([
+                    expect(pool.addGenericTask({
+                        generator: () => {
+                            return wait(1).then(() => {
+                                throw error;
+                            });
+                        },
+                        invocationLimit: 1,
+                    }).promise()).to.be.rejectedWith(error),
+                    wait(tick).then(() => pool.waitForIdle()).catch(() => {
+                        throw new Error("Error did not clear");
+                    }),
+                ]);
             });
         });
     });
@@ -477,7 +547,6 @@ describe("Exception Handling", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             const group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -486,20 +555,13 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then((results) => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
 
         it("Promise Rejection", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
-            let caught: boolean = false;
             const group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
                 generator: () => {
@@ -510,13 +572,7 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle(
-            ).catch((err) => {
-                expect(err).to.equal(error);
-                caught = true;
-            }).then((results) => {
-                expect(caught).to.equal(true, "Must throw an error");
-            });
+            return expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
     });
 });
@@ -573,13 +629,10 @@ describe("Miscellaneous Features", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const start: number = Date.now();
-        let paused: boolean = false;
         const task = pool.addGenericTask({
             generator(index) {
-                if (index === 1 && !paused) {
-                    paused = true;
+                if (index === 0) {
                     this.pause();
-                    return;
                 }
                 return wait(tick)
                     .then(() => {
@@ -600,12 +653,11 @@ describe("Miscellaneous Features", () => {
     it("Get Task Status", () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
         return pool.addGenericTask({
             concurrencyLimit: 5,
             frequencyLimit: 5,
             frequencyWindow: 1000,
-            generator(index) {
+            generator() {
                 return wait(tick)
                     .then(() => {
                         return {
@@ -813,7 +865,7 @@ describe("Task Secializations", () => {
 
         const start: number = Date.now();
         return pool.addLinearTask({
-            generator: (element) => {
+            generator: () => {
                 return wait(tick)
                     .then(() => {
                         return Date.now() - start;
@@ -904,7 +956,7 @@ describe("Task Secializations", () => {
                     expect(output).to.equal(String(input), "Outputs");
                     expectTimes([Date.now() - start], [1], "Timing Results");
                 });
-            })).then((outputs) => {
+            })).then(() => {
                 expect(runCount).to.equal(1, "runCount");
                 // Verify that the task is not storing the results, which would waste memory.
                 expect((task as any)._task._result.length).to.equal(0);
@@ -952,7 +1004,7 @@ describe("Task Secializations", () => {
                         expect(output).to.equal(String(input), "Outputs");
                         expectTimes([Date.now() - start], [1], "Timing Results");
                     });
-                })).then((outputs) => {
+                })).then(() => {
                     expect(runCount).to.equal(2, "runCount");
                 });
             });
@@ -1007,6 +1059,7 @@ describe("Task Secializations", () => {
                     return wait(3 * tick).then(() => new Array(input.length));
                 },
                 queuingDelay: tick,
+                queuingThresholds: [1, Infinity],
             });
             const start: number = Date.now();
             return Promise.all([
@@ -1150,7 +1203,7 @@ describe("Task Secializations", () => {
             it("End Task", () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: (input) => {
+                    generator: () => {
                         return wait(tick).then(() => []);
                     },
                 });
@@ -1159,9 +1212,7 @@ describe("Task Secializations", () => {
                 expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
 
                 return Promise.all([firstPromise, task.getResult(undefined)].map((promise) => {
-                    promise.catch((err) => err).then((result) => {
-                        expect(result).to.be.an.instanceof(Error);
-                    });
+                    return expect(promise).to.be.rejectedWith(Error);
                 }));
             });
         });

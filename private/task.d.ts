@@ -1,7 +1,7 @@
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-export interface GenericTaskOptionsPrivate<R> {
+export interface GenericTaskOptionsPrivate {
     pool: PromisePoolExecutor;
     globalGroup: PromisePoolGroupPrivate;
     triggerNowCallback: () => void;
@@ -22,12 +22,12 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * promise may be generated.
      */
     private _generating;
-    private _promises;
+    private _deferreds;
     private _pool;
     private _triggerCallback;
     private _detachCallback;
     private _resultConverter?;
-    constructor(privateOptions: GenericTaskOptionsPrivate<R>, options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>);
+    constructor(privateOptions: GenericTaskOptionsPrivate, options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>);
     readonly activePromiseCount: number;
     readonly invocations: number;
     invocationLimit: number;

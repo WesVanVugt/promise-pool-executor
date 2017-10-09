@@ -84,8 +84,8 @@ let runCount = 0;
 const persistentBatchTask = pool.addPersistentBatchTask({
     generator: (data) => {
         runCount++;
-        return Promise.resolve(data.map(() => {
-            return data + 1;
+        return Promise.resolve(data.map((n) => {
+            return n + 1;
         }));
     }
 });
@@ -106,7 +106,7 @@ Promise.all(promises).then((results) => {
 
 A pool to add tasks and groups to.
 
-#### Constructor 
+#### Constructor
 
 **new PromisePoolExecutor(options)** - Creates a new promise pool.
   * options.**concurrencyLimit** - The maximum number of promises allowed to be active simultaneously in the pool *(optional)*.

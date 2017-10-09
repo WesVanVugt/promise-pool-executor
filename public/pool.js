@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const Debug = require("debug");
 const nextTick = require("next-tick");
 const group_1 = require("../private/group");
 const persistent_batch_1 = require("../private/persistent-batch");
 const task_1 = require("../private/task");
 const utils_1 = require("../private/utils");
 const task_2 = require("./task");
-const DEBUG_PREFIX = "[Pool] ";
+const debug = Debug("promise-pool-executor:pool");
+debug("booting %o", "promise-pool-executor");
 class PromisePoolExecutor {
     /**
      * Construct a new PromisePoolExecutor object.
@@ -244,13 +246,13 @@ class PromisePoolExecutor {
      */
     _triggerNow() {
         if (this._triggering) {
-            utils_1.debug(`${DEBUG_PREFIX}Setting triggerAgain flag.`);
+            debug("Setting triggerAgain flag.");
             this._triggerAgain = true;
             return;
         }
         this._triggering = true;
         this._triggerAgain = false;
-        utils_1.debug(`${DEBUG_PREFIX}Trigger promises`);
+        debug("Trigger promises");
         this._cleanFrequencyStarts();
         this._clearTriggerTimeout();
         let taskIndex = 0;
@@ -260,7 +262,7 @@ class PromisePoolExecutor {
         while (taskIndex < this._tasks.length) {
             task = this._tasks[taskIndex];
             busyTime = task._busyTime();
-            utils_1.debug(`${DEBUG_PREFIX}BusyTime: ${busyTime}`);
+            debug("BusyTime: %o", busyTime);
             if (!busyTime) {
                 task._run();
             }
@@ -292,7 +294,7 @@ class PromisePoolExecutor {
     _removeTask(task) {
         const i = this._tasks.indexOf(task);
         if (i !== -1) {
-            utils_1.debug(`${DEBUG_PREFIX}Task removed`);
+            debug("Task removed");
             this._tasks.splice(i, 1);
         }
     }
