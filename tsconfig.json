@@ -9,12 +9,12 @@
         "noUnusedParameters": true,
         "declaration": true,
         "sourceMap": false,
-        "outDir": "../"
+        "outDir": "."
     },
     "include": [
-        "index.ts",
-        "test/index.ts",
-        "typings/**/*"
+        "ts/index.ts",
+        "ts/test/index.ts",
+        "ts/typings/**/*"
     ],
     "exclude": []
 }

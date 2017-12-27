@@ -31,7 +31,7 @@
         "clean": "rm -rf index.js index.d.ts private public test",
         "test": "mocha test/*.js --reporter spec --colors --check-leaks",
         "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
-        "tsc": "tsc -p ts",
+        "tsc": "tsc",
         "tslint": "tslint ts/**/*.ts"
     },
     "main": "index.js",
