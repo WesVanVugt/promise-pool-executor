@@ -1,12 +1,13 @@
 import defer = require("defer-promise");
 import { Batcher } from "promise-batcher";
+import { BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask, TaskState } from "../public/task";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
     private _batcher: Batcher<I, O>;
-    private _generator: (input: I[]) => Array<O | Error> | PromiseLike<Array<O | Error>>;
+    private _generator: (input: I[]) => Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
     private _task: PromisePoolTask<any>;
 
     constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
@@ -22,7 +23,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 }
                 const localTaskDeferred = taskDeferred;
                 taskDeferred = undefined;
-                let promise: Promise<Array<O | Error>>;
+                let promise: Promise<Array<BatchingResult<O>>>;
                 try {
                     const result = this._generator(inputs);
                     promise = result instanceof Promise ? result : Promise.resolve(result);
@@ -126,6 +127,10 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
             return Promise.reject(new Error("This task has ended and cannot process more items"));
         }
         return this._batcher.getResult(input);
+    }
+
+    public send(): void {
+        this._batcher.send();
     }
 
     public end(): void {

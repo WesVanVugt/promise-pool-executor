@@ -147,23 +147,20 @@ class PromisePoolGroupPrivate {
     _reject(err) {
         if (this._rejection) {
             if (this._locallyHandled) {
-                err.handled = true;
+                return true;
             }
-            else if (!err.handled) {
-                this._secondaryRejections.push(err);
-            }
-            return;
+            this._secondaryRejections.push(err);
+            return false;
         }
-        else {
-            this._rejection = err;
-            if (this._deferreds.length) {
-                this._locallyHandled = true;
-                this._rejection.handled = true;
-                this._deferreds.forEach((deferred) => {
-                    deferred.reject(err.error);
-                });
-                this._deferreds.length = 0;
-            }
+        let handled = false;
+        this._rejection = err;
+        if (this._deferreds.length) {
+            handled = true;
+            this._locallyHandled = true;
+            this._deferreds.forEach((deferred) => {
+                deferred.reject(err.error);
+            });
+            this._deferreds.length = 0;
         }
         this._recentRejection = true;
         // The group error state should reset on the next tick
@@ -177,6 +174,7 @@ class PromisePoolGroupPrivate {
                 }
             }
         });
+        return handled;
     }
     /**
      * Returns a promise which resolves when the group becomes idle.
@@ -184,12 +182,21 @@ class PromisePoolGroupPrivate {
     waitForIdle() {
         if (this._rejection) {
             this._locallyHandled = true;
-            this._rejection.handled = true;
             if (this._secondaryRejections.length) {
                 this._secondaryRejections.forEach((rejection) => {
-                    rejection.handled = true;
+                    if (rejection.promise) {
+                        rejection.promise.catch(() => {
+                            // handle the rejection
+                        });
+                        rejection.promise = undefined;
+                    }
                 });
                 this._secondaryRejections.length = 0;
+            }
+            if (this._rejection.promise) {
+                const promise = this._rejection.promise;
+                this._rejection.promise = undefined;
+                return promise;
             }
             return Promise.reject(this._rejection.error);
         }

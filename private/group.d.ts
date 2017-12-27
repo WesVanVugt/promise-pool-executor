@@ -56,7 +56,7 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
     /**
      * Rejects all pending waitForIdle promises using the provided error.
      */
-    _reject(err: TaskError): void;
+    _reject(err: TaskError): boolean;
     /**
      * Returns a promise which resolves when the group becomes idle.
      */

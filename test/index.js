@@ -65,6 +65,21 @@ function waitForUnhandledRejection(delay = tick * 2) {
         });
     });
 }
+function expectHandledRejection(delay = tick * 2) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            resetHandledRejectionListener();
+            reject(new Error("Rejection Not Handled"));
+        }, delay);
+        process.removeAllListeners("rejectionHandled");
+        process.prependOnceListener("rejectionHandled", () => {
+            clearTimeout(timeout);
+            debug("rejectionHandled");
+            resetHandledRejectionListener();
+            resolve();
+        });
+    });
+}
 /**
  * Expects an unhandled promise rejection.
  * @param expectedError The error expected to be received with the rejection (optional).
@@ -90,11 +105,23 @@ function unhandledRejectionListener(err) {
     // Fail the test
     throw err;
 }
+function rejectionHandledListener() {
+    debug("Unexpected rejectionHandled event");
+    // Fail the test
+    throw new Error("Unexpected rejectionHandled event");
+}
 function resetUnhandledRejectionListener() {
     process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
 }
-beforeEach(resetUnhandledRejectionListener);
+function resetHandledRejectionListener() {
+    process.removeAllListeners("rejectionHandled");
+    process.addListener("rejectionHandled", rejectionHandledListener);
+}
+beforeEach(() => {
+    resetUnhandledRejectionListener();
+    resetHandledRejectionListener();
+});
 describe("Concurrency", () => {
     it("No Limit", () => {
         const pool = new Pool.PromisePoolExecutor();
@@ -334,6 +361,24 @@ describe("Exception Handling", () => {
             });
             return expectUnhandledRejection(error);
         });
+        it("Late Rejection Handling", () => __awaiter(this, void 0, void 0, function* () {
+            const pool = new Pool.PromisePoolExecutor();
+            const error = new Error();
+            const task = pool.addGenericTask({
+                generator: () => __awaiter(this, void 0, void 0, function* () {
+                    yield wait(1);
+                    throw error;
+                }),
+                invocationLimit: 1,
+            });
+            yield expectUnhandledRejection(error);
+            yield Promise.all([
+                expectHandledRejection(),
+                task.promise().catch(() => {
+                    // discard the error
+                }),
+            ]);
+        }));
         it("Multi-rejection", () => {
             const pool = new Pool.PromisePoolExecutor();
             const errors = [new Error("first"), new Error("second")];
@@ -392,7 +437,10 @@ describe("Exception Handling", () => {
                     },
                     invocationLimit: 1,
                 });
-                return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]);
+                return Promise.all([
+                    expectHandledRejection(),
+                    chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]),
+                ]);
                 // Wait to ensure the task does not throw an unhandled rejection
             }).then(() => wait(tick));
         });
@@ -1004,6 +1052,159 @@ describe("Task Secializations", () => {
                     expectTimes(results, [2, 4], "Timing Results");
                 });
             });
+        });
+        describe("Retries", () => {
+            it("Full", () => __awaiter(this, void 0, void 0, function* () {
+                const pool = new Pool.PromisePoolExecutor();
+                let batchNumber = 0;
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        runCount++;
+                        yield wait(tick);
+                        batchNumber++;
+                        if (batchNumber < 2) {
+                            return inputs.map(() => Pool.BATCHER_RETRY_TOKEN);
+                        }
+                        return inputs.map((input) => input + 1);
+                    }),
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2].map((input) => __awaiter(this, void 0, void 0, function* () {
+                    const output = yield batcher.getResult(input);
+                    chai_1.expect(output).to.equal(input + 1, "getResult output");
+                    return Date.now() - start;
+                })));
+                expectTimes(results, [2, 2], "Timing Results");
+                chai_1.expect(runCount).to.equal(2, "runCount");
+            }));
+            it("Partial", () => __awaiter(this, void 0, void 0, function* () {
+                const pool = new Pool.PromisePoolExecutor();
+                let batchNumber = 0;
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        runCount++;
+                        yield wait(tick);
+                        batchNumber++;
+                        return inputs.map((input, index) => {
+                            return batchNumber < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                        });
+                    }),
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2].map((input) => __awaiter(this, void 0, void 0, function* () {
+                    const output = yield batcher.getResult(input);
+                    chai_1.expect(output).to.equal(input + 1, "getResult output");
+                    return Date.now() - start;
+                })));
+                expectTimes(results, [2, 1], "Timing Results");
+                chai_1.expect(runCount).to.equal(2, "runCount");
+            }));
+            it("Ordering", () => __awaiter(this, void 0, void 0, function* () {
+                const pool = new Pool.PromisePoolExecutor();
+                const batchInputs = [];
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        batchInputs.push(inputs);
+                        yield wait(tick);
+                        return inputs.map((input, index) => {
+                            return batchInputs.length < 2 && index < 2 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                        });
+                    }),
+                    maxBatchSize: 3,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2, 3, 4].map((input) => __awaiter(this, void 0, void 0, function* () {
+                    const output = yield batcher.getResult(input);
+                    chai_1.expect(output).to.equal(input + 1, "getResult output");
+                    return Date.now() - start;
+                })));
+                expectTimes(results, [2, 2, 1, 2], "Timing Results");
+                chai_1.expect(batchInputs).to.deep.equal([[1, 2, 3], [1, 2, 4]], "batchInputs");
+            }));
+        });
+        describe("Send Method", () => {
+            it("Single Use", () => __awaiter(this, void 0, void 0, function* () {
+                const pool = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        runCount++;
+                        yield wait(tick);
+                        return inputs;
+                    }),
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2, 3].map((_, index) => __awaiter(this, void 0, void 0, function* () {
+                    const promise = batcher.getResult(undefined);
+                    if (index === 1) {
+                        chai_1.expect(runCount).to.equal(0, "runCount before");
+                        batcher.send();
+                        chai_1.expect(runCount).to.equal(1, "runCount after");
+                    }
+                    yield promise;
+                    return Date.now() - start;
+                })));
+                expectTimes(results, [1, 1, 3], "Timing Results");
+            }));
+            it("Effect Delayed By queuingThreshold", () => __awaiter(this, void 0, void 0, function* () {
+                const pool = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        runCount++;
+                        yield wait(tick);
+                        return inputs;
+                    }),
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2, 3].map((_, index) => __awaiter(this, void 0, void 0, function* () {
+                    const promise = batcher.getResult(undefined);
+                    if (index === 1) {
+                        chai_1.expect(runCount).to.equal(0, "runCount before");
+                        batcher.send();
+                        chai_1.expect(runCount).to.equal(1, "runCount after");
+                    }
+                    else if (index === 2) {
+                        batcher.send();
+                        chai_1.expect(runCount).to.equal(1, "runCount after second");
+                    }
+                    yield promise;
+                    return Date.now() - start;
+                })));
+                expectTimes(results, [1, 1, 2], "Timing Results");
+            }));
+            it("Interaction With Retries", () => __awaiter(this, void 0, void 0, function* () {
+                // This tests that the effect of the send method lasts even after a retry
+                const pool = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask({
+                    generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
+                        runCount++;
+                        yield wait(tick);
+                        return runCount === 1 ? inputs.map(() => Pool.BATCHER_RETRY_TOKEN) : inputs;
+                    }),
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = yield Promise.all([1, 2, 3].map((_, index) => __awaiter(this, void 0, void 0, function* () {
+                    const promise = batcher.getResult(undefined);
+                    if (index >= 1) {
+                        batcher.send();
+                    }
+                    yield promise;
+                    return Date.now() - start;
+                })));
+                chai_1.expect(runCount).to.equal(2, "runCount");
+                expectTimes(results, [2, 2, 2], "Timing Results");
+            }));
         });
         describe("Error Handling", () => {
             it("Single Rejection", () => {

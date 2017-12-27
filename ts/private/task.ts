@@ -1,6 +1,5 @@
 import * as Debug from "debug";
 import defer = require("defer-promise");
-import * as nextTick from "next-tick";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
@@ -154,7 +153,12 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      */
     public promise(): Promise<any> {
         if (this._rejection) {
-            this._rejection.handled = true;
+            if (this._rejection.promise) {
+                // First handling of this rejection. Return the unhandled promise.
+                const promise = this._rejection.promise;
+                this._rejection.promise = undefined;
+                return promise;
+            }
             return Promise.reject(this._rejection.error);
         } else if (this._state === TaskState.Terminated) {
             return Promise.resolve(this._returnResult);
@@ -355,33 +359,29 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
         const taskError: TaskError = {
             error: err,
-            handled: false,
         };
         this._rejection = taskError;
+        let handled = false;
 
         // This may detach the task
         this.end();
 
         if (this._deferreds.length) {
-            taskError.handled = true;
+            handled = true;
             this._deferreds.forEach((deferred) => {
                 deferred.reject(taskError.error);
             });
             this._deferreds.length = 0;
         }
         this._groups.forEach((group) => {
-            group._reject(taskError);
+            if (group._reject(taskError)) {
+                handled = true;
+            }
         });
 
-        if (!taskError.handled) {
-            // Wait a tick to see if the error gets handled
-            nextTick(() => {
-                if (!taskError.handled) {
-                    // Unhandled promise rejection
-                    debug("Unhandled promise rejection!");
-                    Promise.reject(taskError.error);
-                }
-            });
+        if (!handled) {
+            // Create an unhandled rejection which may be handled later
+            taskError.promise = Promise.reject(err);
         }
     }
 }

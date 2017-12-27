@@ -89,6 +89,8 @@ const persistentBatchTask = pool.addPersistentBatchTask({
         }));
     }
 });
+// Send the batch of requests. This step is optional.
+batcher.send();
 const inputs = [1, 3, 5, 7];
 // Start a series of individual requests
 const promises = inputs.map((input) => persistentBatchTask.getResult(input));
@@ -164,9 +166,9 @@ A pool to add tasks and groups to.
   * options.**concurrencyLimit** - The maximum number of promises allowed to be active simultaneously for the task *(optional)*.
   * options.**frequencyLimit** - The maximum number promises allowed to be generated within the time window specified by options.frequencyWindow *(optional)*.
   * options.**frequencyWindow** - The time window in milliseconds to use for options.frequencyLimit *(optional)*.
-  * options.**generator** - A function which is passed an array of request values, returning a promise which resolves to an array of response values. The request and response arrays must be of equal length. To reject an individual request, return an Error object (or class which extends Error) at the corresponding element in the response array.
+  * options.**generator** - A function which is passed an array of request values, returning a promise which resolves to an array of response values. The request and response arrays must be of equal length. To reject an individual request, return an Error object (or class which extends Error) at the corresponding element in the response array. To retry an individual request, return the BATCHER\_RETRY\_TOKEN in the response array.
   * options.**maxBatchSize** - The maximum number of requests that can be combined in a single batch *(optional)*.
-  * options.**queuingDelay** - The number of milliseconds to wait before running a batch of requests. This is used to allow time for the requests to queue up. Defaults to 1ms. This delay does not apply if the limit set by options.maxBatchSize is reached *(optional)*.
+  * options.**queuingDelay** - The number of milliseconds to wait before running a batch of requests. This is used to allow time for the requests to queue up. Defaults to 1ms. This delay does not apply if the limit set by options.maxBatchSize is reached, or if the task's send method is called. Note that since the setTimeout to perform this delay, batches delayed by this will only be run when Node.js is idle, even if that means a longer delay *(optional)*.
   * options.**queuingThresholds** - An array containing the number of requests that must be queued in order to trigger a batch request at each level of concurrency. For example [1, 5], would require at least 1 queued request when no batch requests are active, and 5 queued requests when 1 (or more) batch requests are active. Defaults to [1]. Note that the delay imposed by options.queuingDelay still applies when a batch request is triggered *(optional)*.
 * pool.**addSingleTask(options)** - Adds a task with a single promise. Returns a [PromisePoolTask object](#object-promisepooltask), which can be resolved to the result of the task by using task.promise().
   * options.**generator** - A function which returns a promise. Is passed the value of options.data as the first argument.
@@ -227,15 +229,8 @@ A task which can be used to combine multiple individual requests into batch requ
 
 * persistentBatchTask.**end()** - Ends the task, preventing the generator function from being called again.
 * persistentBatchTask.**getResult(input)** - Returns a promise which resolves or rejects with the individual result returned from the task's generator function.
+* persistentBatchTask.**send**() - Bypasses any queuingDelay set, while respecting all other limits imposed. If no other limits are set, this will result in the generator function being run immediately. Note that batches will still be run even if this function is not called, once the queuingDelay or maxBatchSize is reached.
 
 ## License
 
-The MIT License (MIT)
-
-Copyright (c) 2017 Wes van Vugt
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+[MIT](https://github.com/baudzilla/promise-pool-executor/blob/master/LICENSE)

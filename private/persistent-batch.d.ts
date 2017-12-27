@@ -13,5 +13,6 @@ export declare class PersistentBatchTaskPrivate<I, O> implements PersistentBatch
     readonly freeSlots: number;
     readonly state: TaskState;
     getResult(input: I): Promise<O>;
+    send(): void;
     end(): void;
 }

@@ -112,6 +112,9 @@ class PersistentBatchTaskPrivate {
         }
         return this._batcher.getResult(input);
     }
+    send() {
+        this._batcher.send();
+    }
     end() {
         this._task.end();
     }
