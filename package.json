@@ -27,6 +27,7 @@
         "url": "git+https://github.com/baudzilla/promise-pool-executor"
     },
     "scripts": {
+        "prepublish": "npm run build",
         "build": "npm run clean && npm run tslint && npm run tsc",
         "clean": "rm -rf index.js index.d.ts private public test",
         "test": "mocha test/*.js --reporter spec --colors --check-leaks",
