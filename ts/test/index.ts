@@ -73,11 +73,27 @@ function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
             resolve();
         }, delay);
 
-        process.prependOnceListener("unhandledRejection", (err: any) => {
+        process.prependOnceListener("unhandledRejection", (err) => {
             clearTimeout(timeout);
             debug("Caught unhandledRejection");
             resetUnhandledRejectionListener();
             reject(err);
+        });
+    });
+}
+
+function waitForHandledRejection(delay: number = tick * 2): Promise<void> {
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            process.removeAllListeners("rejectionHandled");
+            reject(new Error("Rejection Not Handled"));
+        }, delay);
+
+        process.prependOnceListener("rejectionHandled", () => {
+            clearTimeout(timeout);
+            debug("rejectionHandled");
+            resolve();
         });
     });
 }
@@ -384,6 +400,28 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
             });
             return expectUnhandledRejection(error);
+        });
+
+        it("Late Rejection Handling", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            const error: Error = new Error();
+            const task = pool.addGenericTask({
+                generator: () => {
+                    return wait(1).then(() => {
+                        throw error;
+                    });
+                },
+                invocationLimit: 1,
+            });
+            return expectUnhandledRejection(error).then(() => {
+                return Promise.all([
+                    waitForHandledRejection(),
+                    task.promise().catch(() => {
+                        // discard the error
+                    }),
+                ]);
+            });
         });
 
         it("Multi-rejection", () => {
