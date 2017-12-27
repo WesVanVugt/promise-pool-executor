@@ -420,26 +420,24 @@ describe("Exception Handling", () => {
             return expectUnhandledRejection(error);
         });
 
-        it("Late Rejection Handling", () => {
+        it("Late Rejection Handling", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
             const task = pool.addGenericTask({
-                generator: () => {
-                    return wait(1).then(() => {
-                        throw error;
-                    });
+                generator: async () => {
+                    await wait(1);
+                    throw error;
                 },
                 invocationLimit: 1,
             });
-            return expectUnhandledRejection(error).then(() => {
-                return Promise.all([
-                    expectHandledRejection(),
-                    task.promise().catch(() => {
-                        // discard the error
-                    }),
-                ]);
-            });
+            await expectUnhandledRejection(error);
+            await Promise.all([
+                expectHandledRejection(),
+                task.promise().catch(() => {
+                    // discard the error
+                }),
+            ]);
         });
 
         it("Multi-rejection", () => {
