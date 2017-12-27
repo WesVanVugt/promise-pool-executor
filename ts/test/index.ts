@@ -23,7 +23,9 @@ const typingImportTest: Pool.PromisePoolExecutor
     | Pool.TaskState
     // Persistent Batch Task
     | Pool.PersistentBatchTask<any, any>
-    | Pool.PersistentBatchTaskOptions<any, any> = undefined as any;
+    | Pool.PersistentBatchTaskOptions<any, any>
+    | Pool.BatcherToken
+    | Pool.BatchingResult<any> = undefined as any;
 
 if (typingImportTest) {
     // satisfy TypeScript's need to use the variable
@@ -1149,6 +1151,170 @@ describe("Task Secializations", () => {
                 })).then((results) => {
                     expectTimes(results, [2, 4], "Timing Results");
                 });
+            });
+        });
+        describe("Retries", () => {
+            it("Full", async () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let batchNumber = 0;
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask<number, number>({
+                    generator: async (inputs) => {
+                        runCount++;
+                        await wait(tick);
+                        batchNumber++;
+                        if (batchNumber < 2) {
+                            return inputs.map(() => Pool.BATCHER_RETRY_TOKEN);
+                        }
+                        return inputs.map((input) => input + 1);
+                    },
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2].map(async (input) => {
+                        const output = await batcher.getResult(input);
+                        expect(output).to.equal(input + 1, "getResult output");
+                        return Date.now() - start;
+                    }),
+                );
+                expectTimes(results, [2, 2], "Timing Results");
+                expect(runCount).to.equal(2, "runCount");
+            });
+            it("Partial", async () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let batchNumber = 0;
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask<number, number>({
+                    generator: async (inputs) => {
+                        runCount++;
+                        await wait(tick);
+                        batchNumber++;
+                        return inputs.map((input, index) => {
+                            return batchNumber < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                        });
+                    },
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2].map(async (input) => {
+                        const output = await batcher.getResult(input);
+                        expect(output).to.equal(input + 1, "getResult output");
+                        return Date.now() - start;
+                    }),
+                );
+                expectTimes(results, [2, 1], "Timing Results");
+                expect(runCount).to.equal(2, "runCount");
+            });
+            it("Ordering", async () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                const batchInputs: number[][] = [];
+                const batcher = pool.addPersistentBatchTask<number, number>({
+                    generator: async (inputs) => {
+                        batchInputs.push(inputs);
+                        await wait(tick);
+                        return inputs.map((input, index) => {
+                            return batchInputs.length < 2 && index < 2 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                        });
+                    },
+                    maxBatchSize: 3,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2, 3, 4].map(async (input) => {
+                        const output = await batcher.getResult(input);
+                        expect(output).to.equal(input + 1, "getResult output");
+                        return Date.now() - start;
+                    }),
+                );
+                expectTimes(results, [2, 2, 1, 2], "Timing Results");
+                expect(batchInputs).to.deep.equal([[1, 2, 3], [1, 2, 4]], "batchInputs");
+            });
+        });
+        describe("Send Method", () => {
+            it("Single Use", async () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask<undefined, undefined>({
+                    generator: async (inputs) => {
+                        runCount++;
+                        await wait(tick);
+                        return inputs;
+                    },
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2, 3].map(async (_, index) => {
+                        const promise = batcher.getResult(undefined);
+                        if (index === 1) {
+                            expect(runCount).to.equal(0, "runCount before");
+                            batcher.send();
+                            expect(runCount).to.equal(1, "runCount after");
+                        }
+                        await promise;
+                        return Date.now() - start;
+                    }),
+                );
+                expectTimes(results, [1, 1, 3], "Timing Results");
+            });
+            it("Effect Delayed By queuingThreshold", async () => {
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask<undefined, undefined>({
+                    generator: async (inputs) => {
+                        runCount++;
+                        await wait(tick);
+                        return inputs;
+                    },
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2, 3].map(async (_, index) => {
+                        const promise = batcher.getResult(undefined);
+                        if (index === 1) {
+                            expect(runCount).to.equal(0, "runCount before");
+                            batcher.send();
+                            expect(runCount).to.equal(1, "runCount after");
+                        } else if (index === 2) {
+                            batcher.send();
+                            expect(runCount).to.equal(1, "runCount after second");
+                        }
+                        await promise;
+                        return Date.now() - start;
+                    }),
+                );
+                expectTimes(results, [1, 1, 2], "Timing Results");
+            });
+            it("Interaction With Retries", async () => {
+                // This tests that the effect of the send method lasts even after a retry
+                const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+                let runCount = 0;
+                const batcher = pool.addPersistentBatchTask<undefined, undefined>({
+                    generator: async (inputs) => {
+                        runCount++;
+                        await wait(tick);
+                        return runCount === 1 ? inputs.map(() => Pool.BATCHER_RETRY_TOKEN) : inputs;
+                    },
+                    queuingDelay: tick,
+                    queuingThresholds: [1, Infinity],
+                });
+                const start = Date.now();
+                const results = await Promise.all(
+                    [1, 2, 3].map(async (_, index) => {
+                        const promise = batcher.getResult(undefined);
+                        if (index >= 1) {
+                            batcher.send();
+                        }
+                        await promise;
+                        return Date.now() - start;
+                    }),
+                );
+                expect(runCount).to.equal(2, "runCount");
+                expectTimes(results, [2, 2, 2], "Timing Results");
             });
         });
         describe("Error Handling", () => {
