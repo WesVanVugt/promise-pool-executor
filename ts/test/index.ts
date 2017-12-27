@@ -84,17 +84,19 @@ function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
     });
 }
 
-function waitForHandledRejection(delay: number = tick * 2): Promise<void> {
+function expectHandledRejection(delay: number = tick * 2): Promise<void> {
 
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-            process.removeAllListeners("rejectionHandled");
+            resetHandledRejectionListener();
             reject(new Error("Rejection Not Handled"));
         }, delay);
 
+        process.removeAllListeners("rejectionHandled");
         process.prependOnceListener("rejectionHandled", () => {
             clearTimeout(timeout);
             debug("rejectionHandled");
+            resetHandledRejectionListener();
             resolve();
         });
     });
@@ -126,12 +128,26 @@ function unhandledRejectionListener(err: any) {
     throw err;
 }
 
+function rejectionHandledListener() {
+    debug("Unexpected rejectionHandled event");
+    // Fail the test
+    throw new Error("Unexpected rejectionHandled event");
+}
+
 function resetUnhandledRejectionListener(): void {
     process.removeAllListeners("unhandledRejection");
     process.addListener("unhandledRejection", unhandledRejectionListener);
 }
 
-beforeEach(resetUnhandledRejectionListener);
+function resetHandledRejectionListener(): void {
+    process.removeAllListeners("rejectionHandled");
+    process.addListener("rejectionHandled", rejectionHandledListener);
+}
+
+beforeEach(() => {
+    resetUnhandledRejectionListener();
+    resetHandledRejectionListener();
+});
 
 describe("Concurrency", () => {
     it("No Limit", () => {
@@ -418,7 +434,7 @@ describe("Exception Handling", () => {
             });
             return expectUnhandledRejection(error).then(() => {
                 return Promise.all([
-                    waitForHandledRejection(),
+                    expectHandledRejection(),
                     task.promise().catch(() => {
                         // discard the error
                     }),
@@ -490,7 +506,10 @@ describe("Exception Handling", () => {
                         },
                         invocationLimit: 1,
                     });
-                    return expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]);
+                    return Promise.all([
+                        expectHandledRejection(),
+                        expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]),
+                    ]);
                     // Wait to ensure the task does not throw an unhandled rejection
                 }).then(() => wait(tick));
         });
