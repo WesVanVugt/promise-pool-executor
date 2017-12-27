@@ -1,5 +1,10 @@
 # Changelog for promise-pool-executor
 
+## 1.1.0 (2017-12-26)
+* bugfix: Remove postinstall script causing problems on install.
+* feature: Added support for retries on PersistentBatchTask.
+* feature: Added support for late handling of promise rejections.
+
 ## 1.0.3 (2017-10-09)
 * bugfix: Updated error handling when multiple errors occur on the same task or group.
 * misc: Updated debug logging to be divided up by module.
