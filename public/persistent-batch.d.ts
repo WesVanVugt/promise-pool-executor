@@ -1,3 +1,4 @@
+import { BatchingResult } from "promise-batcher";
 import { ActivePromiseCount, FreeSlots, PromisePoolGroupOptions } from "./group";
 import { EndMethod, TaskStateProperty } from "./task";
 export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOptions {
@@ -18,7 +19,7 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
      * A function which is passed an array of request values, returning a promise which resolves to an array of
      * response values.
      */
-    generator(this: PersistentBatchTaskOptions<I, O>, input: I[]): Array<O | Error> | PromiseLike<Array<O | Error>>;
+    generator(this: PersistentBatchTaskOptions<I, O>, input: I[]): Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
 }
 export interface PersistentBatchTask<I, O> extends ActivePromiseCount, PromisePoolGroupOptions, FreeSlots, TaskStateProperty, EndMethod {
     /**
@@ -26,4 +27,8 @@ export interface PersistentBatchTask<I, O> extends ActivePromiseCount, PromisePo
      * function.
      */
     getResult(input: I): Promise<O>;
+    /**
+     * Triggers a batch to run, bypassing the queuingDelay while respecting other imposed delays.
+     */
+    send(): void;
 }
