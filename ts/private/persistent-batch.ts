@@ -1,4 +1,4 @@
-import defer = require("defer-promise");
+import defer = require("p-defer");
 import { Batcher } from "promise-batcher";
 import { BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
