@@ -311,6 +311,7 @@ describe("Exception Handling", () => {
             },
             invocationLimit: 2,
         }).promise()).to.be.rejectedWith(errors[0])
+            // Wait to ensure that the second rejection happens within the scope of this test without issue
             .then(() => wait(tick * 2));
     });
     describe("Invalid Configuration", () => {

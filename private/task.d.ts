@@ -21,7 +21,7 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Set to true while the generator function is being run. Prevents the task from being terminated since a final
      * promise may be generated.
      */
-    private _generating;
+    private _generating?;
     private _deferreds;
     private _pool;
     private _triggerCallback;

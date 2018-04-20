@@ -1,5 +1,9 @@
 # Changelog for promise-pool-executor
 
+## 1.1.1 (2018-04-19)
+* bugfix: Replaced a dependancy which had a reference to global Promise.defer method because it was causing deprecation
+warnings in some cases.
+
 ## 1.1.0 (2017-12-26)
 * bugfix: Remove postinstall script causing problems on install.
 * feature: Added support for retries on PersistentBatchTask.

@@ -64,11 +64,11 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
     /**
      * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
      */
-    private _triggering;
+    private _triggering?;
     /**
      * Gets set when trying to trigger the tasks while they are already being triggerd.
      */
-    private _triggerAgain;
+    private _triggerAgain?;
     /**
      * Construct a new PromisePoolExecutor object.
      * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.

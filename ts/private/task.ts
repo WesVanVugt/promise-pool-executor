@@ -1,5 +1,5 @@
 import * as Debug from "debug";
-import defer = require("defer-promise");
+import defer = require("p-defer");
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
@@ -30,7 +30,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Set to true while the generator function is being run. Prevents the task from being terminated since a final
      * promise may be generated.
      */
-    private _generating: boolean;
+    private _generating?: boolean;
     private _deferreds: Array<Deferred<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;

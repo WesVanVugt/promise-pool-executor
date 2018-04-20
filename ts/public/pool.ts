@@ -94,11 +94,11 @@ export class PromisePoolExecutor implements PromisePoolGroup {
     /**
      * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
      */
-    private _triggering: boolean;
+    private _triggering?: boolean;
     /**
      * Gets set when trying to trigger the tasks while they are already being triggerd.
      */
-    private _triggerAgain: boolean;
+    private _triggerAgain?: boolean;
 
     /**
      * Construct a new PromisePoolExecutor object.

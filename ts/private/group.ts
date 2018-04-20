@@ -1,4 +1,4 @@
-import defer = require("defer-promise");
+import defer = require("p-defer");
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { isNull, TaskError } from "./utils";
@@ -6,9 +6,9 @@ import { isNull, TaskError } from "./utils";
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
     public _pool: PromisePoolExecutor;
-    public _concurrencyLimit: number;
-    public _frequencyLimit: number;
-    public _frequencyWindow: number;
+    public _concurrencyLimit!: number;
+    public _frequencyLimit!: number;
+    public _frequencyWindow!: number;
     public _frequencyStarts: number[] = [];
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;

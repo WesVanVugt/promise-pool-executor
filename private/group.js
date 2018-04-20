@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const defer = require("defer-promise");
+const defer = require("p-defer");
 const utils_1 = require("./utils");
 /** Internal use only */
 class PromisePoolGroupPrivate {

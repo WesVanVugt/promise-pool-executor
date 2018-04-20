@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const Debug = require("debug");
-const defer = require("defer-promise");
+const defer = require("p-defer");
 const task_1 = require("../public/task");
 const utils_1 = require("./utils");
 const debug = Debug("promise-pool-executor:task");
