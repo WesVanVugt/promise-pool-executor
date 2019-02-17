@@ -1,6 +1,9 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const defer = require("p-defer");
+const p_defer_1 = __importDefault(require("p-defer"));
 const utils_1 = require("./utils");
 /** Internal use only */
 class PromisePoolGroupPrivate {
@@ -203,7 +206,7 @@ class PromisePoolGroupPrivate {
         if (this._activeTaskCount <= 0) {
             return Promise.resolve();
         }
-        const deferred = defer();
+        const deferred = p_defer_1.default();
         this._deferreds.push(deferred);
         return deferred.promise;
     }

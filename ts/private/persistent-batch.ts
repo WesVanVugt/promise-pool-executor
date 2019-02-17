@@ -1,4 +1,4 @@
-import defer = require("p-defer");
+import defer, { DeferredPromise } from "p-defer";
 import { Batcher } from "promise-batcher";
 import { BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
@@ -12,8 +12,8 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 
     constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
         let immediate: boolean | Error;
-        let delayDeferred: Deferred<void> | undefined;
-        let taskDeferred: Deferred<void> | undefined;
+        let delayDeferred: DeferredPromise<void> | undefined;
+        let taskDeferred: DeferredPromise<void> | undefined;
 
         this._generator = options.generator;
         this._batcher = new Batcher<I, O>({
@@ -30,14 +30,16 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 } catch (err) {
                     promise = Promise.reject(err);
                 }
-                return promise.catch((err) => {
-                    // Do not send errors to the task, since they will be received via the getResult promises
-                    localTaskDeferred.resolve();
-                    throw err;
-                }).then((outputs) => {
-                    localTaskDeferred.resolve();
-                    return outputs;
-                });
+                return promise
+                    .catch((err) => {
+                        // Do not send errors to the task, since they will be received via the getResult promises
+                        localTaskDeferred.resolve();
+                        throw err;
+                    })
+                    .then((outputs) => {
+                        localTaskDeferred.resolve();
+                        return outputs;
+                    });
             },
             delayFunction: () => {
                 if (delayDeferred) {
@@ -74,7 +76,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
                 }
                 taskDeferred = defer();
                 if (delayDeferred) {
-                    const localDelayDefered: Deferred<void> = delayDeferred;
+                    const localDelayDefered: DeferredPromise<void> = delayDeferred;
                     delayDeferred = undefined;
                     localDelayDefered.resolve();
                 } else {

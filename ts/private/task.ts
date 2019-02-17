@@ -1,5 +1,5 @@
-import * as Debug from "debug";
-import defer = require("p-defer");
+import Debug from "debug";
+import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
@@ -31,7 +31,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * promise may be generated.
      */
     private _generating?: boolean;
-    private _deferreds: Array<Deferred<any>> = [];
+    private _deferreds: Array<DeferredPromise<any>> = [];
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
     private _detachCallback: () => void;
@@ -164,7 +164,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             return Promise.resolve(this._returnResult);
         }
 
-        const deferred: Deferred<any> = defer();
+        const deferred: DeferredPromise<any> = defer();
         this._deferreds.push(deferred);
         return deferred.promise;
     }
@@ -259,17 +259,17 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
         }
         debug("Running generator");
 
-        let promise: Promise<any>;
+        let output: R | PromiseLike<R> | undefined | null | void;
         this._generating = true; // prevent task termination
         try {
-            promise = this._generator.call(this, this._invocations);
+            output = this._generator.call(this, this._invocations);
         } catch (err) {
             this._generating = false;
             this._reject(err);
             return;
         }
         this._generating = false;
-        if (isNull(promise)) {
+        if (isNull(output)) {
             if (this._state !== TaskState.Paused) {
                 this.end();
             }
@@ -277,10 +277,8 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             return;
         }
 
-        if (!(promise instanceof Promise)) {
-            // In case what is returned is not a promise, make it one
-            promise = Promise.resolve(promise);
-        }
+        // In case what is returned is not a promise, make it one
+        const promise: Promise<R> = output instanceof Promise ? output : Promise.resolve(output);
         this._groups.forEach((group) => {
             group._activePromiseCount++;
             if (group._frequencyLimit !== Infinity) {
@@ -294,27 +292,29 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             this.end();
         }
 
-        promise.catch((err) => {
-            this._reject(err);
-            // Resolve
-        }).then((result) => {
-            debug("Promise ended.");
-            this._groups.forEach((group) => {
-                group._activePromiseCount--;
-            });
-            debug("Promise Count: %o", this._taskGroup._activePromiseCount);
-            // Avoid storing the result if it is undefined.
-            // Some tasks may have countless iterations and never return anything, so this could eat memory.
-            if (result !== undefined && this._result) {
-                this._result[resultIndex] = result;
-            }
-            if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
-                this.end();
-            }
+        promise
+            .catch((err) => {
+                this._reject(err);
+                // Resolve
+            })
+            .then((result) => {
+                debug("Promise ended.");
+                this._groups.forEach((group) => {
+                    group._activePromiseCount--;
+                });
+                debug("Promise Count: %o", this._taskGroup._activePromiseCount);
+                // Avoid storing the result if it is undefined.
+                // Some tasks may have countless iterations and never return anything, so this could eat memory.
+                if (result !== undefined && this._result) {
+                    this._result[resultIndex] = result;
+                }
+                if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
+                    this.end();
+                }
 
-            // Remove the task if needed and start the next task
-            this._triggerCallback();
-        });
+                // Remove the task if needed and start the next task
+                this._triggerCallback();
+            });
     }
 
     /**

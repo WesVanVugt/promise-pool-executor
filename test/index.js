@@ -7,14 +7,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+    result["default"] = mod;
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const chai = require("chai");
+const chai = __importStar(require("chai"));
 const chai_1 = require("chai");
-const chaiAsPromised = require("chai-as-promised");
-const Debug = require("debug");
-const Pool = require("../index");
-const debug = Debug("promise-pool-executor:test");
-chai.use(chaiAsPromised);
+const chai_as_promised_1 = __importDefault(require("chai-as-promised"));
+const debug_1 = __importDefault(require("debug"));
+const Pool = __importStar(require("../index"));
+const debug = debug_1.default("promise-pool-executor:test");
+chai.use(chai_as_promised_1.default);
 // Verify that the types needed can be imported
 const typingImportTest = undefined;
 if (typingImportTest) {
@@ -126,46 +136,52 @@ describe("Concurrency", () => {
     it("No Limit", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator: () => {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [1, 1, 1], "Timing Results");
         });
     });
     it("Global Limit", () => {
         const pool = new Pool.PromisePoolExecutor(2);
         const start = Date.now();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator: () => {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
     it("Task Limit", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             concurrencyLimit: 2,
             generator: () => {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
@@ -175,16 +191,18 @@ describe("Concurrency", () => {
             concurrencyLimit: 2,
         });
         const start = Date.now();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator: () => {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
             groups: [group],
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [1, 1, 2], "Timing Results");
         });
     });
@@ -197,12 +215,15 @@ describe("Frequency", () => {
                 frequencyWindow: tick,
             });
             const start = Date.now();
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 expectTimes(results, [0, 0, 1], "Timing Results");
             });
         });
@@ -213,12 +234,15 @@ describe("Frequency", () => {
                 frequencyWindow: tick * 3,
             });
             const start = Date.now();
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator: () => {
                     return wait(tick).then(() => Date.now() - start);
                 },
                 invocationLimit: 4,
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 expectTimes(results, [1, 2, 4, 5], "Timing Results");
             });
         });
@@ -228,23 +252,30 @@ describe("Frequency", () => {
                 frequencyWindow: tick,
             });
             const start = Date.now();
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 invocationLimit: 3,
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 debug(results);
                 expectTimes(results, [0, 0, 1], "Timing Results 1");
                 return wait(tick * 2);
-            }).then(() => {
-                return pool.addGenericTask({
+            })
+                .then(() => {
+                return pool
+                    .addGenericTask({
                     generator: () => {
                         return Promise.resolve(Date.now() - start);
                     },
                     invocationLimit: 3,
-                }).promise();
-            }).then((results) => {
+                })
+                    .promise();
+            })
+                .then((results) => {
                 debug(results);
                 expectTimes(results, [3, 3, 4], "Timing Results 2");
             });
@@ -257,23 +288,29 @@ describe("Frequency", () => {
             frequencyWindow: tick,
         });
         const start = Date.now();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator: () => {
                 return Promise.resolve(Date.now() - start);
             },
             groups: [group],
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [0, 0, 1], "Timing Results");
             chai_1.expect(group._frequencyStarts).to.have.length.of.at.least(1);
         });
     });
     it("Should Not Collect Timestamps If Not Set", () => {
         const pool = new Pool.PromisePoolExecutor();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator: () => Promise.resolve(),
             invocationLimit: 1,
-        }).promise().then(() => {
+        })
+            .promise()
+            .then(() => {
             chai_1.expect(pool._globalGroup._frequencyStarts).to.have.lengthOf(0);
         });
     });
@@ -282,37 +319,44 @@ describe("Exception Handling", () => {
     it("Generator Function (synchronous)", () => {
         const pool = new Pool.PromisePoolExecutor();
         const error = new Error();
-        return chai_1.expect(pool.addGenericTask({
+        return chai_1.expect(pool
+            .addGenericTask({
             generator: () => {
                 throw error;
             },
-        }).promise()).to.be.rejectedWith(error);
+        })
+            .promise()).to.be.rejectedWith(error);
     });
     it("Promise Rejection", () => {
         const pool = new Pool.PromisePoolExecutor();
         const error = new Error();
-        return chai_1.expect(pool.addGenericTask({
+        return chai_1.expect(pool
+            .addGenericTask({
             generator: () => {
                 return wait(1).then(() => {
                     throw error;
                 });
             },
             invocationLimit: 1,
-        }).promise()).to.be.rejectedWith(error);
+        })
+            .promise()).to.be.rejectedWith(error);
     });
     it("Multi-rejection", () => {
         const pool = new Pool.PromisePoolExecutor();
         const errors = [new Error("First"), new Error("Second")];
-        return chai_1.expect(pool.addGenericTask({
+        return (chai_1.expect(pool
+            .addGenericTask({
             generator: (i) => {
                 return wait(i ? tick : 1).then(() => {
                     throw errors[i];
                 });
             },
             invocationLimit: 2,
-        }).promise()).to.be.rejectedWith(errors[0])
+        })
+            .promise())
+            .to.be.rejectedWith(errors[0])
             // Wait to ensure that the second rejection happens within the scope of this test without issue
-            .then(() => wait(tick * 2));
+            .then(() => wait(tick * 2)));
     });
     describe("Invalid Configuration", () => {
         it("Invalid Parameters", () => {
@@ -331,9 +375,11 @@ describe("Exception Handling", () => {
                 generator: () => {
                     return Promise.resolve();
                 },
-                groups: [pool2.addGroup({
+                groups: [
+                    pool2.addGroup({
                         concurrencyLimit: 1,
-                    })],
+                    }),
+                ],
             })).to.throw();
         });
     });
@@ -394,8 +440,7 @@ describe("Exception Handling", () => {
                     invocationLimit: 1,
                 });
             });
-            return expectUnhandledRejection(errors[0])
-                .then(() => expectUnhandledRejection(errors[1]));
+            return expectUnhandledRejection(errors[0]).then(() => expectUnhandledRejection(errors[1]));
         });
         // This scenario creates two tasks at the same time
         // The first task rejects but is handled, while the second remains unhandled.
@@ -409,12 +454,16 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return chai_1.expect(pool.addGenericTask({
+            return chai_1.expect(pool
+                .addGenericTask({
                 generator: () => {
                     return wait(1).then(() => Promise.reject(errors[0]));
                 },
                 invocationLimit: 1,
-            }).promise()).to.be.rejectedWith(errors[0]).then(() => {
+            })
+                .promise())
+                .to.be.rejectedWith(errors[0])
+                .then(() => {
                 return expectUnhandledRejection(errors[1]);
             });
         });
@@ -443,7 +492,8 @@ describe("Exception Handling", () => {
                     chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]),
                 ]);
                 // Wait to ensure the task does not throw an unhandled rejection
-            }).then(() => wait(tick));
+            })
+                .then(() => wait(tick));
         });
     });
     describe("pool.waitForIdle", () => {
@@ -496,12 +546,14 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return chai_1.expect(pool.waitForIdle()).to.be.rejectedWith(error)
+            return chai_1.expect(pool.waitForIdle())
+                .to.be.rejectedWith(error)
                 .then(() => {
                 expectTimes([Date.now() - start], [1], "Timing Results");
                 chai_1.expect(thrown).to.equal(false, "Child task must throw yet");
                 return wait(tick * 2);
-            }).then(() => {
+            })
+                .then(() => {
                 chai_1.expect(thrown).to.equal(true, "Child task must throw error");
             });
         });
@@ -510,15 +562,19 @@ describe("Exception Handling", () => {
                 const pool = new Pool.PromisePoolExecutor();
                 const error = new Error();
                 return Promise.all([
-                    chai_1.expect(pool.addGenericTask({
+                    chai_1.expect(pool
+                        .addGenericTask({
                         generator: () => {
                             return wait(1).then(() => {
                                 throw error;
                             });
                         },
                         invocationLimit: 1,
-                    }).promise()).to.be.rejectedWith(error),
-                    wait(tick).then(() => pool.waitForIdle()).catch(() => {
+                    })
+                        .promise()).to.be.rejectedWith(error),
+                    wait(tick)
+                        .then(() => pool.waitForIdle())
+                        .catch(() => {
                         throw new Error("Error did not clear");
                     }),
                 ]);
@@ -560,23 +616,29 @@ describe("Miscellaneous Features", () => {
     describe("End Task", () => {
         it("From Generator With No Promise", () => {
             const pool = new Pool.PromisePoolExecutor();
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator() {
                     this.end();
                 },
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 chai_1.expect(results).to.have.lengthOf(0);
             });
         });
         it("From Generator With Promise", () => {
             const pool = new Pool.PromisePoolExecutor();
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator() {
                     this.end();
                     // Add one final promise after ending the task
                     return Promise.resolve(1);
                 },
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 chai_1.expect(results).to.deep.equal([1]);
             });
         });
@@ -584,7 +646,8 @@ describe("Miscellaneous Features", () => {
     it("Generator Recursion Prevention", () => {
         const pool = new Pool.PromisePoolExecutor();
         let runCount = 0;
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             generator() {
                 runCount++;
                 // Add a task, triggering it to run
@@ -594,7 +657,9 @@ describe("Miscellaneous Features", () => {
                     },
                 });
             },
-        }).promise().then(() => {
+        })
+            .promise()
+            .then(() => {
             chai_1.expect(runCount).to.equal(1, "runCount");
         });
     });
@@ -606,8 +671,7 @@ describe("Miscellaneous Features", () => {
                 if (index === 0) {
                     this.pause();
                 }
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
@@ -623,13 +687,13 @@ describe("Miscellaneous Features", () => {
     });
     it("Get Task Status", () => {
         const pool = new Pool.PromisePoolExecutor();
-        return pool.addGenericTask({
+        return pool
+            .addGenericTask({
             concurrencyLimit: 5,
             frequencyLimit: 5,
             frequencyWindow: 1000,
             generator() {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return {
                         activePromiseCount: this.activePromiseCount,
                         concurrencyLimit: this.concurrencyLimit,
@@ -643,7 +707,9 @@ describe("Miscellaneous Features", () => {
                 });
             },
             invocationLimit: 1,
-        }).promise().then((status) => {
+        })
+            .promise()
+            .then((status) => {
             chai_1.expect(status[0]).to.deep.equal({
                 activePromiseCount: 1,
                 concurrencyLimit: 5,
@@ -666,8 +732,7 @@ describe("Miscellaneous Features", () => {
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle()
-                .then(() => {
+            return pool.waitForIdle().then(() => {
                 expectTimes([Date.now() - start], [1], "Timing Results");
             });
         });
@@ -693,8 +758,7 @@ describe("Miscellaneous Features", () => {
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle()
-                .then(() => {
+            return pool.waitForIdle().then(() => {
                 expectTimes([Date.now() - start], [2], "Timing Results");
             });
         });
@@ -715,8 +779,7 @@ describe("Miscellaneous Features", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle()
-                .then(() => {
+            return group.waitForIdle().then(() => {
                 expectTimes([Date.now() - start], [1], "Timing Results");
             });
         });
@@ -739,8 +802,7 @@ describe("Miscellaneous Features", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle()
-                .then(() => {
+            return group.waitForIdle().then(() => {
                 expectTimes([Date.now() - start], [2], "Timing Results");
             });
         });
@@ -777,13 +839,16 @@ describe("Miscellaneous Features", () => {
                 group.frequencyWindow = 1;
                 group.frequencyLimit = 1;
             });
-            return pool.addGenericTask({
+            return pool
+                .addGenericTask({
                 generator: () => {
                     return Promise.resolve(Date.now() - start);
                 },
                 groups: [group],
                 invocationLimit: 2,
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 expectTimes(results, [0, 1], "Timing Results");
             });
         });
@@ -794,18 +859,20 @@ describe("Task Secializations", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
         let iteration = 0;
-        return pool.addSingleTask({
+        return pool
+            .addSingleTask({
             data: "test",
             generator: (data) => {
                 chai_1.expect(data).to.equal("test");
                 // The task cannot run more than once
                 chai_1.expect(iteration++).to.equal(0);
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
-        }).promise().then((result) => {
+        })
+            .promise()
+            .then((result) => {
             debug(`Test result: ${result} (${typeof result})`);
             // The task must return the expected non-array result
             expectTimes([result], [1], "Timing Results");
@@ -814,31 +881,35 @@ describe("Task Secializations", () => {
     it("Linear Task", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
-        return pool.addLinearTask({
+        return pool
+            .addLinearTask({
             generator: () => {
-                return wait(tick)
-                    .then(() => {
+                return wait(tick).then(() => {
                     return Date.now() - start;
                 });
             },
             invocationLimit: 3,
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [1, 2, 3], "Timing Results");
         });
     });
     it("Each Task", () => {
         const pool = new Pool.PromisePoolExecutor();
         const start = Date.now();
-        return pool.addEachTask({
+        return pool
+            .addEachTask({
             concurrencyLimit: Infinity,
             data: [3, 2, 1],
             generator: (element) => {
-                return wait(tick * element)
-                    .then(() => {
+                return wait(tick * element).then(() => {
                     return Date.now() - start;
                 });
             },
-        }).promise().then((results) => {
+        })
+            .promise()
+            .then((results) => {
             expectTimes(results, [3, 2, 1], "Timing Results");
         });
     });
@@ -846,24 +917,27 @@ describe("Task Secializations", () => {
         it("Static Batch Size", () => {
             const pool = new Pool.PromisePoolExecutor();
             const start = Date.now();
-            return pool.addBatchTask({
+            return pool
+                .addBatchTask({
                 // Groups the data as [[3, 1], [2]]
                 batchSize: 2,
                 data: [3, 1, 2],
                 generator: (data) => {
-                    return wait(tick * sum(data))
-                        .then(() => {
+                    return wait(tick * sum(data)).then(() => {
                         return Date.now() - start;
                     });
                 },
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 expectTimes(results, [4, 2], "Timing Results");
             });
         });
         it("Dynamic Batch Size", () => {
             const pool = new Pool.PromisePoolExecutor();
             const start = Date.now();
-            return pool.addBatchTask({
+            return pool
+                .addBatchTask({
                 batchSize: (elements, freeSlots) => {
                     // Groups the data as [[2], [1, 3]]
                     return Math.floor(elements / freeSlots);
@@ -871,12 +945,13 @@ describe("Task Secializations", () => {
                 concurrencyLimit: 2,
                 data: [2, 1, 3],
                 generator: (data) => {
-                    return wait(tick * sum(data))
-                        .then(() => {
+                    return wait(tick * sum(data)).then(() => {
                         return Date.now() - start;
                     });
                 },
-            }).promise().then((results) => {
+            })
+                .promise()
+                .then((results) => {
                 expectTimes(results, [2, 4], "Timing Results");
             });
         });
@@ -1219,7 +1294,10 @@ describe("Task Secializations", () => {
                 });
                 const inputs = ["a", "error", "b"];
                 return Promise.all(inputs.map((input) => {
-                    return task.getResult(input).then(() => true).catch((err) => {
+                    return task
+                        .getResult(input)
+                        .then(() => true)
+                        .catch((err) => {
                         chai_1.expect(err.message).to.equal("test");
                         return false;
                     });
@@ -1242,7 +1320,10 @@ describe("Task Secializations", () => {
                 });
                 const inputs = [0, 1, 2];
                 return Promise.all(inputs.map((input) => {
-                    return task.getResult(input).then(() => true).catch((err) => {
+                    return task
+                        .getResult(input)
+                        .then(() => true)
+                        .catch((err) => {
                         chai_1.expect(err.message).to.equal("test");
                         return false;
                     });
@@ -1267,7 +1348,10 @@ describe("Task Secializations", () => {
                 });
                 const inputs = [0, 1, 2];
                 return Promise.all(inputs.map((input) => {
-                    return task.getResult(input).then(() => true).catch((err) => {
+                    return task
+                        .getResult(input)
+                        .then(() => true)
+                        .catch((err) => {
                         chai_1.expect(err.message).to.equal("test");
                         return false;
                     });
@@ -1285,7 +1369,10 @@ describe("Task Secializations", () => {
                 });
                 const inputs = [0, 1, 2];
                 return Promise.all(inputs.map((input) => {
-                    return task.getResult(input).then(() => true).catch(() => false);
+                    return task
+                        .getResult(input)
+                        .then(() => true)
+                        .catch(() => false);
                 })).then((results) => {
                     chai_1.expect(results).to.deep.equal([false, false, false]);
                 });

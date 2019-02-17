@@ -27,7 +27,7 @@ export interface TaskOptionsBase {
     paused?: boolean;
 }
 
-export interface GenericTaskOptionsBase extends PromisePoolGroupOptions, TaskOptionsBase, Partial<InvocationLimit> { }
+export interface GenericTaskOptionsBase extends PromisePoolGroupOptions, TaskOptionsBase, Partial<InvocationLimit> {}
 
 export interface GenericTaskOptions<R> extends GenericTaskOptionsBase {
     /**
@@ -86,8 +86,14 @@ export interface EndMethod {
     end(): void;
 }
 
-export interface PromisePoolTask<R> extends
-    InvocationLimit, ConcurrencyLimit, FrequencyLimit, ActivePromiseCount, FreeSlots, TaskStateProperty, EndMethod {
+export interface PromisePoolTask<R>
+    extends InvocationLimit,
+        ConcurrencyLimit,
+        FrequencyLimit,
+        ActivePromiseCount,
+        FreeSlots,
+        TaskStateProperty,
+        EndMethod {
     /**
      * The number of times the task has been invoked.
      */

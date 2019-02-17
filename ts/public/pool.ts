@@ -1,18 +1,11 @@
-import Debug = require("debug");
-import * as nextTick from "next-tick";
+import Debug from "debug";
+import nextTick from "next-tick";
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
 import { isNull } from "../private/utils";
-import {
-    FrequencyLimit,
-    PromisePoolGroup,
-    PromisePoolGroupOptions,
-} from "./group";
-import {
-    PersistentBatchTask,
-    PersistentBatchTaskOptions,
-} from "./persistent-batch";
+import { FrequencyLimit, PromisePoolGroup, PromisePoolGroupOptions } from "./group";
+import { PersistentBatchTask, PersistentBatchTaskOptions } from "./persistent-batch";
 import {
     GenericTaskConvertedOptions,
     GenericTaskOptions,
@@ -54,7 +47,10 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
      * @param startIndex The original index for the first element in {values}.
      */
     generator: (
-        this: PromisePoolTask<any[]>, values: T[], startIndex: number, invocation: number,
+        this: PromisePoolTask<any[]>,
+        values: T[],
+        startIndex: number,
+        invocation: number,
     ) => R | PromiseLike<R> | undefined | null | void;
     /**
      * An array containing data to be divided into batches and passed to {generator}.
@@ -180,11 +176,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
      * Adds a group to the pool.
      */
     public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
-        return new PromisePoolGroupPrivate(
-            this,
-            () => this._triggerNextTick(),
-            options,
-        );
+        return new PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
     }
 
     /**
@@ -227,7 +219,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         const generator = options.generator;
         return this.addGenericTask<R, R>({
             generator() {
-                return generator.call(this, data);
+                return generator.call(this, data as T);
             },
             groups: options.groups,
             invocationLimit: 1,
@@ -260,9 +252,11 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         let index: number = 0;
 
         // Unacceptable values: NaN, <=0, type not number/function
-        if (!options.batchSize || typeof options.batchSize !== "function"
-            && (typeof options.batchSize !== "number" || options.batchSize <= 0)) {
-
+        if (
+            !options.batchSize ||
+            (typeof options.batchSize !== "function" &&
+                (typeof options.batchSize !== "number" || options.batchSize <= 0))
+        ) {
             throw new Error("Invalid batch size: " + options.batchSize);
         }
 
@@ -279,10 +273,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
                 }
                 const oldIndex: number = index;
                 if (typeof batchSizeOption === "function") {
-                    const batchSize: number = batchSizeOption(
-                        data.length - oldIndex,
-                        this.freeSlots,
-                    );
+                    const batchSize: number = batchSizeOption(data.length - oldIndex, this.freeSlots);
                     // Unacceptable values: NaN, <=0, type not number
                     if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
                         return Promise.reject(new Error("Invalid batch size: " + batchSize));

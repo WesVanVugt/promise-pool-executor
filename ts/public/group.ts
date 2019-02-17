@@ -16,7 +16,7 @@ export interface FrequencyLimit {
     frequencyWindow: number;
 }
 
-export interface PromisePoolGroupOptions extends Partial<ConcurrencyLimit>, Partial<FrequencyLimit> { }
+export interface PromisePoolGroupOptions extends Partial<ConcurrencyLimit>, Partial<FrequencyLimit> {}
 
 export interface ActivePromiseCount {
     /**

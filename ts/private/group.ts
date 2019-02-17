@@ -1,4 +1,4 @@
-import defer = require("p-defer");
+import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { isNull, TaskError } from "./utils";
@@ -12,7 +12,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     public _frequencyStarts: number[] = [];
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
-    private _deferreds: Array<Deferred<void>> = [];
+    private _deferreds: Array<DeferredPromise<void>> = [];
     /**
      * This flag prevents a rejection from being removed before nextTick is called.
      * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
@@ -34,11 +34,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     private _secondaryRejections: TaskError[] = [];
     private _triggerNextCallback: () => void;
 
-    constructor(
-        pool: PromisePoolExecutor,
-        triggerNextCallback: () => void,
-        options?: PromisePoolGroupOptions,
-    ) {
+    constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions) {
         this._pool = pool;
         if (!options) {
             options = {};
@@ -234,7 +230,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
             return Promise.resolve();
         }
 
-        const deferred: Deferred<void> = defer();
+        const deferred: DeferredPromise<void> = defer();
         this._deferreds.push(deferred);
         return deferred.promise;
     }

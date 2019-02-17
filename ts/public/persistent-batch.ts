@@ -20,12 +20,18 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
      * A function which is passed an array of request values, returning a promise which resolves to an array of
      * response values.
      */
-    generator(this: PersistentBatchTaskOptions<I, O>, input: I[]):
-        Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+    generator(
+        this: PersistentBatchTaskOptions<I, O>,
+        input: I[],
+    ): Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
 }
 
-export interface PersistentBatchTask<I, O> extends
-    ActivePromiseCount, PromisePoolGroupOptions, FreeSlots, TaskStateProperty, EndMethod {
+export interface PersistentBatchTask<I, O>
+    extends ActivePromiseCount,
+        PromisePoolGroupOptions,
+        FreeSlots,
+        TaskStateProperty,
+        EndMethod {
     /**
      * Returns a promise which resolves or rejects with the individual result returned from the task's generator
      * function.

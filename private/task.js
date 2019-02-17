@@ -1,10 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const Debug = require("debug");
-const defer = require("p-defer");
+const debug_1 = __importDefault(require("debug"));
+const p_defer_1 = __importDefault(require("p-defer"));
 const task_1 = require("../public/task");
 const utils_1 = require("./utils");
-const debug = Debug("promise-pool-executor:task");
+const debug = debug_1.default("promise-pool-executor:task");
 const GLOBAL_GROUP_INDEX = 0;
 class PromisePoolTaskPrivate {
     constructor(privateOptions, options) {
@@ -120,7 +123,7 @@ class PromisePoolTaskPrivate {
         else if (this._state === task_1.TaskState.Terminated) {
             return Promise.resolve(this._returnResult);
         }
-        const deferred = defer();
+        const deferred = p_defer_1.default();
         this._deferreds.push(deferred);
         return deferred.promise;
     }
@@ -206,10 +209,10 @@ class PromisePoolTaskPrivate {
             return;
         }
         debug("Running generator");
-        let promise;
+        let output;
         this._generating = true; // prevent task termination
         try {
-            promise = this._generator.call(this, this._invocations);
+            output = this._generator.call(this, this._invocations);
         }
         catch (err) {
             this._generating = false;
@@ -217,17 +220,15 @@ class PromisePoolTaskPrivate {
             return;
         }
         this._generating = false;
-        if (utils_1.isNull(promise)) {
+        if (utils_1.isNull(output)) {
             if (this._state !== task_1.TaskState.Paused) {
                 this.end();
             }
             // Remove the task if needed and start the next task
             return;
         }
-        if (!(promise instanceof Promise)) {
-            // In case what is returned is not a promise, make it one
-            promise = Promise.resolve(promise);
-        }
+        // In case what is returned is not a promise, make it one
+        const promise = output instanceof Promise ? output : Promise.resolve(output);
         this._groups.forEach((group) => {
             group._activePromiseCount++;
             if (group._frequencyLimit !== Infinity) {
@@ -240,10 +241,12 @@ class PromisePoolTaskPrivate {
             // this will not detach the task since there are active promises
             this.end();
         }
-        promise.catch((err) => {
+        promise
+            .catch((err) => {
             this._reject(err);
             // Resolve
-        }).then((result) => {
+        })
+            .then((result) => {
             debug("Promise ended.");
             this._groups.forEach((group) => {
                 group._activePromiseCount--;

@@ -66,6 +66,6 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     /**
      * Private. Resolves the task if possible. Should only be called by end()
      */
-    private _resolve();
-    private _reject(err);
+    private _resolve;
+    private _reject;
 }

@@ -57,7 +57,7 @@ export declare enum TaskState {
     /**
      * All outstanding promises have ended and the result has been returned or an error thrown.
      */
-    Terminated = 3,
+    Terminated = 3
 }
 export interface TaskStateProperty {
     /**

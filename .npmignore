@@ -1,9 +1,0 @@
-**/*
-!index.js
-!index.d.ts
-!private/*.js
-!public/*
-!README.md
-!UPGRADING.md
-!CHANGELOG.md
-!LICENSE

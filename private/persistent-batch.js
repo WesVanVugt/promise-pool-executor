@@ -1,6 +1,9 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const defer = require("p-defer");
+const p_defer_1 = __importDefault(require("p-defer"));
 const promise_batcher_1 = require("promise-batcher");
 const task_1 = require("../public/task");
 class PersistentBatchTaskPrivate {
@@ -24,11 +27,13 @@ class PersistentBatchTaskPrivate {
                 catch (err) {
                     promise = Promise.reject(err);
                 }
-                return promise.catch((err) => {
+                return promise
+                    .catch((err) => {
                     // Do not send errors to the task, since they will be received via the getResult promises
                     localTaskDeferred.resolve();
                     throw err;
-                }).then((outputs) => {
+                })
+                    .then((outputs) => {
                     localTaskDeferred.resolve();
                     return outputs;
                 });
@@ -48,7 +53,7 @@ class PersistentBatchTaskPrivate {
                     }
                     return;
                 }
-                delayDeferred = defer();
+                delayDeferred = p_defer_1.default();
                 return delayDeferred.promise;
             },
             maxBatchSize: options.maxBatchSize,
@@ -65,7 +70,7 @@ class PersistentBatchTaskPrivate {
                     immediate = new Error("Expected taskDeferred not to be set (internal error).");
                     return;
                 }
-                taskDeferred = defer();
+                taskDeferred = p_defer_1.default();
                 if (delayDeferred) {
                     const localDelayDefered = delayDeferred;
                     delayDeferred = undefined;

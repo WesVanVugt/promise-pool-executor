@@ -139,12 +139,12 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
      * Returns a promise which resolves when there are no more tasks queued to run.
      */
     waitForIdle(): Promise<void>;
-    private _cleanFrequencyStarts();
-    private _clearTriggerTimeout();
-    private _triggerNextTick();
+    private _cleanFrequencyStarts;
+    private _clearTriggerTimeout;
+    private _triggerNextTick;
     /**
      * Private Method: Triggers promises to start.
      */
-    private _triggerNow();
-    private _removeTask(task);
+    private _triggerNow;
+    private _removeTask;
 }
