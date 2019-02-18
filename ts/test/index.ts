@@ -2,6 +2,7 @@ import * as chai from "chai";
 import { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import Debug from "debug";
+import timeSpan from "time-span";
 import * as Pool from "../index";
 
 const debug = Debug("promise-pool-executor:test");
@@ -152,202 +153,177 @@ beforeEach(() => {
 });
 
 describe("Concurrency", () => {
-    it("No Limit", () => {
+    it("No Limit", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async () => {
+                    await wait(tick);
+                    return end();
                 },
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [1, 1, 1], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [1, 1, 1], "Timing Results");
     });
 
-    it("Global Limit", () => {
+    it("Global Limit", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor(2);
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async () => {
+                    await wait(tick);
+                    return end();
                 },
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [1, 1, 2], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [1, 1, 2], "Timing Results");
     });
 
-    it("Task Limit", () => {
+    it("Task Limit", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addGenericTask({
                 concurrencyLimit: 2,
-                generator: () => {
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async () => {
+                    await wait(tick);
+                    return end();
                 },
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [1, 1, 2], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [1, 1, 2], "Timing Results");
     });
 
-    it("Group Limit", () => {
+    it("Group Limit", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
         const group: Pool.PromisePoolGroup = pool.addGroup({
             concurrencyLimit: 2,
         });
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async () => {
+                    await wait(tick);
+                    return end();
                 },
                 groups: [group],
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [1, 1, 2], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [1, 1, 2], "Timing Results");
     });
 });
 
 describe("Frequency", () => {
     describe("Global Limit", () => {
-        it("Steady Work", () => {
+        it("Steady Work", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
                 frequencyLimit: 2,
                 frequencyWindow: tick,
             });
 
-            const start: number = Date.now();
-            return pool
+            const end = timeSpan();
+            const results = await pool
                 .addGenericTask({
                     generator: () => {
-                        return Promise.resolve(Date.now() - start);
+                        return Promise.resolve(end());
                     },
                     invocationLimit: 3,
                 })
-                .promise()
-                .then((results) => {
-                    expectTimes(results, [0, 0, 1], "Timing Results");
-                });
+                .promise();
+            expectTimes(results, [0, 0, 1], "Timing Results");
         });
 
-        it("Offset Calls", () => {
+        it("Offset Calls", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
                 concurrencyLimit: 1,
                 frequencyLimit: 2,
                 frequencyWindow: tick * 3,
             });
 
-            const start: number = Date.now();
-            return pool
+            const end = timeSpan();
+            const results = await pool
                 .addGenericTask({
-                    generator: () => {
-                        return wait(tick).then(() => Date.now() - start);
+                    generator: async () => {
+                        await wait(tick);
+                        return end();
                     },
                     invocationLimit: 4,
                 })
-                .promise()
-                .then((results) => {
-                    expectTimes(results, [1, 2, 4, 5], "Timing Results");
-                });
+                .promise();
+            expectTimes(results, [1, 2, 4, 5], "Timing Results");
         });
 
-        it("Work Gap", () => {
+        it("Work Gap", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
                 frequencyLimit: 2,
                 frequencyWindow: tick,
             });
 
-            const start: number = Date.now();
-            return pool
+            const end = timeSpan();
+            const results = await pool
                 .addGenericTask({
                     generator: () => {
-                        return Promise.resolve(Date.now() - start);
+                        return Promise.resolve(end());
                     },
                     invocationLimit: 3,
                 })
-                .promise()
-                .then((results) => {
-                    debug(results);
-                    expectTimes(results, [0, 0, 1], "Timing Results 1");
-                    return wait(tick * 2);
+                .promise();
+            debug(results);
+            expectTimes(results, [0, 0, 1], "Timing Results 1");
+            await wait(tick * 2);
+            const results2 = await pool
+                .addGenericTask({
+                    generator: () => {
+                        return Promise.resolve(end());
+                    },
+                    invocationLimit: 3,
                 })
-                .then(() => {
-                    return pool
-                        .addGenericTask({
-                            generator: () => {
-                                return Promise.resolve(Date.now() - start);
-                            },
-                            invocationLimit: 3,
-                        })
-                        .promise();
-                })
-                .then((results) => {
-                    debug(results);
-                    expectTimes(results, [3, 3, 4], "Timing Results 2");
-                });
+                .promise();
+            debug(results2);
+            expectTimes(results2, [3, 3, 4], "Timing Results 2");
         });
     });
 
-    it("Group Limit", () => {
+    it("Group Limit", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
         const group: Pool.PromisePoolGroup = pool.addGroup({
             frequencyLimit: 2,
             frequencyWindow: tick,
         });
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addGenericTask({
                 generator: () => {
-                    return Promise.resolve(Date.now() - start);
+                    return Promise.resolve(end());
                 },
                 groups: [group],
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [0, 0, 1], "Timing Results");
-                expect((group as any)._frequencyStarts).to.have.length.of.at.least(1);
-            });
+            .promise();
+        expectTimes(results, [0, 0, 1], "Timing Results");
+        expect((group as any)._frequencyStarts).to.have.length.of.at.least(1);
     });
 
-    it("Should Not Collect Timestamps If Not Set", () => {
+    it("Should Not Collect Timestamps If Not Set", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-        return pool
+        await pool
             .addGenericTask({
                 generator: () => Promise.resolve(),
                 invocationLimit: 1,
             })
-            .promise()
-            .then(() => {
-                expect((pool as any)._globalGroup._frequencyStarts).to.have.lengthOf(0);
-            });
+            .promise();
+        expect((pool as any)._globalGroup._frequencyStarts).to.have.lengthOf(0);
     });
 });
 
@@ -367,17 +343,16 @@ describe("Exception Handling", () => {
         ).to.be.rejectedWith(error);
     });
 
-    it("Promise Rejection", () => {
+    it("Promise Rejection", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const error: Error = new Error();
-        return expect(
+        await expect(
             pool
                 .addGenericTask({
-                    generator: () => {
-                        return wait(1).then(() => {
-                            throw error;
-                        });
+                    generator: async () => {
+                        await wait(1);
+                        throw error;
                     },
                     invocationLimit: 1,
                 })
@@ -385,27 +360,23 @@ describe("Exception Handling", () => {
         ).to.be.rejectedWith(error);
     });
 
-    it("Multi-rejection", () => {
+    it("Multi-rejection", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
         const errors: Error[] = [new Error("First"), new Error("Second")];
-        return (
-            expect(
-                pool
-                    .addGenericTask({
-                        generator: (i) => {
-                            return wait(i ? tick : 1).then(() => {
-                                throw errors[i];
-                            });
-                        },
-                        invocationLimit: 2,
-                    })
-                    .promise(),
-            )
-                .to.be.rejectedWith(errors[0])
-                // Wait to ensure that the second rejection happens within the scope of this test without issue
-                .then(() => wait(tick * 2))
-        );
+        await expect(
+            pool
+                .addGenericTask({
+                    generator: async (i) => {
+                        await wait(i ? tick : 1);
+                        throw errors[i];
+                    },
+                    invocationLimit: 2,
+                })
+                .promise(),
+        ).to.be.rejectedWith(errors[0]);
+        // Wait to ensure that the second rejection happens within the scope of this test without issue
+        await wait(tick * 2);
     });
 
     describe("Invalid Configuration", () => {
@@ -420,6 +391,7 @@ describe("Exception Handling", () => {
                     },
                 }),
             ).to.throw();
+            // TODO: Test error message
         });
 
         it("Group From Another Pool", () => {
@@ -442,7 +414,7 @@ describe("Exception Handling", () => {
     });
 
     describe("Unhandled Rejection", () => {
-        it("Generator Function (synchronous)", () => {
+        it("Generator Function (synchronous)", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
@@ -452,22 +424,21 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return expectUnhandledRejection(error);
+            await expectUnhandledRejection(error);
         });
 
-        it("Promise Rejection", () => {
+        it("Promise Rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
             pool.addGenericTask({
-                generator: () => {
-                    return wait(1).then(() => {
-                        throw error;
-                    });
+                generator: async () => {
+                    await wait(1);
+                    throw error;
                 },
                 invocationLimit: 1,
             });
-            return expectUnhandledRejection(error);
+            await expectUnhandledRejection(error);
         });
 
         it("Late Rejection Handling", async () => {
@@ -490,55 +461,54 @@ describe("Exception Handling", () => {
             ]);
         });
 
-        it("Multi-rejection", () => {
+        it("Multi-rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const errors = [new Error("first"), new Error("second")];
             errors.forEach((err, i) => {
                 // Create a task which fails without the test handling the error
                 pool.addGenericTask({
-                    generator: () => {
-                        return wait(i ? tick : 1).then(() => {
-                            throw err;
-                        });
+                    generator: async () => {
+                        await wait(i ? tick : 1);
+                        throw err;
                     },
                     invocationLimit: 1,
                 });
             });
-            return expectUnhandledRejection(errors[0]).then(() => expectUnhandledRejection(errors[1]));
+            await expectUnhandledRejection(errors[0]);
+            await expectUnhandledRejection(errors[1]);
         });
 
         // This scenario creates two tasks at the same time
         // The first task rejects but is handled, while the second remains unhandled.
-        it("Handled Rejection Followed By Unhandled Rejection", () => {
+        it("Handled Rejection Followed By Unhandled Rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const errors = [new Error("first"), new Error("second")];
             // Create a task which will reject later without being handled
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => Promise.reject(errors[1]));
+                generator: async () => {
+                    await wait(tick);
+                    throw errors[1];
                 },
                 invocationLimit: 1,
             });
 
-            return expect(
+            await expect(
                 pool
                     .addGenericTask({
-                        generator: () => {
-                            return wait(1).then(() => Promise.reject(errors[0]));
+                        generator: async () => {
+                            await wait(1);
+                            throw errors[0];
                         },
                         invocationLimit: 1,
                     })
                     .promise(),
-            )
-                .to.be.rejectedWith(errors[0])
-                .then(() => {
-                    return expectUnhandledRejection(errors[1]);
-                });
+            ).to.be.rejectedWith(errors[0]);
+            await expectUnhandledRejection(errors[1]);
         });
 
-        it("Unhandled Followed By Rejection With pool.waitForIdle", () => {
+        it("Unhandled Followed By Rejection With pool.waitForIdle", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const errors = [new Error("first"), new Error("second")];
@@ -551,26 +521,21 @@ describe("Exception Handling", () => {
                 generator: () => wait(tick),
                 invocationLimit: 1,
             });
-            return expectUnhandledRejection(errors[0])
-                .then(() => {
-                    pool.addGenericTask({
-                        generator: () => {
-                            throw errors[1];
-                        },
-                        invocationLimit: 1,
-                    });
-                    return Promise.all([
-                        expectHandledRejection(),
-                        expect(pool.waitForIdle()).to.be.rejectedWith(errors[0]),
-                    ]);
-                    // Wait to ensure the task does not throw an unhandled rejection
-                })
-                .then(() => wait(tick));
+            await expectUnhandledRejection(errors[0]);
+            pool.addGenericTask({
+                generator: () => {
+                    throw errors[1];
+                },
+                invocationLimit: 1,
+            });
+            await Promise.all([expectHandledRejection(), expect(pool.waitForIdle()).to.be.rejectedWith(errors[0])]);
+            // Wait to ensure the task does not throw an unhandled rejection
+            await wait(tick);
         });
     });
 
     describe("pool.waitForIdle", () => {
-        it("Generator Function (synchronous)", () => {
+        it("Generator Function (synchronous)", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
@@ -580,91 +545,85 @@ describe("Exception Handling", () => {
                 },
                 invocationLimit: 1,
             });
-            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
+            await expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
 
-        it("Promise Rejection", () => {
+        it("Promise Rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
             pool.addGenericTask({
-                generator: () => {
-                    return wait(1).then(() => {
-                        throw error;
-                    });
+                generator: async () => {
+                    await wait(1);
+                    throw error;
                 },
                 invocationLimit: 1,
             });
-            return expect(pool.waitForIdle()).to.be.rejectedWith(error);
+            await expect(pool.waitForIdle()).to.be.rejectedWith(error);
         });
 
         // In this scenario, a child task fails after its parent does. In this case, only the first error should
         // be received, and the second should be handled by the pool.
-        it("Child Task Rejection Shadowed By Parent Rejection", () => {
+        it("Child Task Rejection Shadowed By Parent Rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error = new Error("Parent error");
             let thrown = false;
-            const start: number = Date.now();
+            const end = timeSpan();
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        pool.addGenericTask({
-                            generator: () => {
-                                return wait(tick).then(() => {
-                                    thrown = true;
-                                    throw new Error("Child task error");
-                                });
-                            },
-                            invocationLimit: 1,
-                        });
-                        debug("About to throw");
-                        throw error;
+                generator: async () => {
+                    await wait(tick);
+                    pool.addGenericTask({
+                        generator: async () => {
+                            await wait(tick);
+                            thrown = true;
+                            throw new Error("Child task error");
+                        },
+                        invocationLimit: 1,
                     });
+                    debug("About to throw");
+                    throw error;
                 },
                 invocationLimit: 1,
             });
-            return expect(pool.waitForIdle())
-                .to.be.rejectedWith(error)
-                .then(() => {
-                    expectTimes([Date.now() - start], [1], "Timing Results");
-                    expect(thrown).to.equal(false, "Child task must throw yet");
-                    return wait(tick * 2);
-                })
-                .then(() => {
-                    expect(thrown).to.equal(true, "Child task must throw error");
-                });
+            await expect(pool.waitForIdle()).to.be.rejectedWith(error);
+            expectTimes([end()], [1], "Timing Results");
+            expect(thrown).to.equal(false, "Child task must throw yet");
+            await wait(tick * 2);
+            expect(thrown).to.equal(true, "Child task must throw error");
         });
 
         describe("Clearing After Delay", () => {
-            it("Promise Rejection", () => {
+            it("Promise Rejection", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const error: Error = new Error();
-                return Promise.all([
+                await Promise.all([
                     expect(
                         pool
                             .addGenericTask({
-                                generator: () => {
-                                    return wait(1).then(() => {
-                                        throw error;
-                                    });
+                                generator: async () => {
+                                    await wait(1);
+                                    throw error;
                                 },
                                 invocationLimit: 1,
                             })
                             .promise(),
                     ).to.be.rejectedWith(error),
-                    wait(tick)
-                        .then(() => pool.waitForIdle())
-                        .catch(() => {
+                    (async () => {
+                        await wait(tick);
+                        try {
+                            await pool.waitForIdle();
+                        } catch (err) {
                             throw new Error("Error did not clear");
-                        }),
+                        }
+                    })(),
                 ]);
             });
         });
     });
 
     describe("group.waitForIdle", () => {
-        it("Generator Function (synchronous)", () => {
+        it("Generator Function (synchronous)", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
@@ -676,49 +635,46 @@ describe("Exception Handling", () => {
                 groups: [group],
                 invocationLimit: 1,
             });
-            return expect(group.waitForIdle()).to.be.rejectedWith(error);
+            await expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
 
-        it("Promise Rejection", () => {
+        it("Promise Rejection", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             const error: Error = new Error();
             const group: Pool.PromisePoolGroup = pool.addGroup({});
             pool.addGenericTask({
-                generator: () => {
-                    return wait(1).then(() => {
-                        throw error;
-                    });
+                generator: async () => {
+                    await wait(1);
+                    throw error;
                 },
                 groups: [group],
                 invocationLimit: 1,
             });
-            return expect(group.waitForIdle()).to.be.rejectedWith(error);
+            await expect(group.waitForIdle()).to.be.rejectedWith(error);
         });
     });
 });
 
 describe("Miscellaneous Features", () => {
     describe("End Task", () => {
-        it("From Generator With No Promise", () => {
+        it("From Generator With No Promise", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            return pool
+            const results = await pool
                 .addGenericTask({
                     generator() {
                         this.end();
                     },
                 })
-                .promise()
-                .then((results) => {
-                    expect(results).to.have.lengthOf(0);
-                });
+                .promise();
+            expect(results).to.have.lengthOf(0);
         });
 
-        it("From Generator With Promise", () => {
+        it("From Generator With Promise", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            return pool
+            const results = await pool
                 .addGenericTask({
                     generator() {
                         this.end();
@@ -726,18 +682,16 @@ describe("Miscellaneous Features", () => {
                         return Promise.resolve(1);
                     },
                 })
-                .promise()
-                .then((results) => {
-                    expect(results).to.deep.equal([1]);
-                });
+                .promise();
+            expect(results).to.deep.equal([1]);
         });
     });
 
-    it("Generator Recursion Prevention", () => {
+    it("Generator Recursion Prevention", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
         let runCount: number = 0;
 
-        return pool
+        await pool
             .addGenericTask({
                 generator() {
                     runCount++;
@@ -749,89 +703,81 @@ describe("Miscellaneous Features", () => {
                     });
                 },
             })
-            .promise()
-            .then(() => {
-                expect(runCount).to.equal(1, "runCount");
-            });
+            .promise();
+        expect(runCount).to.equal(1, "runCount");
     });
 
-    it("Pause/Resume Task", () => {
+    it("Pause/Resume Task", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
+        const end = timeSpan();
         const task = pool.addGenericTask({
-            generator(index) {
+            async generator(index) {
                 if (index === 0) {
                     this.pause();
                 }
-                return wait(tick).then(() => {
-                    return Date.now() - start;
-                });
+                await wait(tick);
+                return end();
             },
             invocationLimit: 3,
         });
         wait(tick).then(() => {
             task.resume();
         });
-        return task.promise().then((results) => {
-            // The task must return the expected non-array result
-            expectTimes(results, [1, 2, 2], "Timing Results");
-        });
+        const results = await task.promise();
+        // The task must return the expected non-array result
+        expectTimes(results, [1, 2, 2], "Timing Results");
     });
 
-    it("Get Task Status", () => {
+    it("Get Task Status", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        return pool
+        const status = await pool
             .addGenericTask({
                 concurrencyLimit: 5,
                 frequencyLimit: 5,
                 frequencyWindow: 1000,
-                generator() {
-                    return wait(tick).then(() => {
-                        return {
-                            activePromiseCount: this.activePromiseCount,
-                            concurrencyLimit: this.concurrencyLimit,
-                            freeSlots: this.freeSlots,
-                            frequencyLimit: this.frequencyLimit,
-                            frequencyWindow: this.frequencyWindow,
-                            invocationLimit: this.invocationLimit,
-                            invocations: this.invocations,
-                            state: this.state,
-                        };
-                    });
+                async generator() {
+                    await wait(tick);
+                    return {
+                        activePromiseCount: this.activePromiseCount,
+                        concurrencyLimit: this.concurrencyLimit,
+                        freeSlots: this.freeSlots,
+                        frequencyLimit: this.frequencyLimit,
+                        frequencyWindow: this.frequencyWindow,
+                        invocationLimit: this.invocationLimit,
+                        invocations: this.invocations,
+                        state: this.state,
+                    };
                 },
                 invocationLimit: 1,
             })
-            .promise()
-            .then((status) => {
-                expect(status[0]).to.deep.equal({
-                    activePromiseCount: 1,
-                    concurrencyLimit: 5,
-                    freeSlots: 0,
-                    frequencyLimit: 5,
-                    frequencyWindow: 1000,
-                    invocationLimit: 1,
-                    invocations: 1,
-                    state: Pool.TaskState.Exhausted,
-                });
-            });
+            .promise();
+        expect(status[0]).to.deep.equal({
+            activePromiseCount: 1,
+            concurrencyLimit: 5,
+            freeSlots: 0,
+            frequencyLimit: 5,
+            frequencyWindow: 1000,
+            invocationLimit: 1,
+            invocations: 1,
+            state: Pool.TaskState.Exhausted,
+        });
     });
 
     describe("waitForIdle", () => {
-        it("Simple", () => {
+        it("Simple", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick);
+                generator: async () => {
+                    await wait(tick);
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle().then(() => {
-                expectTimes([Date.now() - start], [1], "Timing Results");
-            });
+            await pool.waitForIdle();
+            expectTimes([end()], [1], "Timing Results");
         });
 
         it("Set concurrencyLimit", () => {
@@ -842,106 +788,100 @@ describe("Miscellaneous Features", () => {
             expect(pool.concurrencyLimit).to.equal(2);
         });
 
-        it("Child Task", () => {
+        it("Child Task", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        pool.addGenericTask({
-                            generator: () => {
-                                return wait(tick);
-                            },
-                            invocationLimit: 1,
-                        });
+                generator: async () => {
+                    await wait(tick);
+                    pool.addGenericTask({
+                        generator: async () => {
+                            await wait(tick);
+                        },
+                        invocationLimit: 1,
                     });
                 },
                 invocationLimit: 1,
             });
-            return pool.waitForIdle().then(() => {
-                expectTimes([Date.now() - start], [2], "Timing Results");
-            });
+            await pool.waitForIdle();
+            expectTimes([end()], [2], "Timing Results");
         });
 
-        it("No Task", () => {
+        it("No Task", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            return pool.waitForIdle();
+            await pool.waitForIdle();
         });
     });
 
     describe("waitForGroupIdle", () => {
-        it("Simple", () => {
+        it("Simple", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             const group = pool.addGroup({});
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick);
+                generator: async () => {
+                    await wait(tick);
                 },
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle().then(() => {
-                expectTimes([Date.now() - start], [1], "Timing Results");
-            });
+            await group.waitForIdle();
+            expectTimes([end()], [1], "Timing Results");
         });
 
-        it("Child Task", () => {
+        it("Child Task", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             const group = pool.addGroup({});
             pool.addGenericTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        pool.addGenericTask({
-                            generator: () => {
-                                return wait(tick);
-                            },
-                            groups: [group],
-                            invocationLimit: 1,
-                        });
+                generator: async () => {
+                    await wait(tick);
+                    pool.addGenericTask({
+                        generator: async () => {
+                            await wait(tick);
+                        },
+                        groups: [group],
+                        invocationLimit: 1,
                     });
                 },
                 groups: [group],
                 invocationLimit: 1,
             });
-            return group.waitForIdle().then(() => {
-                expectTimes([Date.now() - start], [2], "Timing Results");
-            });
+            await group.waitForIdle();
+            expectTimes([end()], [2], "Timing Results");
         });
     });
 
     describe("Configure Task", () => {
-        it("Invocation Limit Triggers Completion", () => {
+        it("Invocation Limit Triggers Completion", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             const task = pool.addGenericTask({
                 frequencyLimit: 1,
                 frequencyWindow: tick * 2,
                 generator: () => {
-                    return Promise.resolve(Date.now() - start);
+                    return Promise.resolve(end());
                 },
                 invocationLimit: 2,
             });
             wait(tick).then(() => {
                 task.invocationLimit = 1;
             });
-            return task.promise().then((results) => {
-                expectTimes([...results, Date.now() - start], [0, 1], "Timing Results");
-            });
+            const results = await task.promise();
+            expectTimes([...results, end()], [0, 1], "Timing Results");
         });
     });
 
     describe("Configure Group", () => {
-        it("Triggers Promises", () => {
+        it("Triggers Promises", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
+            const end = timeSpan();
             const group = pool.addGroup({
                 frequencyLimit: 1,
                 frequencyWindow: tick * 2,
@@ -950,114 +890,100 @@ describe("Miscellaneous Features", () => {
                 group.frequencyWindow = 1;
                 group.frequencyLimit = 1;
             });
-            return pool
+            const results = await pool
                 .addGenericTask({
                     generator: () => {
-                        return Promise.resolve(Date.now() - start);
+                        return Promise.resolve(end());
                     },
                     groups: [group],
                     invocationLimit: 2,
                 })
-                .promise()
-                .then((results) => {
-                    expectTimes(results, [0, 1], "Timing Results");
-                });
+                .promise();
+            expectTimes(results, [0, 1], "Timing Results");
         });
     });
 });
 
 describe("Task Secializations", () => {
-    it("Single Task", () => {
+    it("Single Task", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
+        const end = timeSpan();
         let iteration: number = 0;
-        return pool
+        const result = await pool
             .addSingleTask({
                 data: "test",
-                generator: (data) => {
+                generator: async (data) => {
                     expect(data).to.equal("test");
                     // The task cannot run more than once
                     expect(iteration++).to.equal(0);
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                    await wait(tick);
+                    return end();
                 },
             })
-            .promise()
-            .then((result) => {
-                debug(`Test result: ${result} (${typeof result})`);
-                // The task must return the expected non-array result
-                expectTimes([result], [1], "Timing Results");
-            });
+            .promise();
+        debug(`Test result: ${result} (${typeof result})`);
+        // The task must return the expected non-array result
+        expectTimes([result], [1], "Timing Results");
     });
 
-    it("Linear Task", () => {
+    it("Linear Task", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addLinearTask({
-                generator: () => {
-                    return wait(tick).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async () => {
+                    await wait(tick);
+                    return end();
                 },
                 invocationLimit: 3,
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [1, 2, 3], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [1, 2, 3], "Timing Results");
     });
 
-    it("Each Task", () => {
+    it("Each Task", async () => {
         const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-        const start: number = Date.now();
-        return pool
+        const end = timeSpan();
+        const results = await pool
             .addEachTask({
                 concurrencyLimit: Infinity,
                 data: [3, 2, 1],
-                generator: (element) => {
-                    return wait(tick * element).then(() => {
-                        return Date.now() - start;
-                    });
+                generator: async (element) => {
+                    await wait(tick * element);
+                    return end();
                 },
             })
-            .promise()
-            .then((results) => {
-                expectTimes(results, [3, 2, 1], "Timing Results");
-            });
+            .promise();
+        expectTimes(results, [3, 2, 1], "Timing Results");
     });
 
     describe("Batch Task", () => {
-        it("Static Batch Size", () => {
+        it("Static Batch Size", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
-            return pool
+            const end = timeSpan();
+            const results = await pool
                 .addBatchTask({
                     // Groups the data as [[3, 1], [2]]
                     batchSize: 2,
                     data: [3, 1, 2],
-                    generator: (data) => {
-                        return wait(tick * sum(data)).then(() => {
-                            return Date.now() - start;
-                        });
+                    generator: async (data) => {
+                        await wait(tick * sum(data));
+                        return end();
                     },
                 })
-                .promise()
-                .then((results) => {
-                    expectTimes(results, [4, 2], "Timing Results");
-                });
+                .promise();
+            expectTimes(results, [4, 2], "Timing Results");
         });
 
-        it("Dynamic Batch Size", () => {
+        it("Dynamic Batch Size", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
-            const start: number = Date.now();
-            return pool
+            const end = timeSpan();
+            const results = await pool
                 .addBatchTask({
                     batchSize: (elements, freeSlots) => {
                         // Groups the data as [[2], [1, 3]]
@@ -1065,215 +991,204 @@ describe("Task Secializations", () => {
                     },
                     concurrencyLimit: 2,
                     data: [2, 1, 3],
-                    generator: (data) => {
-                        return wait(tick * sum(data)).then(() => {
-                            return Date.now() - start;
-                        });
+                    generator: async (data) => {
+                        await wait(tick * sum(data));
+                        return end();
                     },
                 })
-                .promise()
-                .then((results) => {
-                    expectTimes(results, [2, 4], "Timing Results");
-                });
+                .promise();
+            expectTimes(results, [2, 4], "Timing Results");
         });
     });
 
     describe("Persistent Batch Task", () => {
-        it("Core Functionality", () => {
+        it("Core Functionality", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
             const task = pool.addPersistentBatchTask<number, string>({
-                generator: (input) => {
+                generator: async (input) => {
                     runCount++;
-                    return wait(tick).then(() => input.map(String));
+                    await wait(tick);
+                    return input.map(String);
                 },
             });
             const inputs = [1, 5, 9];
-            const start: number = Date.now();
-            return Promise.all(
-                inputs.map((input) => {
-                    return task.getResult(input).then((output) => {
-                        expect(output).to.equal(String(input), "Outputs");
-                        expectTimes([Date.now() - start], [1], "Timing Results");
-                    });
+            const end = timeSpan();
+            await Promise.all(
+                inputs.map(async (input) => {
+                    const output = await task.getResult(input);
+                    expect(output).to.equal(String(input), "Outputs");
+                    expectTimes([end()], [1], "Timing Results");
                 }),
-            ).then(() => {
-                expect(runCount).to.equal(1, "runCount");
-                // Verify that the task is not storing the results, which would waste memory.
-                expect((task as any)._task._result.length).to.equal(0);
-            });
+            );
+            expect(runCount).to.equal(1, "runCount");
+            // Verify that the task is not storing the results, which would waste memory.
+            expect((task as any)._task._result.length).to.equal(0);
         });
-        it("Offset Batches", () => {
+        it("Offset Batches", async () => {
             // Runs two batches of requests, offset so the seconds starts while the first is half finished.
             // The second batch should start before the first finishes.
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-            const start: number = Date.now();
+            const end = timeSpan();
             let runCount: number = 0;
             const task = pool.addPersistentBatchTask<number, string>({
-                generator: (input) => {
+                generator: async (input) => {
                     runCount++;
-                    return wait(tick * 2).then(() => input.map(String));
+                    await wait(tick * 2);
+                    return input.map(String);
                 },
             });
             const inputs = [[1, 9], [5, 7]];
-            return Promise.all(
-                inputs.map((input, index) => {
-                    return wait(index * tick).then(() =>
-                        Promise.all(
-                            input.map((value, index2) => {
-                                return task.getResult(value).then((result) => {
-                                    expect(result).to.equal(String(value));
-                                    expectTimes(
-                                        [Date.now() - start],
-                                        [index + 2],
-                                        `Timing result (${index},${index2})`,
-                                    );
-                                });
-                            }),
-                        ),
+            await Promise.all(
+                inputs.map(async (input, index) => {
+                    await wait(index * tick);
+                    await Promise.all(
+                        input.map(async (value, index2) => {
+                            const result = await task.getResult(value);
+                            expect(result).to.equal(String(value));
+                            expectTimes([end()], [index + 2], `Timing result (${index},${index2})`);
+                        }),
                     );
                 }),
-            ).then(() => {
-                expect(runCount).to.equal(2, "runCount");
-            });
+            );
+            expect(runCount).to.equal(2, "runCount");
         });
-        describe("maxBatchSize", () => {
-            it("Core Functionality", () => {
+        describe("maxBatchSize", async () => {
+            it("Core Functionality", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
                 const task = pool.addPersistentBatchTask<number, string>({
-                    generator: (input) => {
+                    generator: async (input) => {
                         runCount++;
-                        return wait(tick).then(() => input.map(String));
+                        await wait(tick);
+                        return input.map(String);
                     },
                     maxBatchSize: 2,
                 });
                 const inputs = [1, 5, 9];
-                const start: number = Date.now();
-                return Promise.all(
-                    inputs.map((input) => {
-                        return task.getResult(input).then((output) => {
-                            expect(output).to.equal(String(input), "Outputs");
-                            expectTimes([Date.now() - start], [1], "Timing Results");
-                        });
+                const end = timeSpan();
+                await Promise.all(
+                    inputs.map(async (input) => {
+                        const output = await task.getResult(input);
+                        expect(output).to.equal(String(input), "Outputs");
+                        expectTimes([end()], [1], "Timing Results");
                     }),
-                ).then(() => {
-                    expect(runCount).to.equal(2, "runCount");
-                });
+                );
+                expect(runCount).to.equal(2, "runCount");
             });
-            it("Instant Start", () => {
+            it("Instant Start", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: (input) => {
+                    generator: async (input) => {
                         runCount++;
-                        return wait(tick).then(() => input);
+                        await wait(tick);
+                        return input;
                     },
                     maxBatchSize: 2,
                 });
 
                 const runCounts = [0, 1, 1];
-                return Promise.all(
-                    runCounts.map((expectedRunCount) => {
+                await Promise.all(
+                    runCounts.map(async (expectedRunCount) => {
                         // The generator should be triggered instantly when the max batch size is reached
                         const promise = task.getResult(undefined);
                         expect(runCount).to.equal(expectedRunCount);
-                        return promise;
+                        await promise;
                     }),
                 );
             });
         });
-        it("queuingDelay", () => {
+        it("queuingDelay", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
             const task = pool.addPersistentBatchTask<undefined, undefined>({
-                generator: (input) => {
+                generator: async (input) => {
                     runCount++;
-                    return Promise.resolve(new Array(input.length));
+                    return new Array(input.length);
                 },
                 queuingDelay: tick * 2,
             });
             const delays = [0, 1, 3];
-            const start: number = Date.now();
-            return Promise.all(
-                delays.map((delay) => {
-                    return wait(delay * tick)
-                        .then(() => task.getResult(undefined))
-                        .then(() => Date.now() - start);
+            const end = timeSpan();
+            const results = await Promise.all(
+                delays.map(async (delay) => {
+                    await wait(delay * tick);
+                    await task.getResult(undefined);
+                    return end();
                 }),
-            ).then((results) => {
-                expectTimes(results, [2, 2, 5], "Timing Results");
-                expect(runCount).to.equal(2, "runCount");
-            });
+            );
+            expectTimes(results, [2, 2, 5], "Timing Results");
+            expect(runCount).to.equal(2, "runCount");
         });
-        it("Delay After Hitting Concurrency Limit", () => {
+        it("Delay After Hitting Concurrency Limit", async () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             let runCount: number = 0;
             const task = pool.addPersistentBatchTask<undefined, undefined>({
                 concurrencyLimit: 1,
-                generator: (input) => {
+                generator: async (input) => {
                     runCount++;
-                    return wait(3 * tick).then(() => new Array(input.length));
+                    await wait(3 * tick);
+                    return new Array(input.length);
                 },
                 queuingDelay: tick,
                 queuingThresholds: [1, Infinity],
             });
-            const start: number = Date.now();
-            return Promise.all(
+            const end = timeSpan();
+            const results = await Promise.all(
                 [
                     task.getResult(undefined).then(() => {
                         return task.getResult(undefined);
                     }),
                     wait(2 * tick).then(() => task.getResult(undefined)),
-                ].map((promise) => promise.then(() => Date.now() - start)),
-            ).then((results) => {
-                expectTimes(results, [8, 8], "Timing Results");
-                expect(runCount).to.equal(2, "runCount");
-            });
+                ].map((promise) => promise.then(() => end())),
+            );
+            expectTimes(results, [8, 8], "Timing Results");
+            expect(runCount).to.equal(2, "runCount");
         });
         describe("queueingThresholds", () => {
-            it("Core Functionality", () => {
+            it("Core Functionality", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 let runCount: number = 0;
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: (input) => {
+                    generator: async (input) => {
                         runCount++;
-                        return wait(5 * tick).then(() => new Array(input.length));
+                        await wait(5 * tick);
+                        return new Array(input.length);
                     },
                     queuingThresholds: [1, 2],
                 });
                 const delays = [0, 1, 2, 3, 4];
-                const start: number = Date.now();
-                return Promise.all(
-                    delays.map((delay) => {
-                        return wait(delay * tick)
-                            .then(() => task.getResult(undefined))
-                            .then(() => Date.now() - start);
+                const end = timeSpan();
+                const results = await Promise.all(
+                    delays.map(async (delay) => {
+                        await wait(delay * tick);
+                        await task.getResult(undefined);
+                        return end();
                     }),
-                ).then((results) => {
-                    expectTimes(results, [5, 7, 7, 9, 9], "Timing Results");
-                    expect(runCount).to.equal(3, "runCount");
-                });
+                );
+                expectTimes(results, [5, 7, 7, 9, 9], "Timing Results");
+                expect(runCount).to.equal(3, "runCount");
             });
-            it("Should Trigger On Task Completion", () => {
+            it("Should Trigger On Task Completion", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: (input) => {
-                        return wait(2 * tick).then(() => new Array(input.length));
+                    generator: async (input) => {
+                        await wait(2 * tick);
+                        return new Array(input.length);
                     },
                     queuingThresholds: [1, 2],
                 });
                 const delays = [0, 1];
-                const start: number = Date.now();
-                return Promise.all(
-                    delays.map((delay) => {
-                        return wait(delay * tick)
-                            .then(() => task.getResult(undefined))
-                            .then(() => Date.now() - start);
+                const end = timeSpan();
+                const results = await Promise.all(
+                    delays.map(async (delay) => {
+                        await wait(delay * tick);
+                        await task.getResult(undefined);
+                        return end();
                     }),
-                ).then((results) => {
-                    expectTimes(results, [2, 4], "Timing Results");
-                });
+                );
+                expectTimes(results, [2, 4], "Timing Results");
             });
         });
         describe("Retries", () => {
@@ -1292,12 +1207,12 @@ describe("Task Secializations", () => {
                         return inputs.map((input) => input + 1);
                     },
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2].map(async (input) => {
                         const output = await batcher.getResult(input);
                         expect(output).to.equal(input + 1, "getResult output");
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expectTimes(results, [2, 2], "Timing Results");
@@ -1317,12 +1232,12 @@ describe("Task Secializations", () => {
                         });
                     },
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2].map(async (input) => {
                         const output = await batcher.getResult(input);
                         expect(output).to.equal(input + 1, "getResult output");
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expectTimes(results, [2, 1], "Timing Results");
@@ -1342,12 +1257,12 @@ describe("Task Secializations", () => {
                     maxBatchSize: 3,
                     queuingThresholds: [1, Infinity],
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2, 3, 4].map(async (input) => {
                         const output = await batcher.getResult(input);
                         expect(output).to.equal(input + 1, "getResult output");
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expectTimes(results, [2, 2, 1, 2], "Timing Results");
@@ -1367,7 +1282,7 @@ describe("Task Secializations", () => {
                     queuingDelay: tick,
                     queuingThresholds: [1, Infinity],
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2, 3].map(async (_, index) => {
                         const promise = batcher.getResult(undefined);
@@ -1377,7 +1292,7 @@ describe("Task Secializations", () => {
                             expect(runCount).to.equal(1, "runCount after");
                         }
                         await promise;
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expectTimes(results, [1, 1, 3], "Timing Results");
@@ -1394,7 +1309,7 @@ describe("Task Secializations", () => {
                     queuingDelay: tick,
                     queuingThresholds: [1, Infinity],
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2, 3].map(async (_, index) => {
                         const promise = batcher.getResult(undefined);
@@ -1407,7 +1322,7 @@ describe("Task Secializations", () => {
                             expect(runCount).to.equal(1, "runCount after second");
                         }
                         await promise;
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expectTimes(results, [1, 1, 2], "Timing Results");
@@ -1425,7 +1340,7 @@ describe("Task Secializations", () => {
                     queuingDelay: tick,
                     queuingThresholds: [1, Infinity],
                 });
-                const start = Date.now();
+                const end = timeSpan();
                 const results = await Promise.all(
                     [1, 2, 3].map(async (_, index) => {
                         const promise = batcher.getResult(undefined);
@@ -1433,7 +1348,7 @@ describe("Task Secializations", () => {
                             batcher.send();
                         }
                         await promise;
-                        return Date.now() - start;
+                        return end();
                     }),
                 );
                 expect(runCount).to.equal(2, "runCount");
@@ -1441,126 +1356,108 @@ describe("Task Secializations", () => {
             });
         });
         describe("Error Handling", () => {
-            it("Single Rejection", () => {
+            it("Single Rejection", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<string, undefined>({
-                    generator: (input) => {
-                        return wait(tick).then(() =>
-                            input.map((value) => {
-                                return value === "error" ? new Error("test") : undefined;
-                            }),
-                        );
+                    generator: async (input) => {
+                        await wait(tick);
+                        return input.map((value) => {
+                            return value === "error" ? new Error("test") : undefined;
+                        });
                     },
                 });
 
                 const inputs = ["a", "error", "b"];
-                return Promise.all(
-                    inputs.map((input) => {
-                        return task
-                            .getResult(input)
-                            .then(() => true)
-                            .catch((err: Error) => {
-                                expect(err.message).to.equal("test");
-                                return false;
-                            });
+                const results = await Promise.all(
+                    inputs.map(async (input) => {
+                        try {
+                            await task.getResult(input);
+                            return true;
+                        } catch (err) {
+                            expect(err.message).to.equal("test");
+                            return false;
+                        }
                     }),
-                ).then((results) => {
-                    expect(results).to.deep.equal([true, false, true]);
-                });
+                );
+                expect(results).to.deep.equal([true, false, true]);
             });
-            it("Synchronous Generator Exception Followed By Success", () => {
+            it("Synchronous Generator Exception Followed By Success", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<number, undefined>({
-                    generator: (input) => {
+                    generator: async (input) => {
                         input.forEach((value) => {
                             if (value === 0) {
                                 throw new Error("test");
                             }
                         });
-                        return wait(1).then(() => new Array(input.length));
+                        await wait(1);
+                        return new Array(input.length);
                     },
                     maxBatchSize: 2,
                 });
 
-                const inputs = [0, 1, 2];
-                return Promise.all(
-                    inputs.map((input) => {
-                        return task
-                            .getResult(input)
-                            .then(() => true)
-                            .catch((err: Error) => {
-                                expect(err.message).to.equal("test");
-                                return false;
-                            });
+                await Promise.all(
+                    [0, 1].map(async (input) => {
+                        await expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
                     }),
-                ).then((results) => {
-                    expect(results).to.deep.equal([false, false, true]);
-                });
+                );
+                await task.getResult(2);
             });
-            it("Asynchronous Generator Exception Followed By Success", () => {
+            it("Asynchronous Generator Exception Followed By Success", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<number, undefined>({
-                    generator: (input) => {
-                        return wait(1).then(() => {
-                            input.forEach((value) => {
-                                if (value === 0) {
-                                    throw new Error("test");
-                                }
-                            });
-                            return new Array(input.length);
+                    generator: async (input) => {
+                        await wait(1);
+                        input.forEach((value) => {
+                            if (value === 0) {
+                                throw new Error("test");
+                            }
                         });
+                        return new Array(input.length);
                     },
                     maxBatchSize: 2,
                 });
 
-                const inputs = [0, 1, 2];
-                return Promise.all(
-                    inputs.map((input) => {
-                        return task
-                            .getResult(input)
-                            .then(() => true)
-                            .catch((err: Error) => {
-                                expect(err.message).to.equal("test");
-                                return false;
-                            });
+                await Promise.all(
+                    [0, 1].map(async (input) => {
+                        await expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
                     }),
-                ).then((results) => {
-                    expect(results).to.deep.equal([false, false, true]);
-                });
+                );
+                await task.getResult(1);
             });
-            it("Invalid Output Length", () => {
+            it("Invalid Output Length", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<number, undefined>({
-                    generator: (input) => {
+                    generator: async (input) => {
                         // Respond with an array larger than the input
-                        return wait(1).then(() => new Array(input.length + 1));
+                        await wait(1);
+                        return new Array(input.length + 1);
                     },
                 });
 
                 const inputs = [0, 1, 2];
-                return Promise.all(
-                    inputs.map((input) => {
-                        return task
-                            .getResult(input)
-                            .then(() => true)
-                            .catch(() => false);
+                await Promise.all(
+                    inputs.map(async (input) => {
+                        expect(task.getResult(input)).to.be.rejectedWith(
+                            Error,
+                            /^batchingFunction output length does not equal the input length$/,
+                        );
                     }),
-                ).then((results) => {
-                    expect(results).to.deep.equal([false, false, false]);
-                });
+                );
             });
-            it("End Task", () => {
+            it("End Task", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: () => {
-                        return wait(tick).then(() => []);
+                    generator: async () => {
+                        await wait(tick);
+                        return [];
                     },
                 });
                 const firstPromise = task.getResult(undefined);
                 task.end();
                 expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
 
-                return Promise.all(
+                await Promise.all(
                     [firstPromise, task.getResult(undefined)].map((promise) => {
                         return expect(promise).to.be.rejectedWith(Error);
                     }),

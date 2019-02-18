@@ -52,10 +52,12 @@
         "@types/next-tick": "^1.0.0",
         "@types/node": "^11.9.4",
         "@types/p-defer": "^1.0.3",
+        "@types/time-span": "^2.0.0",
         "chai": "^4.2.0",
         "chai-as-promised": "^7.1.1",
         "cross-env": "^5.2.0",
         "mocha": "^5.2.0",
+        "time-span": "^2.0.0",
         "tslint": "^5.12.1",
         "typescript": "^3.3.3"
     },
