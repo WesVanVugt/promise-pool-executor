@@ -385,7 +385,7 @@ describe("Exception Handling", () => {
     });
 
     describe("Invalid Configuration", () => {
-        it("Invalid Parameters", () => {
+        it("Invalid concurrencyLimit", () => {
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
 
             expect(() =>
@@ -394,6 +394,28 @@ describe("Exception Handling", () => {
                     generator: undefined as any,
                 }),
             ).to.throw(Error, /^Invalid concurrency limit: 0$/);
+        });
+
+        it("Invalid frequencyLimit", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            expect(() =>
+                pool.addGenericTask({
+                    frequencyLimit: 0, // invalid
+                    generator: undefined as any,
+                }),
+            ).to.throw(Error, /^Invalid frequency limit: 0$/);
+        });
+
+        it("Invalid frequencyWindow", () => {
+            const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
+
+            expect(() =>
+                pool.addGenericTask({
+                    frequencyWindow: 0, // invalid
+                    generator: undefined as any,
+                }),
+            ).to.throw(Error, /^Invalid frequency window: 0$/);
         });
 
         it("Group From Another Pool", () => {
@@ -723,6 +745,56 @@ describe("Miscellaneous Features", () => {
         const results = await task.promise();
         // The task must return the expected non-array result
         expectTimes(results, [1, 2, 2], "Timing Results");
+    });
+
+    it("Get Pool Status", async () => {
+        const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor({
+            concurrencyLimit: 5,
+            frequencyLimit: 5,
+            frequencyWindow: 1000,
+        });
+
+        const task = pool.addGenericTask({
+            async generator() {
+                await wait(tick);
+            },
+            invocationLimit: 1,
+        });
+        pool.addGenericTask({
+            async generator() {
+                await wait(tick);
+            },
+            invocationLimit: 2,
+        });
+
+        expect({
+            concurrencyLimit: pool.concurrencyLimit,
+            frequencyLimit: pool.frequencyLimit,
+            frequencyWindow: pool.frequencyWindow,
+            freeSlots: pool.freeSlots,
+            activePromiseCount: pool.activePromiseCount,
+            activeTaskCount: pool.activeTaskCount,
+        }).to.deep.equal({
+            concurrencyLimit: 5,
+            frequencyLimit: 5,
+            frequencyWindow: 1000,
+            freeSlots: 2,
+            activePromiseCount: 3,
+            activeTaskCount: 2,
+        });
+
+        await task.promise();
+        expect({
+            freeSlots: pool.freeSlots,
+            activePromiseCount: pool.activePromiseCount,
+            activeTaskCount: pool.activeTaskCount,
+        }).to.deep.equal({
+            freeSlots: 3,
+            activePromiseCount: 2,
+            activeTaskCount: 1,
+        });
+
+        await pool.waitForIdle();
     });
 
     it("Get Task Status", async () => {
