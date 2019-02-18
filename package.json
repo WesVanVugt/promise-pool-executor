@@ -21,9 +21,9 @@
     "repository": "WesVanVugt/promise-pool-executor",
     "scripts": {
         "prepare": "npm run build",
-        "build": "npm run clean && npm run lint && npm run tsc",
+        "build": "npm run clean && npm run tsc",
         "clean": "rm -rf index.js index.d.ts private public test",
-        "test": "mocha test/*.js --reporter spec --colors --check-leaks --retries 2",
+        "test": "npm run lint && nyc mocha --require ts-node/register ts/test/*.ts --colors --check-leaks --retries 2",
         "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
         "tsc": "tsc",
         "lint": "tslint ts/**/*.ts"
@@ -57,10 +57,16 @@
         "chai-as-promised": "^7.1.1",
         "cross-env": "^5.2.0",
         "mocha": "^5.2.0",
+        "nyc": "^13.3.0",
         "time-span": "^2.0.0",
+        "ts-node": "^8.0.2",
         "tslint": "^5.12.1",
         "typescript": "^3.3.3"
     },
     "license": "MIT",
-    "public": true
+    "nyc": {
+        "extension": [
+            ".ts"
+        ]
+    }
 }
