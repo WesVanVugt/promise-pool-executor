@@ -23,7 +23,7 @@
         "prepare": "npm run build",
         "build": "npm run clean && npm run lint && npm run tsc",
         "clean": "rm -rf index.js index.d.ts private public test",
-        "test": "mocha test/*.js --reporter spec --colors --check-leaks",
+        "test": "mocha test/*.js --reporter spec --colors --check-leaks --retries 2",
         "test-debug": "cross-env DEBUG=*,-mocha:* npm test",
         "tsc": "tsc",
         "lint": "tslint ts/**/*.ts"

@@ -34,11 +34,11 @@ if (typingImportTest) {
 /**
  * Milliseconds per tick.
  */
-const tick = 100;
+const tick = 80;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance = 80;
+const tolerance = 70;
 /**
  * Returns a promise which waits the specified amount of time before resolving.
  */
@@ -104,12 +104,7 @@ function expectUnhandledRejection(expectedError, delay = tick * 2) {
  * Returns the sum of an array of numbers.
  */
 function sum(nums) {
-    let total = 0;
-    let i;
-    for (i of nums) {
-        total += i;
-    }
-    return total;
+    return nums.reduce((a, b) => a + b, 0);
 }
 function unhandledRejectionListener(err) {
     debug("unhandledRejectionListener: %O", err);
@@ -339,7 +334,7 @@ describe("Exception Handling", () => {
                 generator: () => {
                     return Promise.resolve();
                 },
-            })).to.throw();
+            })).to.throw(Error, /^Invalid concurrency limit: 0$/);
             // TODO: Test error message
         });
         it("Group From Another Pool", () => {
@@ -354,7 +349,7 @@ describe("Exception Handling", () => {
                         concurrencyLimit: 1,
                     }),
                 ],
-            })).to.throw();
+            })).to.throw(Error, /^options\.groups contains a group belonging to a different pool$/);
         });
     });
     describe("Unhandled Rejection", () => {
@@ -392,12 +387,7 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
             });
             yield expectUnhandledRejection(error);
-            yield Promise.all([
-                expectHandledRejection(),
-                task.promise().catch(() => {
-                    // discard the error
-                }),
-            ]);
+            yield Promise.all([expectHandledRejection(), chai_1.expect(task.promise()).to.be.rejectedWith(error)]);
         }));
         it("Multi-rejection", () => __awaiter(this, void 0, void 0, function* () {
             const pool = new Pool.PromisePoolExecutor();
@@ -909,8 +899,7 @@ describe("Task Secializations", () => {
             chai_1.expect(task._task._result.length).to.equal(0);
         }));
         it("Offset Batches", () => __awaiter(this, void 0, void 0, function* () {
-            // Runs two batches of requests, offset so the seconds starts while the first is half finished.
-            // The second batch should start before the first finishes.
+            // Runs two batches of requests, offset so the second starts while the first is half finished.
             const pool = new Pool.PromisePoolExecutor();
             const end = time_span_1.default();
             let runCount = 0;
@@ -920,16 +909,17 @@ describe("Task Secializations", () => {
                     yield wait(tick * 2);
                     return input.map(String);
                 }),
+                queuingDelay: tick,
             });
-            const inputs = [[1, 9], [5, 7]];
-            yield Promise.all(inputs.map((input, index) => __awaiter(this, void 0, void 0, function* () {
-                yield wait(index * tick);
-                yield Promise.all(input.map((value, index2) => __awaiter(this, void 0, void 0, function* () {
+            const results = yield Promise.all([[1, 9], [5, 7]].map((input, index) => __awaiter(this, void 0, void 0, function* () {
+                yield wait(2 * index * tick);
+                return Promise.all(input.map((value) => __awaiter(this, void 0, void 0, function* () {
                     const result = yield task.getResult(value);
                     chai_1.expect(result).to.equal(String(value));
-                    expectTimes([end()], [index + 2], `Timing result (${index},${index2})`);
+                    return end();
                 })));
             })));
+            expectTimes([].concat(...results), [3, 3, 5, 5], "Timing Results");
             chai_1.expect(runCount).to.equal(2, "runCount");
         }));
         describe("maxBatchSize", () => __awaiter(this, void 0, void 0, function* () {
@@ -943,14 +933,15 @@ describe("Task Secializations", () => {
                         return input.map(String);
                     }),
                     maxBatchSize: 2,
+                    queuingDelay: tick,
                 });
-                const inputs = [1, 5, 9];
                 const end = time_span_1.default();
-                yield Promise.all(inputs.map((input) => __awaiter(this, void 0, void 0, function* () {
+                const results = yield Promise.all([1, 5, 9].map((input) => __awaiter(this, void 0, void 0, function* () {
                     const output = yield task.getResult(input);
                     chai_1.expect(output).to.equal(String(input), "Outputs");
-                    expectTimes([end()], [1], "Timing Results");
+                    return end();
                 })));
+                expectTimes(results, [1, 1, 2], "Timing Results");
                 chai_1.expect(runCount).to.equal(2, "runCount");
             }));
             it("Instant Start", () => __awaiter(this, void 0, void 0, function* () {
@@ -964,8 +955,7 @@ describe("Task Secializations", () => {
                     }),
                     maxBatchSize: 2,
                 });
-                const runCounts = [0, 1, 1];
-                yield Promise.all(runCounts.map((expectedRunCount) => __awaiter(this, void 0, void 0, function* () {
+                yield Promise.all([0, 1, 1].map((expectedRunCount) => __awaiter(this, void 0, void 0, function* () {
                     // The generator should be triggered instantly when the max batch size is reached
                     const promise = task.getResult(undefined);
                     chai_1.expect(runCount).to.equal(expectedRunCount);
@@ -983,9 +973,8 @@ describe("Task Secializations", () => {
                 }),
                 queuingDelay: tick * 2,
             });
-            const delays = [0, 1, 3];
             const end = time_span_1.default();
-            const results = yield Promise.all(delays.map((delay) => __awaiter(this, void 0, void 0, function* () {
+            const results = yield Promise.all([0, 1, 3].map((delay) => __awaiter(this, void 0, void 0, function* () {
                 yield wait(delay * tick);
                 yield task.getResult(undefined);
                 return end();
@@ -1008,11 +997,17 @@ describe("Task Secializations", () => {
             });
             const end = time_span_1.default();
             const results = yield Promise.all([
-                task.getResult(undefined).then(() => {
-                    return task.getResult(undefined);
-                }),
-                wait(2 * tick).then(() => task.getResult(undefined)),
-            ].map((promise) => promise.then(() => end())));
+                (() => __awaiter(this, void 0, void 0, function* () {
+                    yield task.getResult(undefined);
+                    yield task.getResult(undefined);
+                    return end();
+                }))(),
+                (() => __awaiter(this, void 0, void 0, function* () {
+                    yield wait(2 * tick);
+                    yield task.getResult(undefined);
+                    return end();
+                }))(),
+            ]);
             expectTimes(results, [8, 8], "Timing Results");
             chai_1.expect(runCount).to.equal(2, "runCount");
         }));
@@ -1023,19 +1018,19 @@ describe("Task Secializations", () => {
                 const task = pool.addPersistentBatchTask({
                     generator: (input) => __awaiter(this, void 0, void 0, function* () {
                         runCount++;
-                        yield wait(5 * tick);
+                        yield wait(7 * tick);
                         return new Array(input.length);
                     }),
                     queuingThresholds: [1, 2],
+                    queuingDelay: tick,
                 });
-                const delays = [0, 1, 2, 3, 4];
                 const end = time_span_1.default();
-                const results = yield Promise.all(delays.map((delay) => __awaiter(this, void 0, void 0, function* () {
+                const results = yield Promise.all([0, 2, 3, 5, 6].map((delay) => __awaiter(this, void 0, void 0, function* () {
                     yield wait(delay * tick);
                     yield task.getResult(undefined);
                     return end();
                 })));
-                expectTimes(results, [5, 7, 7, 9, 9], "Timing Results");
+                expectTimes(results, [8, 11, 11, 14, 14], "Timing Results");
                 chai_1.expect(runCount).to.equal(3, "runCount");
             }));
             it("Should Trigger On Task Completion", () => __awaiter(this, void 0, void 0, function* () {
@@ -1045,33 +1040,32 @@ describe("Task Secializations", () => {
                         yield wait(2 * tick);
                         return new Array(input.length);
                     }),
-                    queuingThresholds: [1, 2],
+                    queuingThresholds: [1, Infinity],
+                    queuingDelay: tick,
                 });
-                const delays = [0, 1];
                 const end = time_span_1.default();
-                const results = yield Promise.all(delays.map((delay) => __awaiter(this, void 0, void 0, function* () {
+                const results = yield Promise.all([0, 2].map((delay) => __awaiter(this, void 0, void 0, function* () {
                     yield wait(delay * tick);
                     yield task.getResult(undefined);
                     return end();
                 })));
-                expectTimes(results, [2, 4], "Timing Results");
+                expectTimes(results, [3, 6], "Timing Results");
             }));
         });
         describe("Retries", () => {
             it("Full", () => __awaiter(this, void 0, void 0, function* () {
                 const pool = new Pool.PromisePoolExecutor();
-                let batchNumber = 0;
                 let runCount = 0;
                 const batcher = pool.addPersistentBatchTask({
                     generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
                         runCount++;
                         yield wait(tick);
-                        batchNumber++;
-                        if (batchNumber < 2) {
+                        if (runCount < 2) {
                             return inputs.map(() => Pool.BATCHER_RETRY_TOKEN);
                         }
                         return inputs.map((input) => input + 1);
                     }),
+                    queuingDelay: tick,
                 });
                 const end = time_span_1.default();
                 const results = yield Promise.all([1, 2].map((input) => __awaiter(this, void 0, void 0, function* () {
@@ -1079,22 +1073,21 @@ describe("Task Secializations", () => {
                     chai_1.expect(output).to.equal(input + 1, "getResult output");
                     return end();
                 })));
-                expectTimes(results, [2, 2], "Timing Results");
+                expectTimes(results, [4, 4], "Timing Results");
                 chai_1.expect(runCount).to.equal(2, "runCount");
             }));
             it("Partial", () => __awaiter(this, void 0, void 0, function* () {
                 const pool = new Pool.PromisePoolExecutor();
-                let batchNumber = 0;
                 let runCount = 0;
                 const batcher = pool.addPersistentBatchTask({
                     generator: (inputs) => __awaiter(this, void 0, void 0, function* () {
                         runCount++;
                         yield wait(tick);
-                        batchNumber++;
                         return inputs.map((input, index) => {
-                            return batchNumber < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                            return runCount < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
                         });
                     }),
+                    queuingDelay: tick,
                 });
                 const end = time_span_1.default();
                 const results = yield Promise.all([1, 2].map((input) => __awaiter(this, void 0, void 0, function* () {
@@ -1102,7 +1095,7 @@ describe("Task Secializations", () => {
                     chai_1.expect(output).to.equal(input + 1, "getResult output");
                     return end();
                 })));
-                expectTimes(results, [2, 1], "Timing Results");
+                expectTimes(results, [4, 2], "Timing Results");
                 chai_1.expect(runCount).to.equal(2, "runCount");
             }));
             it("Ordering", () => __awaiter(this, void 0, void 0, function* () {
@@ -1221,8 +1214,7 @@ describe("Task Secializations", () => {
                         });
                     }),
                 });
-                const inputs = ["a", "error", "b"];
-                const results = yield Promise.all(inputs.map((input) => __awaiter(this, void 0, void 0, function* () {
+                const results = yield Promise.all(["a", "error", "b"].map((input) => __awaiter(this, void 0, void 0, function* () {
                     try {
                         yield task.getResult(input);
                         return true;
@@ -1249,7 +1241,7 @@ describe("Task Secializations", () => {
                     maxBatchSize: 2,
                 });
                 yield Promise.all([0, 1].map((input) => __awaiter(this, void 0, void 0, function* () {
-                    yield chai_1.expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
+                    yield chai_1.expect(task.getResult(input)).to.be.rejectedWith(Error, /^test$/);
                 })));
                 yield task.getResult(2);
             }));
@@ -1268,7 +1260,7 @@ describe("Task Secializations", () => {
                     maxBatchSize: 2,
                 });
                 yield Promise.all([0, 1].map((input) => __awaiter(this, void 0, void 0, function* () {
-                    yield chai_1.expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
+                    yield chai_1.expect(task.getResult(input)).to.be.rejectedWith(Error, /^test$/);
                 })));
                 yield task.getResult(1);
             }));
@@ -1281,8 +1273,7 @@ describe("Task Secializations", () => {
                         return new Array(input.length + 1);
                     }),
                 });
-                const inputs = [0, 1, 2];
-                yield Promise.all(inputs.map((input) => __awaiter(this, void 0, void 0, function* () {
+                yield Promise.all([0, 1, 2].map((input) => __awaiter(this, void 0, void 0, function* () {
                     chai_1.expect(task.getResult(input)).to.be.rejectedWith(Error, /^batchingFunction output length does not equal the input length$/);
                 })));
             }));
@@ -1298,7 +1289,7 @@ describe("Task Secializations", () => {
                 task.end();
                 chai_1.expect(task.state === Pool.TaskState.Terminated, "State should be terminated");
                 yield Promise.all([firstPromise, task.getResult(undefined)].map((promise) => {
-                    return chai_1.expect(promise).to.be.rejectedWith(Error);
+                    return chai_1.expect(promise).to.be.rejectedWith(Error, /^This task has ended and cannot process more items$/);
                 }));
             }));
         });

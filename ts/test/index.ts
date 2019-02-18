@@ -36,11 +36,11 @@ if (typingImportTest) {
 /**
  * Milliseconds per tick.
  */
-const tick: number = 100;
+const tick: number = 80;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 80;
+const tolerance: number = 70;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -117,12 +117,7 @@ async function expectUnhandledRejection(expectedError: any, delay: number = tick
  * Returns the sum of an array of numbers.
  */
 function sum(nums: number[]): number {
-    let total: number = 0;
-    let i: number;
-    for (i of nums) {
-        total += i;
-    }
-    return total;
+    return nums.reduce((a, b) => a + b, 0);
 }
 
 function unhandledRejectionListener(err: any) {
@@ -390,8 +385,7 @@ describe("Exception Handling", () => {
                         return Promise.resolve();
                     },
                 }),
-            ).to.throw();
-            // TODO: Test error message
+            ).to.throw(Error, /^Invalid concurrency limit: 0$/);
         });
 
         it("Group From Another Pool", () => {
@@ -409,7 +403,7 @@ describe("Exception Handling", () => {
                         }),
                     ],
                 }),
-            ).to.throw();
+            ).to.throw(Error, /^options\.groups contains a group belonging to a different pool$/);
         });
     });
 
@@ -453,12 +447,7 @@ describe("Exception Handling", () => {
                 invocationLimit: 1,
             });
             await expectUnhandledRejection(error);
-            await Promise.all([
-                expectHandledRejection(),
-                task.promise().catch(() => {
-                    // discard the error
-                }),
-            ]);
+            await Promise.all([expectHandledRejection(), expect(task.promise()).to.be.rejectedWith(error)]);
         });
 
         it("Multi-rejection", async () => {
@@ -1026,8 +1015,7 @@ describe("Task Secializations", () => {
             expect((task as any)._task._result.length).to.equal(0);
         });
         it("Offset Batches", async () => {
-            // Runs two batches of requests, offset so the seconds starts while the first is half finished.
-            // The second batch should start before the first finishes.
+            // Runs two batches of requests, offset so the second starts while the first is half finished.
             const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
             const end = timeSpan();
             let runCount: number = 0;
@@ -1037,20 +1025,21 @@ describe("Task Secializations", () => {
                     await wait(tick * 2);
                     return input.map(String);
                 },
+                queuingDelay: tick,
             });
-            const inputs = [[1, 9], [5, 7]];
-            await Promise.all(
-                inputs.map(async (input, index) => {
-                    await wait(index * tick);
-                    await Promise.all(
-                        input.map(async (value, index2) => {
+            const results = await Promise.all(
+                [[1, 9], [5, 7]].map(async (input, index) => {
+                    await wait(2 * index * tick);
+                    return Promise.all(
+                        input.map(async (value) => {
                             const result = await task.getResult(value);
                             expect(result).to.equal(String(value));
-                            expectTimes([end()], [index + 2], `Timing result (${index},${index2})`);
+                            return end();
                         }),
                     );
                 }),
             );
+            expectTimes(([] as number[]).concat(...results), [3, 3, 5, 5], "Timing Results");
             expect(runCount).to.equal(2, "runCount");
         });
         describe("maxBatchSize", async () => {
@@ -1064,16 +1053,17 @@ describe("Task Secializations", () => {
                         return input.map(String);
                     },
                     maxBatchSize: 2,
+                    queuingDelay: tick,
                 });
-                const inputs = [1, 5, 9];
                 const end = timeSpan();
-                await Promise.all(
-                    inputs.map(async (input) => {
+                const results = await Promise.all(
+                    [1, 5, 9].map(async (input) => {
                         const output = await task.getResult(input);
                         expect(output).to.equal(String(input), "Outputs");
-                        expectTimes([end()], [1], "Timing Results");
+                        return end();
                     }),
                 );
+                expectTimes(results, [1, 1, 2], "Timing Results");
                 expect(runCount).to.equal(2, "runCount");
             });
             it("Instant Start", async () => {
@@ -1088,9 +1078,8 @@ describe("Task Secializations", () => {
                     maxBatchSize: 2,
                 });
 
-                const runCounts = [0, 1, 1];
                 await Promise.all(
-                    runCounts.map(async (expectedRunCount) => {
+                    [0, 1, 1].map(async (expectedRunCount) => {
                         // The generator should be triggered instantly when the max batch size is reached
                         const promise = task.getResult(undefined);
                         expect(runCount).to.equal(expectedRunCount);
@@ -1109,10 +1098,9 @@ describe("Task Secializations", () => {
                 },
                 queuingDelay: tick * 2,
             });
-            const delays = [0, 1, 3];
             const end = timeSpan();
             const results = await Promise.all(
-                delays.map(async (delay) => {
+                [0, 1, 3].map(async (delay) => {
                     await wait(delay * tick);
                     await task.getResult(undefined);
                     return end();
@@ -1135,14 +1123,18 @@ describe("Task Secializations", () => {
                 queuingThresholds: [1, Infinity],
             });
             const end = timeSpan();
-            const results = await Promise.all(
-                [
-                    task.getResult(undefined).then(() => {
-                        return task.getResult(undefined);
-                    }),
-                    wait(2 * tick).then(() => task.getResult(undefined)),
-                ].map((promise) => promise.then(() => end())),
-            );
+            const results = await Promise.all([
+                (async () => {
+                    await task.getResult(undefined);
+                    await task.getResult(undefined);
+                    return end();
+                })(),
+                (async () => {
+                    await wait(2 * tick);
+                    await task.getResult(undefined);
+                    return end();
+                })(),
+            ]);
             expectTimes(results, [8, 8], "Timing Results");
             expect(runCount).to.equal(2, "runCount");
         });
@@ -1153,21 +1145,21 @@ describe("Task Secializations", () => {
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
                     generator: async (input) => {
                         runCount++;
-                        await wait(5 * tick);
+                        await wait(7 * tick);
                         return new Array(input.length);
                     },
                     queuingThresholds: [1, 2],
+                    queuingDelay: tick,
                 });
-                const delays = [0, 1, 2, 3, 4];
                 const end = timeSpan();
                 const results = await Promise.all(
-                    delays.map(async (delay) => {
+                    [0, 2, 3, 5, 6].map(async (delay) => {
                         await wait(delay * tick);
                         await task.getResult(undefined);
                         return end();
                     }),
                 );
-                expectTimes(results, [5, 7, 7, 9, 9], "Timing Results");
+                expectTimes(results, [8, 11, 11, 14, 14], "Timing Results");
                 expect(runCount).to.equal(3, "runCount");
             });
             it("Should Trigger On Task Completion", async () => {
@@ -1177,35 +1169,34 @@ describe("Task Secializations", () => {
                         await wait(2 * tick);
                         return new Array(input.length);
                     },
-                    queuingThresholds: [1, 2],
+                    queuingThresholds: [1, Infinity],
+                    queuingDelay: tick,
                 });
-                const delays = [0, 1];
                 const end = timeSpan();
                 const results = await Promise.all(
-                    delays.map(async (delay) => {
+                    [0, 2].map(async (delay) => {
                         await wait(delay * tick);
                         await task.getResult(undefined);
                         return end();
                     }),
                 );
-                expectTimes(results, [2, 4], "Timing Results");
+                expectTimes(results, [3, 6], "Timing Results");
             });
         });
         describe("Retries", () => {
             it("Full", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                let batchNumber = 0;
                 let runCount = 0;
                 const batcher = pool.addPersistentBatchTask<number, number>({
                     generator: async (inputs) => {
                         runCount++;
                         await wait(tick);
-                        batchNumber++;
-                        if (batchNumber < 2) {
+                        if (runCount < 2) {
                             return inputs.map(() => Pool.BATCHER_RETRY_TOKEN);
                         }
                         return inputs.map((input) => input + 1);
                     },
+                    queuingDelay: tick,
                 });
                 const end = timeSpan();
                 const results = await Promise.all(
@@ -1215,22 +1206,21 @@ describe("Task Secializations", () => {
                         return end();
                     }),
                 );
-                expectTimes(results, [2, 2], "Timing Results");
+                expectTimes(results, [4, 4], "Timing Results");
                 expect(runCount).to.equal(2, "runCount");
             });
             it("Partial", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
-                let batchNumber = 0;
                 let runCount = 0;
                 const batcher = pool.addPersistentBatchTask<number, number>({
                     generator: async (inputs) => {
                         runCount++;
                         await wait(tick);
-                        batchNumber++;
                         return inputs.map((input, index) => {
-                            return batchNumber < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
+                            return runCount < 2 && index < 1 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
                         });
                     },
+                    queuingDelay: tick,
                 });
                 const end = timeSpan();
                 const results = await Promise.all(
@@ -1240,7 +1230,7 @@ describe("Task Secializations", () => {
                         return end();
                     }),
                 );
-                expectTimes(results, [2, 1], "Timing Results");
+                expectTimes(results, [4, 2], "Timing Results");
                 expect(runCount).to.equal(2, "runCount");
             });
             it("Ordering", async () => {
@@ -1367,9 +1357,8 @@ describe("Task Secializations", () => {
                     },
                 });
 
-                const inputs = ["a", "error", "b"];
                 const results = await Promise.all(
-                    inputs.map(async (input) => {
+                    ["a", "error", "b"].map(async (input) => {
                         try {
                             await task.getResult(input);
                             return true;
@@ -1398,7 +1387,7 @@ describe("Task Secializations", () => {
 
                 await Promise.all(
                     [0, 1].map(async (input) => {
-                        await expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
+                        await expect(task.getResult(input)).to.be.rejectedWith(Error, /^test$/);
                     }),
                 );
                 await task.getResult(2);
@@ -1420,7 +1409,7 @@ describe("Task Secializations", () => {
 
                 await Promise.all(
                     [0, 1].map(async (input) => {
-                        await expect(task.getResult(input)).to.be.rejectedWith(Error, "test");
+                        await expect(task.getResult(input)).to.be.rejectedWith(Error, /^test$/);
                     }),
                 );
                 await task.getResult(1);
@@ -1435,9 +1424,8 @@ describe("Task Secializations", () => {
                     },
                 });
 
-                const inputs = [0, 1, 2];
                 await Promise.all(
-                    inputs.map(async (input) => {
+                    [0, 1, 2].map(async (input) => {
                         expect(task.getResult(input)).to.be.rejectedWith(
                             Error,
                             /^batchingFunction output length does not equal the input length$/,
@@ -1459,7 +1447,10 @@ describe("Task Secializations", () => {
 
                 await Promise.all(
                     [firstPromise, task.getResult(undefined)].map((promise) => {
-                        return expect(promise).to.be.rejectedWith(Error);
+                        return expect(promise).to.be.rejectedWith(
+                            Error,
+                            /^This task has ended and cannot process more items$/,
+                        );
                     }),
                 );
             });
