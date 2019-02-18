@@ -36,11 +36,11 @@ if (typingImportTest) {
 /**
  * Milliseconds per tick.
  */
-const tick: number = 80;
+const tick: number = 90;
 /**
  * Milliseconds tolerance for tests above the target.
  */
-const tolerance: number = 70;
+const tolerance: number = 80;
 
 /**
  * Returns a promise which waits the specified amount of time before resolving.
@@ -70,14 +70,18 @@ function expectTimes(resultTimes: number[], targetTicks: number[], message: stri
     });
 }
 
-function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
+function waitForUnhandledRejection(delay: number): Promise<void> {
     process.removeListener("unhandledRejection", unhandledRejectionListener);
 
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            resetUnhandledRejectionListener();
-            resolve();
-        }, delay);
+        const timeout = setTimeout(
+            // istanbul ignore next
+            () => {
+                resetUnhandledRejectionListener();
+                resolve();
+            },
+            delay,
+        );
 
         process.prependOnceListener("unhandledRejection", (err) => {
             clearTimeout(timeout);
@@ -90,10 +94,14 @@ function waitForUnhandledRejection(delay: number = tick * 2): Promise<void> {
 
 function expectHandledRejection(delay: number = tick * 2): Promise<void> {
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            resetHandledRejectionListener();
-            reject(new Error("Rejection Not Handled"));
-        }, delay);
+        const timeout = setTimeout(
+            // istanbul ignore next
+            () => {
+                resetHandledRejectionListener();
+                reject(new Error("Rejection Not Handled"));
+            },
+            delay,
+        );
 
         process.removeAllListeners("rejectionHandled");
         process.prependOnceListener("rejectionHandled", () => {
@@ -120,12 +128,14 @@ function sum(nums: number[]): number {
     return nums.reduce((a, b) => a + b, 0);
 }
 
+// istanbul ignore next
 function unhandledRejectionListener(err: any) {
     debug("unhandledRejectionListener: %O", err);
     // Fail the test
     throw err;
 }
 
+// istanbul ignore next
 function rejectionHandledListener() {
     debug("Unexpected rejectionHandled event");
     // Fail the test
@@ -381,9 +391,7 @@ describe("Exception Handling", () => {
             expect(() =>
                 pool.addGenericTask({
                     concurrencyLimit: 0, // invalid
-                    generator: () => {
-                        return Promise.resolve();
-                    },
+                    generator: undefined as any,
                 }),
             ).to.throw(Error, /^Invalid concurrency limit: 0$/);
         });
@@ -394,9 +402,7 @@ describe("Exception Handling", () => {
 
             expect(() =>
                 pool1.addGenericTask({
-                    generator: () => {
-                        return Promise.resolve();
-                    },
+                    generator: undefined as any,
                     groups: [
                         pool2.addGroup({
                             concurrencyLimit: 1,
@@ -603,6 +609,7 @@ describe("Exception Handling", () => {
                         try {
                             await pool.waitForIdle();
                         } catch (err) {
+                            // istanbul ignore next
                             throw new Error("Error did not clear");
                         }
                     })(),
@@ -1436,10 +1443,7 @@ describe("Task Secializations", () => {
             it("End Task", async () => {
                 const pool: Pool.PromisePoolExecutor = new Pool.PromisePoolExecutor();
                 const task = pool.addPersistentBatchTask<undefined, undefined>({
-                    generator: async () => {
-                        await wait(tick);
-                        return [];
-                    },
+                    generator: undefined as any,
                 });
                 const firstPromise = task.getResult(undefined);
                 task.end();
