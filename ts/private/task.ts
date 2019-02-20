@@ -3,7 +3,7 @@ import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { isNull, TaskError } from "./utils";
+import { isNull } from "./utils";
 
 const debug = Debug("promise-pool-executor:task");
 
@@ -23,15 +23,16 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _invocations: number = 0;
     private _invocationLimit: number = Infinity;
     private _result?: R[] = [];
-    private _returnResult: any;
     private _state: TaskState;
-    private _rejection?: TaskError;
+    // TODO: Not sure if I need this
+    private _rejection?: boolean;
     /**
      * Set to true while the generator function is being run. Prevents the task from being terminated since a final
      * promise may be generated.
      */
     private _generating?: boolean;
-    private _deferreds: Array<DeferredPromise<any>> = [];
+    // TODO: Can I make this more typesafe?
+    private _deferred: DeferredPromise<any> = defer();
     private _pool: PromisePoolExecutor;
     private _triggerCallback: () => void;
     private _detachCallback: () => void;
@@ -152,21 +153,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Returns a promise which resolves when the task completes.
      */
     public promise(): Promise<any> {
-        if (this._rejection) {
-            if (this._rejection.promise) {
-                // First handling of this rejection. Return the unhandled promise.
-                const promise = this._rejection.promise;
-                this._rejection.promise = undefined;
-                return promise;
-            }
-            return Promise.reject(this._rejection.error);
-        } else if (this._state === TaskState.Terminated) {
-            return Promise.resolve(this._returnResult);
-        }
-
-        const deferred: DeferredPromise<any> = defer();
-        this._deferreds.push(deferred);
-        return deferred.promise;
+        return this._deferred.promise;
     }
 
     /**
@@ -331,23 +318,16 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
         if (this._resultConverter) {
             try {
-                this._returnResult = this._resultConverter(this._result);
+                this._deferred.resolve(this._resultConverter(this._result));
             } catch (err) {
                 this._reject(err);
                 return;
             }
         } else {
-            this._returnResult = this._result;
+            this._deferred.resolve(this._result);
         }
         // discard the original array to free memory
         this._result = undefined;
-
-        if (this._deferreds.length) {
-            this._deferreds.forEach((deferred) => {
-                deferred.resolve(this._returnResult);
-            });
-            this._deferreds.length = 0;
-        }
     }
 
     private _reject(err: any) {
@@ -357,31 +337,15 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
             return;
         }
 
-        const taskError: TaskError = {
-            error: err,
-        };
-        this._rejection = taskError;
-        let handled = false;
+        // TODO: Rejection after resolution?
+        this._deferred.reject(err);
+        this._rejection = true;
 
         // This may detach the task
         this.end();
 
-        if (this._deferreds.length) {
-            handled = true;
-            this._deferreds.forEach((deferred) => {
-                deferred.reject(taskError.error);
-            });
-            this._deferreds.length = 0;
-        }
         this._groups.forEach((group) => {
-            if (group._reject(taskError)) {
-                handled = true;
-            }
+            group._reject(this._deferred.promise as Promise<never>);
         });
-
-        if (!handled) {
-            // Create an unhandled rejection which may be handled later
-            taskError.promise = Promise.reject(err);
-        }
     }
 }

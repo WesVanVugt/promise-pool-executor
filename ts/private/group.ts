@@ -1,7 +1,7 @@
 import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { isNull, TaskError } from "./utils";
+import { handleErr, isNull } from "./utils";
 
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
@@ -12,17 +12,13 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     public _frequencyStarts: number[] = [];
     public _activeTaskCount: number = 0;
     public _activePromiseCount: number = 0;
-    private _deferreds: Array<DeferredPromise<void>> = [];
+    private _deferred?: DeferredPromise<void>;
+    private _promise?: Promise<void>;
     /**
      * This flag prevents a rejection from being removed before nextTick is called.
      * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
      */
     private _recentRejection: boolean = false;
-    /**
-     * The error that the pool was rejected with.
-     * Clears when activePromiseCount reaches 0 and recentRejection is false.
-     */
-    private _rejection?: TaskError;
     /**
      * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
      * within the group as handled.
@@ -31,7 +27,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     /**
      * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
      */
-    private _secondaryRejections: TaskError[] = [];
+    private _secondaryRejections: Array<Promise<never>> = [];
     private _triggerNextCallback: () => void;
 
     constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions) {
@@ -153,38 +149,22 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
     }
 
     /**
-     * Resolves all pending waitForIdle promises.
-     */
-    public _resolve() {
-        if (!this._rejection && this._deferreds.length) {
-            this._deferreds.forEach((deferred) => {
-                deferred.resolve();
-            });
-            this._deferreds.length = 0;
-        }
-    }
-
-    /**
      * Rejects all pending waitForIdle promises using the provided error.
      */
-    public _reject(err: TaskError): boolean {
-        if (this._rejection) {
-            if (this._locallyHandled) {
-                return true;
-            }
-            this._secondaryRejections.push(err);
-            return false;
-        }
-        let handled = false;
-
-        this._rejection = err;
-        if (this._deferreds.length) {
-            handled = true;
+    public _reject(err: Promise<never>): void {
+        if (this._deferred) {
+            this._deferred.resolve(err);
             this._locallyHandled = true;
-            this._deferreds.forEach((deferred) => {
-                deferred.reject(err.error);
-            });
-            this._deferreds.length = 0;
+            this._deferred = undefined;
+        } else if (!this._promise) {
+            this._promise = err;
+        } else {
+            if (this._locallyHandled) {
+                handleErr(err);
+            } else {
+                this._secondaryRejections.push(err);
+            }
+            return;
         }
 
         this._recentRejection = true;
@@ -192,47 +172,37 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         process.nextTick(() => {
             this._recentRejection = false;
             if (this._activeTaskCount < 1) {
-                this._rejection = undefined;
+                this._deferred = undefined;
+                this._promise = undefined;
                 this._locallyHandled = false;
                 if (this._secondaryRejections.length) {
                     this._secondaryRejections.length = 0;
                 }
             }
         });
-        return handled;
     }
 
     /**
      * Returns a promise which resolves when the group becomes idle.
      */
     public waitForIdle(): Promise<void> {
-        if (this._rejection) {
+        if (this._promise) {
             this._locallyHandled = true;
             if (this._secondaryRejections.length) {
                 this._secondaryRejections.forEach((rejection) => {
-                    if (rejection.promise) {
-                        rejection.promise.catch(() => {
-                            // handle the rejection
-                        });
-                        rejection.promise = undefined;
-                    }
+                    handleErr(rejection);
                 });
                 this._secondaryRejections.length = 0;
             }
-            if (this._rejection.promise) {
-                const promise = this._rejection.promise;
-                this._rejection.promise = undefined;
-                return promise;
-            }
-            return Promise.reject(this._rejection.error);
+            return this._promise;
         }
         if (this._activeTaskCount <= 0) {
             return Promise.resolve();
         }
 
-        const deferred: DeferredPromise<void> = defer();
-        this._deferreds.push(deferred);
-        return deferred.promise;
+        this._deferred = defer();
+        this._promise = this._deferred.promise;
+        return this._promise;
     }
 
     public _incrementTasks(): void {
@@ -247,11 +217,13 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
         if (this._activeTaskCount > 0) {
             return;
         }
-        if (this._rejection && !this._recentRejection) {
-            this._rejection = undefined;
+        if (this._deferred) {
+            this._deferred.resolve();
+            this._deferred = undefined;
+        }
+        if (!this._recentRejection) {
             this._locallyHandled = false;
-        } else {
-            this._resolve();
+            this._promise = undefined;
         }
     }
 }
