@@ -24,8 +24,6 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
     private _invocationLimit: number = Infinity;
     private _result?: R[] = [];
     private _state: TaskState;
-    // TODO: Not sure if I need this
-    private _rejection?: boolean;
     /**
      * Set to true while the generator function is being run. Prevents the task from being terminated since a final
      * promise may be generated.
@@ -308,38 +306,37 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
      * Private. Resolves the task if possible. Should only be called by end()
      */
     private _resolve(): void {
-        if (this._rejection || !this._result) {
+        if (!this._result) {
             return;
         }
-        // Set the length of the resulting array in case some undefined results affected this
-        this._result.length = this._invocations;
 
-        this._state = TaskState.Terminated;
+        const result = this._result;
+
+        this._result = undefined;
+        // Set the length of the resulting array in case some undefined results affected this
+        result.length = this._invocations;
 
         if (this._resultConverter) {
             try {
-                this._deferred.resolve(this._resultConverter(this._result));
+                this._deferred.resolve(this._resultConverter(result));
             } catch (err) {
                 this._reject(err);
-                return;
             }
         } else {
-            this._deferred.resolve(this._result);
+            this._deferred.resolve(result);
         }
-        // discard the original array to free memory
-        this._result = undefined;
     }
 
     private _reject(err: any) {
         // Check if the task has already failed
-        if (this._rejection) {
-            debug("This task already failed. Redundant error: %O", err);
+        if (!this._result) {
+            debug("This task already finished. Redundant error: %O", err);
             return;
         }
 
-        // TODO: Rejection after resolution?
+        this._result = undefined;
+
         this._deferred.reject(err);
-        this._rejection = true;
 
         // This may detach the task
         this.end();
