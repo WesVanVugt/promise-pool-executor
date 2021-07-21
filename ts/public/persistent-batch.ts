@@ -6,24 +6,24 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
     /**
      * The maximum number of requests that can be combined in a single batch.
      */
-    maxBatchSize?: number;
+    readonly maxBatchSize?: number;
     /**
      * The number of milliseconds to wait before running a batch of requests.
      */
-    queuingDelay?: number;
+    readonly queuingDelay?: number;
     /**
      * An array containing the number of requests that must be queued in order to trigger a batch request at
      * each level of concurrency
      */
-    queuingThresholds?: number[];
+    readonly queuingThresholds?: readonly number[];
     /**
      * A function which is passed an array of request values, returning a promise which resolves to an array of
      * response values.
      */
-    generator(
+    readonly generator: (
         this: PersistentBatchTaskOptions<I, O>,
-        input: I[],
-    ): Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+        input: readonly I[],
+    ) => ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
 }
 
 export interface PersistentBatchTask<I, O>

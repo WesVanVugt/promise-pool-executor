@@ -10,7 +10,10 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "newLine": "LF",
-        "outDir": "."
+        "outDir": ".",
+        "lib": [
+            "es2017"
+        ]
     },
     "include": [
         "ts/index.ts",

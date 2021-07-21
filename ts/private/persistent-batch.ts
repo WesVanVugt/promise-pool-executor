@@ -7,7 +7,9 @@ import { PromisePoolTask, TaskState } from "../public/task";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
     private _batcher: Batcher<I, O>;
-    private _generator: (input: I[]) => Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+    private _generator: (
+        input: readonly I[],
+    ) => ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
     private _task: PromisePoolTask<any>;
 
     constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {

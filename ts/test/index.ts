@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import chai from "chai";
 import { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import Debug from "debug";
@@ -26,7 +26,6 @@ const typingImportTest:
     // Persistent Batch Task
     | Pool.PersistentBatchTask<any, any>
     | Pool.PersistentBatchTaskOptions<any, any>
-    | Pool.BatcherToken
     | Pool.BatchingResult<any> = undefined as any;
 
 if (typingImportTest) {
@@ -1107,7 +1106,10 @@ describe("Task Secializations", () => {
                 queuingDelay: tick,
             });
             const results = await Promise.all(
-                [[1, 9], [5, 7]].map(async (input, index) => {
+                [
+                    [1, 9],
+                    [5, 7],
+                ].map(async (input, index) => {
                     await wait(2 * index * tick);
                     return Promise.all(
                         input.map(async (value) => {
@@ -1317,7 +1319,7 @@ describe("Task Secializations", () => {
                 const batchInputs: number[][] = [];
                 const batcher = pool.addPersistentBatchTask<number, number>({
                     generator: async (inputs) => {
-                        batchInputs.push(inputs);
+                        batchInputs.push(inputs.slice());
                         await wait(tick);
                         return inputs.map((input, index) => {
                             return batchInputs.length < 2 && index < 2 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
@@ -1335,7 +1337,13 @@ describe("Task Secializations", () => {
                     }),
                 );
                 expectTimes(results, [2, 2, 1, 2], "Timing Results");
-                expect(batchInputs).to.deep.equal([[1, 2, 3], [1, 2, 4]], "batchInputs");
+                expect(batchInputs).to.deep.equal(
+                    [
+                        [1, 2, 3],
+                        [1, 2, 4],
+                    ],
+                    "batchInputs",
+                );
             });
         });
         describe("Send Method", () => {
