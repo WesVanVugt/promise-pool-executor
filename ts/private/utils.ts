@@ -1,5 +1,5 @@
-import Debug from "debug";
-export const debug = Debug("promise-pool-executor");
+import util from "util";
+export const debug = util.debuglog("promise-pool-executor");
 
 export function isNull(val: any): val is null | undefined | void {
     return val === undefined || val === null;

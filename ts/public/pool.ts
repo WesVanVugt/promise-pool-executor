@@ -1,5 +1,5 @@
-import Debug from "debug";
 import nextTick from "next-tick";
+import util from "util";
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
 import { PromisePoolTaskPrivate } from "../private/task";
@@ -15,7 +15,7 @@ import {
     TaskState,
 } from "./task";
 
-const debug = Debug("promise-pool-executor:pool");
+const debug = util.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
 
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {

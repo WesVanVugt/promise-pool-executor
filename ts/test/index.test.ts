@@ -2,12 +2,12 @@ import FakeTimers from "@sinonjs/fake-timers";
 import chai from "chai";
 import { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
-import Debug from "debug";
 import timeSpan from "time-span";
+import util from "util";
 import * as Pool from "../index";
 
 const clock = FakeTimers.install();
-const debug = Debug("promise-pool-executor:test");
+const debug = util.debuglog("promise-pool-executor:test");
 chai.use(chaiAsPromised);
 
 // Verify that the types needed can be imported
@@ -316,7 +316,6 @@ describe("Frequency", () => {
                     })
                     .promise(),
             );
-            debug(results);
             expect(results).to.deep.equal([0, 0, TICK], "Timing Results 1");
             await fakeAwait(wait(TICK * 2));
             const results2 = await fakeAwait(
@@ -329,7 +328,6 @@ describe("Frequency", () => {
                     })
                     .promise(),
             );
-            debug(results2);
             expect(results2).to.deep.equal([TICK * 3, TICK * 3, TICK * 4], "Timing Results 2");
         });
     });

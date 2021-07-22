@@ -1,11 +1,11 @@
-import Debug from "debug";
 import defer, { DeferredPromise } from "p-defer";
+import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 import { isNull } from "./utils";
 
-const debug = Debug("promise-pool-executor:task");
+const debug = util.debuglog("promise-pool-executor:task");
 
 const GLOBAL_GROUP_INDEX = 0;
 
