@@ -24,7 +24,7 @@
         "build": "npm run clean && npm run tsc",
         "clean": "rm -rf index.js index.d.ts private public test",
         "test": "npm run lint && npm run test:local",
-        "test:local": "nyc mocha --colors --require ts-node/register ts/test/*.ts",
+        "test:local": "nyc mocha --colors --require ts-node/register ts/test/*.test.ts",
         "test-debug": "cross-env DEBUG=promise-pool-executor:*,-mocha:* npm test",
         "tsc": "tsc",
         "lint": "tslint ts/**/*.ts"
