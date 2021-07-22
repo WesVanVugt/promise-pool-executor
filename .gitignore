@@ -2,3 +2,4 @@ node_modules/
 *.tgz
 .nyc_output
 coverage
+private/*.d.ts
