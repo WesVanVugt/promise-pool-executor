@@ -1,4 +1,3 @@
-import nextTick from "next-tick";
 import util from "util";
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
@@ -356,7 +355,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
         }
         this._clearTriggerTimeout();
         this._nextTriggerTime = -1;
-        nextTick(() => {
+        process.nextTick(() => {
             if (this._nextTriggerTime === -1) {
                 this._nextTriggerTime = undefined;
                 this._triggerNow();
