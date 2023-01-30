@@ -3,36 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolGroupPrivate = void 0;
 const defer = require("p-defer");
 const utils_1 = require("./utils");
-/** Internal use only */
 class PromisePoolGroupPrivate {
 	constructor(pool, triggerNextCallback, options) {
 		this._frequencyStarts = [];
 		this._activeTaskCount = 0;
 		this._activePromiseCount = 0;
 		this._deferreds = [];
-		/**
-		 * This flag prevents a rejection from being removed before nextTick is called.
-		 * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
-		 */
 		this._recentRejection = false;
-		/**
-		 * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
-		 * within the group as handled.
-		 */
 		this._locallyHandled = false;
-		/**
-		 * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
-		 */
 		this._secondaryRejections = [];
 		this._pool = pool;
 		if (!options) {
 			options = {};
 		}
-		// Throw errors if applicable
 		this.concurrencyLimit = options.concurrencyLimit;
 		this.frequencyLimit = options.frequencyLimit;
 		this.frequencyWindow = options.frequencyWindow;
-		// Set the callback afterwards so it does not get triggered during creation
 		this._triggerNextCallback = triggerNextCallback;
 	}
 	get activeTaskCount() {
@@ -98,12 +84,7 @@ class PromisePoolGroupPrivate {
 			this._frequencyLimit - this._frequencyStarts.length,
 		);
 	}
-	/**
-	 * Cleans out old entries from the frequencyStarts array. Uses a passed timestamp to ensure consistency between
-	 * groups.
-	 */
 	_cleanFrequencyStarts(now) {
-		// Remove the frequencyStarts entries which are outside of the window
 		if (this._frequencyStarts.length > 0) {
 			const time = now - this._frequencyWindow;
 			let i = 0;
@@ -115,10 +96,6 @@ class PromisePoolGroupPrivate {
 			}
 		}
 	}
-	/**
-	 * Returns 0 if the group is available, Infinity if the group is busy for an indeterminate time, or the timestamp
-	 * of when the group will become available.
-	 */
 	_busyTime() {
 		if (this._activePromiseCount >= this._concurrencyLimit) {
 			return Infinity;
@@ -127,9 +104,6 @@ class PromisePoolGroupPrivate {
 		}
 		return 0;
 	}
-	/**
-	 * Resolves all pending waitForIdle promises.
-	 */
 	_resolve() {
 		if (!this._rejection && this._deferreds.length) {
 			this._deferreds.forEach((deferred) => {
@@ -138,9 +112,6 @@ class PromisePoolGroupPrivate {
 			this._deferreds.length = 0;
 		}
 	}
-	/**
-	 * Rejects all pending waitForIdle promises using the provided error.
-	 */
 	_reject(err) {
 		if (this._rejection) {
 			if (this._locallyHandled) {
@@ -160,7 +131,6 @@ class PromisePoolGroupPrivate {
 			this._deferreds.length = 0;
 		}
 		this._recentRejection = true;
-		// The group error state should reset on the next tick
 		process.nextTick(() => {
 			this._recentRejection = false;
 			if (this._activeTaskCount < 1) {
@@ -173,18 +143,13 @@ class PromisePoolGroupPrivate {
 		});
 		return handled;
 	}
-	/**
-	 * Returns a promise which resolves when the group becomes idle.
-	 */
 	waitForIdle() {
 		if (this._rejection) {
 			this._locallyHandled = true;
 			if (this._secondaryRejections.length) {
 				this._secondaryRejections.forEach((rejection) => {
 					if (rejection.promise) {
-						rejection.promise.catch(() => {
-							// handle the rejection
-						});
+						rejection.promise.catch(() => {});
 						rejection.promise = undefined;
 					}
 				});
@@ -207,9 +172,6 @@ class PromisePoolGroupPrivate {
 	_incrementTasks() {
 		this._activeTaskCount++;
 	}
-	/**
-	 * Decrements the active tasks, resolving promises if applicable.
-	 */
 	_decrementTasks() {
 		this._activeTaskCount--;
 		if (this._activeTaskCount > 0) {

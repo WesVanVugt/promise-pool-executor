@@ -11,14 +11,7 @@ const task_2 = require("./task");
 const debug = Debug("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
 class PromisePoolExecutor {
-	/**
-	 * Construct a new PromisePoolExecutor object.
-	 * @param concurrencyLimit The maximum number of promises which are allowed to run at one time.
-	 */
 	constructor(options) {
-		/**
-		 * All tasks which are active or waiting.
-		 */
 		this._tasks = [];
 		let groupOptions;
 		if (!(0, utils_1.isNull)(options)) {
@@ -34,54 +27,33 @@ class PromisePoolExecutor {
 		}
 		this._globalGroup = this.addGroup(groupOptions);
 	}
-	/**
-	 * The maximum number of promises allowed to be active simultaneously in the pool.
-	 */
 	get concurrencyLimit() {
 		return this._globalGroup.concurrencyLimit;
 	}
 	set concurrencyLimit(val) {
 		this._globalGroup.concurrencyLimit = val;
 	}
-	/**
-	 * The maximum number promises allowed to be generated within the time window specified by {frequencyWindow}.
-	 */
 	get frequencyLimit() {
 		return this._globalGroup.frequencyLimit;
 	}
 	set frequencyLimit(val) {
 		this._globalGroup.frequencyLimit = val;
 	}
-	/**
-	 * The time window in milliseconds to use for {frequencyLimit}.
-	 */
 	get frequencyWindow() {
 		return this._globalGroup.frequencyWindow;
 	}
 	set frequencyWindow(val) {
 		this._globalGroup.frequencyWindow = val;
 	}
-	/**
-	 * The number of tasks active in the pool.
-	 */
 	get activeTaskCount() {
 		return this._globalGroup.activeTaskCount;
 	}
-	/**
-	 * The number of promises active in the pool.
-	 */
 	get activePromiseCount() {
 		return this._globalGroup.activePromiseCount;
 	}
-	/**
-	 * The number of promises which can be created before reaching the pool's configured limits.
-	 */
 	get freeSlots() {
 		return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
 	}
-	/**
-	 * Adds a group to the pool.
-	 */
 	addGroup(options) {
 		return new group_1.PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
 	}
@@ -98,15 +70,11 @@ class PromisePoolExecutor {
 			options,
 		);
 		if (task.state <= task_2.TaskState.Paused) {
-			// Attach the task
 			this._tasks.push(task);
 		}
 		this._triggerNow();
 		return task;
 	}
-	/**
-	 * Adds a task with a single promise. The resulting task can be resolved to the result of this promise.
-	 */
 	addSingleTask(options) {
 		const data = options.data;
 		const generator = options.generator;
@@ -120,10 +88,6 @@ class PromisePoolExecutor {
 			resultConverter: (result) => result[0],
 		});
 	}
-	/**
-	 * Adds a task with a concurrency limit of 1. The resulting task can be resolved to an array containing the
-	 * results of the task.
-	 */
 	addLinearTask(options) {
 		return this.addGenericTask({
 			concurrencyLimit: 1,
@@ -135,13 +99,8 @@ class PromisePoolExecutor {
 			paused: options.paused,
 		});
 	}
-	/**
-	 * Adds a task which generates a promise for batches of elements from an array. The resulting task can be
-	 * resolved to an array containing the results of the task.
-	 */
 	addBatchTask(options) {
 		let index = 0;
-		// Unacceptable values: NaN, <=0, type not number/function
 		if (
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
@@ -157,12 +116,11 @@ class PromisePoolExecutor {
 			frequencyWindow: options.frequencyWindow,
 			generator(invocation) {
 				if (index >= data.length) {
-					return; // No data to process
+					return;
 				}
 				const oldIndex = index;
 				if (typeof batchSizeOption === "function") {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
-					// Unacceptable values: NaN, <=0, type not number
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
 						return Promise.reject(new Error("Invalid batch size: " + batchSize));
 					}
@@ -171,7 +129,7 @@ class PromisePoolExecutor {
 					index += batchSizeOption;
 				}
 				if (index >= data.length) {
-					this.end(); // last batch
+					this.end();
 				}
 				return generator.call(this, data.slice(oldIndex, index), oldIndex, invocation);
 			},
@@ -180,10 +138,6 @@ class PromisePoolExecutor {
 			paused: options.paused,
 		});
 	}
-	/**
-	 * Adds a task which generates a promise for each element in an array. The resulting task can be resolved to
-	 * an array containing the results of the task.
-	 */
 	addEachTask(options) {
 		const data = options.data;
 		return this.addGenericTask({
@@ -195,29 +149,21 @@ class PromisePoolExecutor {
 			generator(index) {
 				if (index >= data.length - 1) {
 					if (index >= data.length) {
-						return; // No element to process
+						return;
 					}
-					// Last element
 					this.end();
 				}
 				return options.generator.call(this, data[index], index);
 			},
 		});
 	}
-	/**
-	 * Adds a task which can be used to combine multiple requests into batches to improve efficiency.
-	 */
 	addPersistentBatchTask(options) {
 		return new persistent_batch_1.PersistentBatchTaskPrivate(this, options);
 	}
-	/**
-	 * Returns a promise which resolves when there are no more tasks queued to run.
-	 */
 	waitForIdle() {
 		return this._globalGroup.waitForIdle();
 	}
 	_cleanFrequencyStarts() {
-		// Remove the frequencyStarts entries which are outside of the window
 		const now = Date.now();
 		this._globalGroup._cleanFrequencyStarts(now);
 		this._tasks.forEach((task) => {
@@ -244,9 +190,6 @@ class PromisePoolExecutor {
 			}
 		});
 	}
-	/**
-	 * Private Method: Triggers promises to start.
-	 */
 	_triggerNow() {
 		if (this._triggering) {
 			debug("Setting triggerAgain flag.");
