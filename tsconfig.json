@@ -13,9 +13,7 @@
 		"outDir": "."
 	},
 	"include": [
-		"ts/index.ts",
-		"ts/test/index.ts",
-		"ts/typings/**/*"
+		"**/*"
 	],
 	"exclude": []
 }

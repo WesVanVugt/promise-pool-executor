@@ -8,6 +8,7 @@
 		120
 	],
 	"editor.tabSize": 2,
+	"files.eol": "\n",
 	"files.trimTrailingWhitespace": true,
 	"[json]": {
 		"editor.defaultFormatter": "vscode.json-language-features"
