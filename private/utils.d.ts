@@ -1,4 +1,6 @@
-export declare const debug: (msg: string, ...param: any[]) => void;
+/// <reference types="node" />
+import util from "util";
+export declare const debug: util.DebugLogger;
 export interface TaskError {
 	error: any;
 	promise?: Promise<never>;
