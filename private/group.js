@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PromisePoolGroupPrivate = void 0;
 const defer = require("p-defer");
 const utils_1 = require("./utils");
 /** Internal use only */
@@ -44,7 +45,7 @@ class PromisePoolGroupPrivate {
 		return this._concurrencyLimit;
 	}
 	set concurrencyLimit(val) {
-		if (utils_1.isNull(val)) {
+		if ((0, utils_1.isNull)(val)) {
 			this._concurrencyLimit = Infinity;
 		} else if (val && typeof val === "number" && val > 0) {
 			this._concurrencyLimit = val;
@@ -59,7 +60,7 @@ class PromisePoolGroupPrivate {
 		return this._frequencyLimit;
 	}
 	set frequencyLimit(val) {
-		if (utils_1.isNull(val)) {
+		if ((0, utils_1.isNull)(val)) {
 			this._frequencyLimit = Infinity;
 		} else if (val && typeof val === "number" && val > 0) {
 			this._frequencyLimit = val;
@@ -74,7 +75,7 @@ class PromisePoolGroupPrivate {
 		return this._frequencyWindow;
 	}
 	set frequencyWindow(val) {
-		if (utils_1.isNull(val)) {
+		if ((0, utils_1.isNull)(val)) {
 			this._frequencyWindow = 1000;
 		} else if (val && typeof val === "number" && val > 0) {
 			this._frequencyWindow = val;

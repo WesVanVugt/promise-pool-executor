@@ -88,27 +88,30 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	/**
 	 * The maximum number of promises allowed to be active simultaneously in the pool.
 	 */
-	concurrencyLimit: number;
+	get concurrencyLimit(): number;
+	set concurrencyLimit(val: number);
 	/**
 	 * The maximum number promises allowed to be generated within the time window specified by {frequencyWindow}.
 	 */
-	frequencyLimit: number;
+	get frequencyLimit(): number;
+	set frequencyLimit(val: number);
 	/**
 	 * The time window in milliseconds to use for {frequencyLimit}.
 	 */
-	frequencyWindow: number;
+	get frequencyWindow(): number;
+	set frequencyWindow(val: number);
 	/**
 	 * The number of tasks active in the pool.
 	 */
-	readonly activeTaskCount: number;
+	get activeTaskCount(): number;
 	/**
 	 * The number of promises active in the pool.
 	 */
-	readonly activePromiseCount: number;
+	get activePromiseCount(): number;
 	/**
 	 * The number of promises which can be created before reaching the pool's configured limits.
 	 */
-	readonly freeSlots: number;
+	get freeSlots(): number;
 	/**
 	 * Adds a group to the pool.
 	 */
@@ -150,12 +153,12 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	 * Returns a promise which resolves when there are no more tasks queued to run.
 	 */
 	waitForIdle(): Promise<void>;
-	private _cleanFrequencyStarts();
-	private _clearTriggerTimeout();
-	private _triggerNextTick();
+	private _cleanFrequencyStarts;
+	private _clearTriggerTimeout;
+	private _triggerNextTick;
 	/**
 	 * Private Method: Triggers promises to start.
 	 */
-	private _triggerNow();
-	private _removeTask(task);
+	private _triggerNow;
+	private _removeTask;
 }

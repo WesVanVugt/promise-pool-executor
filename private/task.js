@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PromisePoolTaskPrivate = void 0;
 const Debug = require("debug");
 const defer = require("p-defer");
 const task_1 = require("../public/task");
@@ -18,7 +19,7 @@ class PromisePoolTaskPrivate {
 		this._detachCallback = privateOptions.detach;
 		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? task_1.TaskState.Paused : task_1.TaskState.Active;
-		if (!utils_1.isNull(options.invocationLimit)) {
+		if (!(0, utils_1.isNull)(options.invocationLimit)) {
 			if (typeof options.invocationLimit !== "number") {
 				throw new Error("Invalid invocation limit: " + options.invocationLimit);
 			}
@@ -38,7 +39,7 @@ class PromisePoolTaskPrivate {
 		}
 		this._generator = options.generator;
 		// Resolve the promise only after all options have been validated
-		if (!utils_1.isNull(options.invocationLimit) && options.invocationLimit <= 0) {
+		if (!(0, utils_1.isNull)(options.invocationLimit) && options.invocationLimit <= 0) {
 			this.end();
 			return;
 		}
@@ -57,7 +58,7 @@ class PromisePoolTaskPrivate {
 		return this._invocationLimit;
 	}
 	set invocationLimit(val) {
-		if (utils_1.isNull(val)) {
+		if ((0, utils_1.isNull)(val)) {
 			this._invocationLimit = Infinity;
 		} else if (!isNaN(val) && typeof val === "number" && val >= 0) {
 			this._invocationLimit = val;
@@ -206,6 +207,7 @@ class PromisePoolTaskPrivate {
 		let promise;
 		this._generating = true; // prevent task termination
 		try {
+			// @ts-expect-error
 			promise = this._generator.call(this, this._invocations);
 		} catch (err) {
 			this._generating = false;
@@ -213,7 +215,7 @@ class PromisePoolTaskPrivate {
 			return;
 		}
 		this._generating = false;
-		if (utils_1.isNull(promise)) {
+		if ((0, utils_1.isNull)(promise)) {
 			if (this._state !== task_1.TaskState.Paused) {
 				this.end();
 			}

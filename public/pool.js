@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PromisePoolExecutor = void 0;
 const Debug = require("debug");
 const nextTick = require("next-tick");
 const group_1 = require("../private/group");
@@ -20,7 +21,7 @@ class PromisePoolExecutor {
 		 */
 		this._tasks = [];
 		let groupOptions;
-		if (!utils_1.isNull(options)) {
+		if (!(0, utils_1.isNull)(options)) {
 			if (typeof options === "object") {
 				groupOptions = options;
 			} else {
