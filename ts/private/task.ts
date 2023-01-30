@@ -1,11 +1,11 @@
-import * as Debug from "debug";
 import defer = require("p-defer");
+import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 import { isNull, TaskError } from "./utils";
 
-const debug = Debug("promise-pool-executor:task");
+const debug = util.debuglog("promise-pool-executor:task");
 
 const GLOBAL_GROUP_INDEX = 0;
 
@@ -17,11 +17,11 @@ export interface GenericTaskOptionsPrivate {
 }
 
 export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
-	private _groups: PromisePoolGroupPrivate[];
-	private _generator: (invocation: number) => R | PromiseLike<R> | undefined | null | void;
-	private _taskGroup: PromisePoolGroupPrivate;
-	private _invocations: number = 0;
-	private _invocationLimit: number = Infinity;
+	private readonly _groups: PromisePoolGroupPrivate[];
+	private readonly _generator: (invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	private readonly _taskGroup: PromisePoolGroupPrivate;
+	private _invocations = 0;
+	private _invocationLimit = Infinity;
 	private _result?: R[] = [];
 	private _returnResult: any;
 	private _state: TaskState;
@@ -31,11 +31,11 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	 * promise may be generated.
 	 */
 	private _generating?: boolean;
-	private _deferreds: Array<Deferred<any>> = [];
-	private _pool: PromisePoolExecutor;
-	private _triggerCallback: () => void;
-	private _detachCallback: () => void;
-	private _resultConverter?: (result: R[]) => any;
+	private readonly _deferreds: Array<Deferred<any>> = [];
+	private readonly _pool: PromisePoolExecutor;
+	private readonly _triggerCallback: () => void;
+	private readonly _detachCallback: () => void;
+	private readonly _resultConverter?: (result: R[]) => any;
 
 	public constructor(
 		privateOptions: GenericTaskOptionsPrivate,
@@ -225,7 +225,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 			return Infinity;
 		}
 
-		let time: number = 0;
+		let time = 0;
 		for (const group of this._groups) {
 			const busyTime: number = group._busyTime();
 			if (busyTime > time) {

@@ -8,9 +8,9 @@ export interface GenericTaskOptionsPrivate {
 	detach: () => void;
 }
 export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
-	private _groups;
-	private _generator;
-	private _taskGroup;
+	private readonly _groups;
+	private readonly _generator;
+	private readonly _taskGroup;
 	private _invocations;
 	private _invocationLimit;
 	private _result?;
@@ -22,11 +22,11 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	 * promise may be generated.
 	 */
 	private _generating?;
-	private _deferreds;
-	private _pool;
-	private _triggerCallback;
-	private _detachCallback;
-	private _resultConverter?;
+	private readonly _deferreds;
+	private readonly _pool;
+	private readonly _triggerCallback;
+	private readonly _detachCallback;
+	private readonly _resultConverter?;
 	constructor(
 		privateOptions: GenericTaskOptionsPrivate,
 		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,

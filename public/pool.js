@@ -1,14 +1,19 @@
 "use strict";
+var __importDefault =
+	(this && this.__importDefault) ||
+	function (mod) {
+		return mod && mod.__esModule ? mod : { default: mod };
+	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolExecutor = void 0;
-const Debug = require("debug");
-const nextTick = require("next-tick");
+const next_tick_1 = __importDefault(require("next-tick"));
+const util_1 = __importDefault(require("util"));
 const group_1 = require("../private/group");
 const persistent_batch_1 = require("../private/persistent-batch");
 const task_1 = require("../private/task");
 const utils_1 = require("../private/utils");
 const task_2 = require("./task");
-const debug = Debug("promise-pool-executor:pool");
+const debug = util_1.default.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
 class PromisePoolExecutor {
 	constructor(options) {
@@ -183,7 +188,7 @@ class PromisePoolExecutor {
 		}
 		this._clearTriggerTimeout();
 		this._nextTriggerTime = -1;
-		nextTick(() => {
+		(0, next_tick_1.default)(() => {
 			if (this._nextTriggerTime === -1) {
 				this._nextTriggerTime = undefined;
 				this._triggerNow();

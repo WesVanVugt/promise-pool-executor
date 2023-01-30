@@ -1,5 +1,4 @@
-import * as Debug from "debug";
-export declare const debug: Debug.IDebugger;
+export declare const debug: (msg: string, ...param: any[]) => void;
 export interface TaskError {
 	error: any;
 	promise?: Promise<never>;

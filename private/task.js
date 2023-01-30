@@ -1,11 +1,16 @@
 "use strict";
+var __importDefault =
+	(this && this.__importDefault) ||
+	function (mod) {
+		return mod && mod.__esModule ? mod : { default: mod };
+	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolTaskPrivate = void 0;
-const Debug = require("debug");
 const defer = require("p-defer");
+const util_1 = __importDefault(require("util"));
 const task_1 = require("../public/task");
 const utils_1 = require("./utils");
-const debug = Debug("promise-pool-executor:task");
+const debug = util_1.default.debuglog("promise-pool-executor:task");
 const GLOBAL_GROUP_INDEX = 0;
 class PromisePoolTaskPrivate {
 	constructor(privateOptions, options) {
