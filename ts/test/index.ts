@@ -1,7 +1,7 @@
-import * as Debug from "debug";
+import util from "util";
 import * as Pool from "../index";
 
-const debug = Debug("promise-pool-executor:test");
+const debug = util.debuglog("promise-pool-executor:test");
 
 // Verify that the types needed can be imported
 const typingImportTest:
@@ -289,7 +289,7 @@ describe("Frequency", () => {
 				})
 				.promise()
 				.then((results) => {
-					debug(results);
+					debug("%o", results);
 					expectTimes(results, [0, 0, 1], "Timing Results 1");
 					return wait(TICK * 2);
 				})
@@ -304,7 +304,7 @@ describe("Frequency", () => {
 						.promise();
 				})
 				.then((results) => {
-					debug(results);
+					debug("%o", results);
 					expectTimes(results, [3, 3, 4], "Timing Results 2");
 				});
 		});

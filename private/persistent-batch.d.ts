@@ -2,9 +2,9 @@ import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persi
 import { PromisePoolExecutor } from "../public/pool";
 import { TaskState } from "../public/task";
 export declare class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
-	private _batcher;
-	private _generator;
-	private _task;
+	private readonly _batcher;
+	private readonly _generator;
+	private readonly _task;
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>);
 	get activePromiseCount(): number;
 	get concurrencyLimit(): number;

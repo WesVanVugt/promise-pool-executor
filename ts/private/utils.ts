@@ -1,5 +1,5 @@
-import * as Debug from "debug";
-export const debug = Debug("promise-pool-executor");
+import util from "util";
+export const debug = util.debuglog("promise-pool-executor");
 
 export interface TaskError {
 	error: any;

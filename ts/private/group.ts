@@ -10,14 +10,14 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	public _frequencyLimit!: number;
 	public _frequencyWindow!: number;
 	public _frequencyStarts: number[] = [];
-	public _activeTaskCount: number = 0;
-	public _activePromiseCount: number = 0;
-	private _deferreds: Array<Deferred<void>> = [];
+	public _activeTaskCount = 0;
+	public _activePromiseCount = 0;
+	private readonly _deferreds: Array<Deferred<void>> = [];
 	/**
 	 * This flag prevents a rejection from being removed before nextTick is called.
 	 * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
 	 */
-	private _recentRejection: boolean = false;
+	private _recentRejection = false;
 	/**
 	 * The error that the pool was rejected with.
 	 * Clears when activePromiseCount reaches 0 and recentRejection is false.
@@ -27,12 +27,12 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	 * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
 	 * within the group as handled.
 	 */
-	private _locallyHandled: boolean = false;
+	private _locallyHandled = false;
 	/**
 	 * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
 	 */
-	private _secondaryRejections: TaskError[] = [];
-	private _triggerNextCallback: () => void;
+	private readonly _secondaryRejections: TaskError[] = [];
+	private readonly _triggerNextCallback: () => void;
 
 	constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions) {
 		this._pool = pool;
@@ -129,7 +129,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		// Remove the frequencyStarts entries which are outside of the window
 		if (this._frequencyStarts.length > 0) {
 			const time: number = now - this._frequencyWindow;
-			let i: number = 0;
+			let i = 0;
 			while (i < this._frequencyStarts.length && this._frequencyStarts[i] <= time) {
 				i++;
 			}
