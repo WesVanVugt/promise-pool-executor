@@ -1,6 +1,7 @@
 {
 	"compileOnSave": true,
 	"compilerOptions": {
+		"newLine": "lf",
 		"target": "es6",
 		"module": "commonjs",
 		"strict": true,

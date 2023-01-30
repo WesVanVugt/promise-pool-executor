@@ -32,12 +32,15 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	private _secondaryRejections;
 	private _triggerNextCallback;
 	constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions);
-	readonly activeTaskCount: number;
-	readonly activePromiseCount: number;
-	concurrencyLimit: number;
-	frequencyLimit: number;
-	frequencyWindow: number;
-	readonly freeSlots: number;
+	get activeTaskCount(): number;
+	get activePromiseCount(): number;
+	get concurrencyLimit(): number;
+	set concurrencyLimit(val: number);
+	get frequencyLimit(): number;
+	set frequencyLimit(val: number);
+	get frequencyWindow(): number;
+	set frequencyWindow(val: number);
+	get freeSlots(): number;
 	_getFreeSlots(): number;
 	/**
 	 * Cleans out old entries from the frequencyStarts array. Uses a passed timestamp to ensure consistency between

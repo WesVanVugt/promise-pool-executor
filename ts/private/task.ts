@@ -262,6 +262,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		let promise: Promise<any>;
 		this._generating = true; // prevent task termination
 		try {
+			// @ts-expect-error
 			promise = this._generator.call(this, this._invocations);
 		} catch (err) {
 			this._generating = false;

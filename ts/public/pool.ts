@@ -217,7 +217,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		const generator = options.generator;
 		return this.addGenericTask<R, R>({
 			generator() {
-				return generator.call(this, data);
+				return generator.call(this, data as T);
 			},
 			groups: options.groups,
 			invocationLimit: 1,

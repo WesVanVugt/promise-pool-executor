@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PersistentBatchTaskPrivate = void 0;
 const defer = require("p-defer");
 const promise_batcher_1 = require("promise-batcher");
 const task_1 = require("../public/task");

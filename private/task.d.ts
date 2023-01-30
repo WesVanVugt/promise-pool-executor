@@ -31,14 +31,18 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		privateOptions: GenericTaskOptionsPrivate,
 		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
 	);
-	readonly activePromiseCount: number;
-	readonly invocations: number;
-	invocationLimit: number;
-	concurrencyLimit: number;
-	frequencyLimit: number;
-	frequencyWindow: number;
-	readonly freeSlots: number;
-	readonly state: TaskState;
+	get activePromiseCount(): number;
+	get invocations(): number;
+	get invocationLimit(): number;
+	set invocationLimit(val: number);
+	get concurrencyLimit(): number;
+	set concurrencyLimit(val: number);
+	get frequencyLimit(): number;
+	set frequencyLimit(val: number);
+	get frequencyWindow(): number;
+	set frequencyWindow(val: number);
+	get freeSlots(): number;
+	get state(): TaskState;
 	/**
 	 * Returns a promise which resolves when the task completes.
 	 */
@@ -69,6 +73,6 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	/**
 	 * Private. Resolves the task if possible. Should only be called by end()
 	 */
-	private _resolve();
-	private _reject(err);
+	private _resolve;
+	private _reject;
 }
