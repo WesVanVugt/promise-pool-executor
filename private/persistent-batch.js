@@ -26,7 +26,6 @@ class PersistentBatchTaskPrivate {
 				}
 				return promise
 					.catch((err) => {
-						// Do not send errors to the task, since they will be received via the getResult promises
 						localTaskDeferred.resolve();
 						throw err;
 					})

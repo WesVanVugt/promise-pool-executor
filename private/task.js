@@ -25,7 +25,6 @@ class PromisePoolTaskPrivate {
 			}
 			this._invocationLimit = options.invocationLimit;
 		}
-		// Create a group exclusively for this task. This may throw errors.
 		this._taskGroup = privateOptions.pool.addGroup(options);
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
@@ -38,7 +37,6 @@ class PromisePoolTaskPrivate {
 			this._groups.push(...groups);
 		}
 		this._generator = options.generator;
-		// Resolve the promise only after all options have been validated
 		if (!(0, utils_1.isNull)(options.invocationLimit) && options.invocationLimit <= 0) {
 			this.end();
 			return;
@@ -46,7 +44,6 @@ class PromisePoolTaskPrivate {
 		this._groups.forEach((group) => {
 			group._incrementTasks();
 		});
-		// The creator will trigger the promises to run
 	}
 	get activePromiseCount() {
 		return this._taskGroup._activePromiseCount;
@@ -103,13 +100,9 @@ class PromisePoolTaskPrivate {
 	get state() {
 		return this._state;
 	}
-	/**
-	 * Returns a promise which resolves when the task completes.
-	 */
 	promise() {
 		if (this._rejection) {
 			if (this._rejection.promise) {
-				// First handling of this rejection. Return the unhandled promise.
 				const promise = this._rejection.promise;
 				this._rejection.promise = undefined;
 				return promise;
@@ -122,18 +115,12 @@ class PromisePoolTaskPrivate {
 		this._deferreds.push(deferred);
 		return deferred.promise;
 	}
-	/**
-	 * Pauses an active task, preventing any additional promises from being generated.
-	 */
 	pause() {
 		if (this._state === task_1.TaskState.Active) {
 			debug("State: %o", "Paused");
 			this._state = task_1.TaskState.Paused;
 		}
 	}
-	/**
-	 * Resumes a paused task, allowing for the generation of additional promises.
-	 */
 	resume() {
 		if (this._state === task_1.TaskState.Paused) {
 			debug("State: %o", "Active");
@@ -141,12 +128,7 @@ class PromisePoolTaskPrivate {
 			this._triggerCallback();
 		}
 	}
-	/**
-	 * Ends the task. Any promises created by the promise() method will be resolved when all outstanding promises
-	 * have ended.
-	 */
 	end() {
-		// Note that this does not trigger more tasks to run. It can resolve a task though.
 		if (this._state < task_1.TaskState.Exhausted) {
 			debug("State: %o", "Exhausted");
 			this._state = task_1.TaskState.Exhausted;
@@ -165,10 +147,6 @@ class PromisePoolTaskPrivate {
 			this._resolve();
 		}
 	}
-	/**
-	 * Private. Returns 0 if the task is ready, Infinity if the task is busy with an indeterminate ready time, or the
-	 * timestamp for when the task will be ready.
-	 */
 	_busyTime() {
 		if (this._state !== task_1.TaskState.Active) {
 			return Infinity;
@@ -189,25 +167,18 @@ class PromisePoolTaskPrivate {
 			}
 		});
 	}
-	/**
-	 * Private. Invokes the task.
-	 */
 	_run() {
 		if (this._generating) {
-			// This should never happen
 			throw new Error("Internal Error: Task is already being run");
 		}
 		if (this._invocations >= this._invocationLimit) {
-			// TODO: Make a test for this
-			// This may detach / resolve the task if no promises are active
 			this.end();
 			return;
 		}
 		debug("Running generator");
 		let promise;
-		this._generating = true; // prevent task termination
+		this._generating = true;
 		try {
-			// @ts-expect-error
 			promise = this._generator.call(this, this._invocations);
 		} catch (err) {
 			this._generating = false;
@@ -219,11 +190,9 @@ class PromisePoolTaskPrivate {
 			if (this._state !== task_1.TaskState.Paused) {
 				this.end();
 			}
-			// Remove the task if needed and start the next task
 			return;
 		}
 		if (!(promise instanceof Promise)) {
-			// In case what is returned is not a promise, make it one
 			promise = Promise.resolve(promise);
 		}
 		this._groups.forEach((group) => {
@@ -235,13 +204,11 @@ class PromisePoolTaskPrivate {
 		const resultIndex = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {
-			// this will not detach the task since there are active promises
 			this.end();
 		}
 		promise
 			.catch((err) => {
 				this._reject(err);
-				// Resolve
 			})
 			.then((result) => {
 				debug("Promise ended.");
@@ -249,26 +216,19 @@ class PromisePoolTaskPrivate {
 					group._activePromiseCount--;
 				});
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
-				// Avoid storing the result if it is undefined.
-				// Some tasks may have countless iterations and never return anything, so this could eat memory.
 				if (result !== undefined && this._result) {
 					this._result[resultIndex] = result;
 				}
 				if (this._state >= task_1.TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
 					this.end();
 				}
-				// Remove the task if needed and start the next task
 				this._triggerCallback();
 			});
 	}
-	/**
-	 * Private. Resolves the task if possible. Should only be called by end()
-	 */
 	_resolve() {
 		if (this._rejection || !this._result) {
 			return;
 		}
-		// Set the length of the resulting array in case some undefined results affected this
 		this._result.length = this._invocations;
 		this._state = task_1.TaskState.Terminated;
 		if (this._resultConverter) {
@@ -281,7 +241,6 @@ class PromisePoolTaskPrivate {
 		} else {
 			this._returnResult = this._result;
 		}
-		// discard the original array to free memory
 		this._result = undefined;
 		if (this._deferreds.length) {
 			this._deferreds.forEach((deferred) => {
@@ -291,7 +250,6 @@ class PromisePoolTaskPrivate {
 		}
 	}
 	_reject(err) {
-		// Check if the task has already failed
 		if (this._rejection) {
 			debug("This task already failed. Redundant error: %O", err);
 			return;
@@ -301,7 +259,6 @@ class PromisePoolTaskPrivate {
 		};
 		this._rejection = taskError;
 		let handled = false;
-		// This may detach the task
 		this.end();
 		if (this._deferreds.length) {
 			handled = true;
@@ -316,7 +273,6 @@ class PromisePoolTaskPrivate {
 			}
 		});
 		if (!handled) {
-			// Create an unhandled rejection which may be handled later
 			taskError.promise = Promise.reject(err);
 		}
 	}
