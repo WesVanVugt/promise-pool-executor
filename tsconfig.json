@@ -1,16 +1,10 @@
 {
-	"compileOnSave": true,
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"extends": "@tsconfig/node12/tsconfig.json",
 	"compilerOptions": {
-		"newLine": "lf",
-		"target": "es6",
-		"module": "commonjs",
-		"strict": true,
-		"preserveConstEnums": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
-		"esModuleInterop": true,
+		"target": "es2017",
 		"declaration": true,
-		"sourceMap": false,
+		"newLine": "lf",
 		"outDir": "."
 	},
 	"include": [
