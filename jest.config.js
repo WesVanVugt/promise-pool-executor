@@ -7,7 +7,7 @@ process._original = (function (_original) {
 
 /** @type {import("jest").Config} */
 const config = {
-	testMatch: ["**/ts/test/*.ts"],
+	testMatch: ["<rootDir>/ts/test/index.ts"],
 	preset: "ts-jest",
 	collectCoverage: true,
 	coverageThreshold: {
