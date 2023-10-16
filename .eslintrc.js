@@ -18,7 +18,6 @@ const config = {
 	],
 	rules: {
 		"@typescript-eslint/no-base-to-string": 2,
-		"@typescript-eslint/no-implicit-any-catch": 2,
 		"@typescript-eslint/no-invalid-this": 2,
 		"@typescript-eslint/no-throw-literal": 2,
 		"@typescript-eslint/no-unsafe-argument": 2,

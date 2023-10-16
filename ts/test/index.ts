@@ -27,9 +27,25 @@ const typingImportTest:
 	| Pool.PersistentBatchTaskOptions<unknown, unknown>
 	| Pool.BatchingResult<never>
 	| undefined = undefined;
-
+// TODO: Use ts-expect?
 if (typingImportTest) {
 	// satisfy TypeScript's need to use the variable
+}
+
+interface PromisePoolGroupPrivate extends Pool.PromisePoolGroup {
+	readonly _frequencyStarts: readonly number[];
+}
+
+interface PromisePoolTaskPrivate extends Pool.PromisePoolTask<unknown> {
+	readonly _result?: unknown[];
+}
+
+interface PersistentBatchTaskPrivate extends Pool.PersistentBatchTask<unknown, unknown> {
+	readonly _task: PromisePoolTaskPrivate;
+}
+
+interface PromisePoolExecutorPrivate extends Pool.PromisePoolGroup {
+	readonly _globalGroup: PromisePoolGroupPrivate;
 }
 
 /**
@@ -292,7 +308,7 @@ describe("Frequency", () => {
 			})
 			.promise();
 		expect(results).toStrictEqual([0, 0, TICK]);
-		expect((group as any)._frequencyStarts.length).toBeGreaterThanOrEqual(1);
+		expect((group as PromisePoolGroupPrivate)._frequencyStarts.length).toBeGreaterThanOrEqual(1);
 	});
 
 	test("Should Not Collect Timestamps If Not Set", async () => {
@@ -303,7 +319,7 @@ describe("Frequency", () => {
 				invocationLimit: 1,
 			})
 			.promise();
-		expect((pool as any)._globalGroup._frequencyStarts).toHaveLength(0);
+		expect((pool as unknown as PromisePoolExecutorPrivate)._globalGroup._frequencyStarts).toHaveLength(0);
 	});
 });
 
@@ -994,7 +1010,7 @@ describe("Task Specializations", () => {
 			);
 			expect(runCount).toBe(1);
 			// Verify that the task is not storing the results, which would waste memory.
-			expect((task as any)._task._result.length).toBe(0);
+			expect((task as PersistentBatchTaskPrivate)._task._result!.length).toBe(0);
 		});
 		test("Offset Batches", async () => {
 			// Runs two batches of requests, offset so the seconds starts while the first is half finished.

@@ -1,7 +1,7 @@
 import defer = require("p-defer");
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
-import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
+import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 import { isNull, TaskError } from "./utils";
 
@@ -16,14 +16,14 @@ export interface GenericTaskOptionsPrivate {
 	detach: () => void;
 }
 
-export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
+export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _groups: PromisePoolGroupPrivate[];
-	private readonly _generator: (invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	private readonly _generator: (invocation: number) => I | PromiseLike<I> | undefined | null | void;
 	private readonly _taskGroup: PromisePoolGroupPrivate;
 	private _invocations = 0;
 	private _invocationLimit = Infinity;
-	private _result?: R[] = [];
-	private _returnResult: any;
+	private _result?: I[] = [];
+	private _returnResult?: R;
 	private _state: TaskState;
 	private _rejection?: TaskError;
 	/**
@@ -31,26 +31,23 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	 * promise may be generated.
 	 */
 	private _generating?: boolean;
-	private readonly _deferreds: Array<Deferred<any>> = [];
+	private readonly _deferreds: Array<Deferred<R>> = [];
 	private readonly _pool: PromisePoolExecutor;
 	private readonly _triggerCallback: () => void;
 	private readonly _detachCallback: () => void;
-	private readonly _resultConverter?: (result: R[]) => any;
+	private readonly _resultConverter?: (result: readonly I[]) => R;
 
-	public constructor(
-		privateOptions: GenericTaskOptionsPrivate,
-		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
-	) {
+	public constructor(privateOptions: GenericTaskOptionsPrivate, options: GenericTaskConvertedOptions<I, R>) {
 		debug("Creating task");
 		this._pool = privateOptions.pool;
 		this._triggerCallback = privateOptions.triggerNowCallback;
 		this._detachCallback = privateOptions.detach;
-		this._resultConverter = (options as GenericTaskConvertedOptions<any, R>).resultConverter;
+		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? TaskState.Paused : TaskState.Active;
 
 		if (!isNull(options.invocationLimit)) {
 			if (typeof options.invocationLimit !== "number") {
-				throw new Error("Invalid invocation limit: " + options.invocationLimit);
+				throw new Error(`Invalid invocation limit: ${options.invocationLimit as string}`);
 			}
 			this._invocationLimit = options.invocationLimit;
 		}
@@ -66,6 +63,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 			});
 			this._groups.push(...groups);
 		}
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 
 		// Resolve the promise only after all options have been validated
@@ -151,7 +149,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	/**
 	 * Returns a promise which resolves when the task completes.
 	 */
-	public promise(): Promise<any> {
+	public async promise(): Promise<R> {
 		if (this._rejection) {
 			if (this._rejection.promise) {
 				// First handling of this rejection. Return the unhandled promise.
@@ -159,12 +157,12 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 				this._rejection.promise = undefined;
 				return promise;
 			}
-			return Promise.reject(this._rejection.error);
+			throw this._rejection.error;
 		} else if (this._state === TaskState.Terminated) {
-			return Promise.resolve(this._returnResult);
+			return this._returnResult!;
 		}
 
-		const deferred: Deferred<any> = defer();
+		const deferred = defer<R>();
 		this._deferreds.push(deferred);
 		return deferred.promise;
 	}
@@ -259,10 +257,9 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		}
 		debug("Running generator");
 
-		let promise: Promise<any>;
+		let promise: PromiseLike<I> | I | undefined | null | void;
 		this._generating = true; // prevent task termination
 		try {
-			// @ts-expect-error
 			promise = this._generator.call(this, this._invocations);
 		} catch (err) {
 			this._generating = false;
@@ -278,16 +275,13 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 			return;
 		}
 
-		if (!(promise instanceof Promise)) {
-			// In case what is returned is not a promise, make it one
-			promise = Promise.resolve(promise);
-		}
 		this._groups.forEach((group) => {
 			group._activePromiseCount++;
 			if (group._frequencyLimit !== Infinity) {
 				group._frequencyStarts.push(Date.now());
 			}
 		});
+		// TODO: Remove inferrable typing. Use linting rule?
 		const resultIndex: number = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {
@@ -295,13 +289,16 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 			this.end();
 		}
 
-		promise
-			.catch((err) => {
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
+		(async () => {
+			let result: I | undefined;
+			try {
+				result = await (promise as PromiseLike<I>);
+			} catch (err) {
 				this._reject(err);
-				// Resolve
-			})
-			.then((result) => {
+			} finally {
 				debug("Promise ended.");
+				// TODO: Use for
 				this._groups.forEach((group) => {
 					group._activePromiseCount--;
 				});
@@ -317,7 +314,8 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
 				// Remove the task if needed and start the next task
 				this._triggerCallback();
-			});
+			}
+		})();
 	}
 
 	/**
@@ -340,7 +338,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 				return;
 			}
 		} else {
-			this._returnResult = this._result;
+			this._returnResult = this._result as R;
 		}
 		// discard the original array to free memory
 		this._result = undefined;
@@ -353,7 +351,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		}
 	}
 
-	private _reject(err: any) {
+	private _reject(err: unknown) {
 		// Check if the task has already failed
 		if (this._rejection) {
 			debug("This task already failed. Redundant error: %O", err);

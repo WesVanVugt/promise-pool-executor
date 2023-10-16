@@ -26,7 +26,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 	/**
 	 * A function used for creating promises to run.
 	 */
-	generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
 
 export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
@@ -36,7 +36,7 @@ export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<Frequency
 	 * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
 	 * promise returned.
 	 */
-	generator: (this: PromisePoolTask<any[]>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	generator: (this: PromisePoolTask<unknown>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
 }
 
 export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
@@ -47,7 +47,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
 	 * @param startIndex The original index for the first element in {values}.
 	 */
 	generator: (
-		this: PromisePoolTask<any[]>,
+		this: PromisePoolTask<unknown>,
 		values: T[],
 		startIndex: number,
 		invocation: number,
@@ -76,17 +76,18 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 	 * @param value The value from {data} for this invocation.
 	 * @param index The original index which {value} was stored at.
 	 */
-	generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
 
 export class PromisePoolExecutor implements PromisePoolGroup {
 	private _nextTriggerTime?: number;
-	private _nextTriggerTimeout?: any;
+	private _nextTriggerTimeout?: ReturnType<typeof setTimeout>;
 	/**
 	 * All tasks which are active or waiting.
 	 */
-	private _tasks: Array<PromisePoolTaskPrivate<any>> = [];
-	private _globalGroup: PromisePoolGroupPrivate;
+	// TODO: Use set?
+	private readonly _tasks: Array<PromisePoolTaskPrivate<unknown>> = [];
+	private readonly _globalGroup: PromisePoolGroupPrivate;
 	/**
 	 * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
 	 */
@@ -189,21 +190,23 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * of the task, or a modified result using the resultConverter option.
 	 */
 	public addGenericTask<R>(options: GenericTaskOptions<R>): PromisePoolTask<R[]>;
-	public addGenericTask<R>(options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>): PromisePoolTask<R[]> {
-		const task: PromisePoolTaskPrivate<R> = new PromisePoolTaskPrivate(
+	public addGenericTask<I, R>(
+		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<I, R>,
+	): PromisePoolTask<R | R[]> {
+		const task = new PromisePoolTaskPrivate(
 			{
 				detach: () => {
-					this._removeTask(task);
+					this._removeTask(task as PromisePoolTaskPrivate<unknown>);
 				},
 				globalGroup: this._globalGroup,
 				pool: this,
 				triggerNowCallback: () => this._triggerNow(),
 			},
-			options,
+			options as GenericTaskConvertedOptions<I, R>,
 		);
 		if (task.state <= TaskState.Paused) {
 			// Attach the task
-			this._tasks.push(task);
+			this._tasks.push(task as PromisePoolTaskPrivate<unknown, unknown>);
 		}
 		this._triggerNow();
 		return task;
@@ -213,7 +216,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * Adds a task with a single promise. The resulting task can be resolved to the result of this promise.
 	 */
 	public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
-		const data: T | undefined = options.data;
+		const data = options.data;
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		const generator = options.generator;
 		return this.addGenericTask<R, R>({
 			generator() {
@@ -379,7 +383,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		this._clearTriggerTimeout();
 
 		let taskIndex: number = 0;
-		let task: PromisePoolTaskPrivate<any[]>;
+		let task: PromisePoolTaskPrivate<unknown>;
 		let soonest: number = Infinity;
 		let busyTime: number;
 
@@ -418,8 +422,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 	}
 
-	private _removeTask(task: PromisePoolTaskPrivate<any>) {
-		const i: number = this._tasks.indexOf(task);
+	private _removeTask(task: PromisePoolTaskPrivate<unknown>) {
+		const i = this._tasks.indexOf(task);
 		if (i !== -1) {
 			debug("Task removed");
 			this._tasks.splice(i, 1);

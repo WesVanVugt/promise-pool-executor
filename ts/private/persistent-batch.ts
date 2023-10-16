@@ -10,7 +10,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 	private readonly _generator: (
 		input: readonly I[],
 	) => ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
-	private readonly _task: PromisePoolTask<any>;
+	private readonly _task: PromisePoolTask<unknown>;
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
 		let immediate: boolean | Error;
@@ -26,23 +26,15 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 				}
 				const localTaskDeferred = taskDeferred;
 				taskDeferred = undefined;
-				let promise: Promise<Array<BatchingResult<O>>>;
-				try {
-					const result = this._generator(inputs);
-					promise = result instanceof Promise ? result : Promise.resolve(result);
-				} catch (err) {
-					promise = Promise.reject(err);
-				}
-				return promise
-					.catch((err) => {
+
+				return (async () => {
+					try {
+						return await this._generator(inputs);
+					} finally {
 						// Do not send errors to the task, since they will be received via the getResult promises
 						localTaskDeferred.resolve();
-						throw err;
-					})
-					.then((outputs) => {
-						localTaskDeferred.resolve();
-						return outputs;
-					});
+					}
+				})();
 			},
 			delayFunction: () => {
 				if (delayDeferred) {
@@ -55,7 +47,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 				this._task.resume();
 				if (immediate) {
 					if (immediate !== true) {
-						throw immediate;
+						throw immediate as Error;
 					}
 					return;
 				}
