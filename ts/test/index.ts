@@ -14,19 +14,18 @@ const typingImportTest:
 	| Pool.PromisePoolGroup
 	| Pool.PromisePoolGroupOptions
 	// General Tasks
-	| Pool.PromisePoolTask<any>
-	| Pool.GenericTaskOptions<any>
-	| Pool.GenericTaskConvertedOptions<any, any>
-	| Pool.SingleTaskOptions<any, any>
-	| Pool.LinearTaskOptions<any>
-	| Pool.BatchTaskOptions<any, any>
-	| Pool.EachTaskOptions<any, any>
+	| Pool.PromisePoolTask<unknown>
+	| Pool.GenericTaskOptions<unknown>
+	| Pool.GenericTaskConvertedOptions<unknown, unknown>
+	| Pool.SingleTaskOptions<unknown, unknown>
+	| Pool.LinearTaskOptions<unknown>
+	| Pool.BatchTaskOptions<unknown, unknown>
+	| Pool.EachTaskOptions<unknown, unknown>
 	| Pool.TaskState
 	// Persistent Batch Task
-	| Pool.PersistentBatchTask<any, any>
-	| Pool.PersistentBatchTaskOptions<any, any>
-	| Pool.BatcherToken
-	| Pool.BatchingResult<any>
+	| Pool.PersistentBatchTask<unknown, unknown>
+	| Pool.PersistentBatchTaskOptions<unknown, unknown>
+	| Pool.BatchingResult<never>
 	| undefined = undefined;
 
 if (typingImportTest) {
@@ -1231,7 +1230,7 @@ describe("Task Specializations", () => {
 				const batchInputs: number[][] = [];
 				const batcher = pool.addPersistentBatchTask<number, number>({
 					generator: async (inputs) => {
-						batchInputs.push(inputs);
+						batchInputs.push(inputs.slice());
 						await wait(TICK);
 						return inputs.map((input, index) => {
 							return batchInputs.length < 2 && index < 2 ? Pool.BATCHER_RETRY_TOKEN : input + 1;
@@ -1410,13 +1409,13 @@ describe("Task Specializations", () => {
 
 				await Promise.all([
 					expect(task.getResult(0)).rejects.toThrowError(
-						/^Batching function output length does not equal the input length.$/,
+						/^batchingFunction output length does not equal the input length$/,
 					),
 					expect(task.getResult(1)).rejects.toThrowError(
-						/^Batching function output length does not equal the input length.$/,
+						/^batchingFunction output length does not equal the input length$/,
 					),
 					expect(task.getResult(2)).rejects.toThrowError(
-						/^Batching function output length does not equal the input length.$/,
+						/^batchingFunction output length does not equal the input length$/,
 					),
 				]);
 			});

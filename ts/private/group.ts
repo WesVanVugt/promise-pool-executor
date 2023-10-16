@@ -66,7 +66,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		} else if (val && typeof val === "number" && val > 0) {
 			this._concurrencyLimit = val;
 		} else {
-			throw new Error("Invalid concurrency limit: " + val);
+			throw new Error(`Invalid concurrency limit: ${val}`);
 		}
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
@@ -83,7 +83,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		} else if (val && typeof val === "number" && val > 0) {
 			this._frequencyLimit = val;
 		} else {
-			throw new Error("Invalid frequency limit: " + val);
+			throw new Error(`Invalid frequency limit: ${val}`);
 		}
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
@@ -100,7 +100,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		} else if (val && typeof val === "number" && val > 0) {
 			this._frequencyWindow = val;
 		} else {
-			throw new Error("Invalid frequency window: " + val);
+			throw new Error(`Invalid frequency window: ${val}`);
 		}
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();

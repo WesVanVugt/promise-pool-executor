@@ -7,7 +7,9 @@ import { PromisePoolTask, TaskState } from "../public/task";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
 	private readonly _batcher: Batcher<I, O>;
-	private readonly _generator: (input: I[]) => Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+	private readonly _generator: (
+		input: readonly I[],
+	) => ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
 	private readonly _task: PromisePoolTask<any>;
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
@@ -15,6 +17,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 		let delayDeferred: Deferred<void> | undefined;
 		let taskDeferred: Deferred<void> | undefined;
 
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 		this._batcher = new Batcher<I, O>({
 			batchingFunction: (inputs) => {
