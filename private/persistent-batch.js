@@ -17,22 +17,13 @@ class PersistentBatchTaskPrivate {
 				}
 				const localTaskDeferred = taskDeferred;
 				taskDeferred = undefined;
-				let promise;
-				try {
-					const result = this._generator(inputs);
-					promise = result instanceof Promise ? result : Promise.resolve(result);
-				} catch (err) {
-					promise = Promise.reject(err);
-				}
-				return promise
-					.catch((err) => {
+				return (async () => {
+					try {
+						return await this._generator(inputs);
+					} finally {
 						localTaskDeferred.resolve();
-						throw err;
-					})
-					.then((outputs) => {
-						localTaskDeferred.resolve();
-						return outputs;
-					});
+					}
+				})();
 			},
 			delayFunction: () => {
 				if (delayDeferred) {

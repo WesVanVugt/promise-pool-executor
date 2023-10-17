@@ -15,7 +15,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 	/**
 	 * A function used for creating promises to run.
 	 */
-	generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
 export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
 	/**
@@ -24,7 +24,7 @@ export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<Frequency
 	 * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
 	 * promise returned.
 	 */
-	generator: (this: PromisePoolTask<any[]>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	generator: (this: PromisePoolTask<unknown>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
 }
 export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
 	/**
@@ -34,7 +34,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
 	 * @param startIndex The original index for the first element in {values}.
 	 */
 	generator: (
-		this: PromisePoolTask<any[]>,
+		this: PromisePoolTask<unknown>,
 		values: T[],
 		startIndex: number,
 		invocation: number,
@@ -62,7 +62,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 	 * @param value The value from {data} for this invocation.
 	 * @param index The original index which {value} was stored at.
 	 */
-	generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
 export declare class PromisePoolExecutor implements PromisePoolGroup {
 	private _nextTriggerTime?;
@@ -70,8 +70,8 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	/**
 	 * All tasks which are active or waiting.
 	 */
-	private _tasks;
-	private _globalGroup;
+	private readonly _tasks;
+	private readonly _globalGroup;
 	/**
 	 * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
 	 */

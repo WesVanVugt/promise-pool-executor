@@ -2,7 +2,7 @@
 import util from "util";
 export declare const debug: util.DebugLogger;
 export interface TaskError {
-	error: any;
+	error: unknown;
 	promise?: Promise<never>;
 }
-export declare function isNull(val: any): val is null | undefined;
+export declare function isNull(val: unknown): val is null | undefined;

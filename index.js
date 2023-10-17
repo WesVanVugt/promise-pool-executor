@@ -26,7 +26,7 @@ var __exportStar =
 			if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BatcherToken = exports.BATCHER_RETRY_TOKEN = void 0;
+exports.BATCHER_RETRY_TOKEN = void 0;
 __exportStar(require("./public/group"), exports);
 __exportStar(require("./public/persistent-batch"), exports);
 __exportStar(require("./public/pool"), exports);
@@ -36,11 +36,5 @@ Object.defineProperty(exports, "BATCHER_RETRY_TOKEN", {
 	enumerable: true,
 	get: function () {
 		return promise_batcher_1.BATCHER_RETRY_TOKEN;
-	},
-});
-Object.defineProperty(exports, "BatcherToken", {
-	enumerable: true,
-	get: function () {
-		return promise_batcher_1.BatcherToken;
 	},
 });

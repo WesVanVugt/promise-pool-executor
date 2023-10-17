@@ -21,8 +21,8 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
 	 */
 	generator(
 		this: PersistentBatchTaskOptions<I, O>,
-		input: I[],
-	): Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+		input: readonly I[],
+	): ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
 }
 export interface PersistentBatchTask<I, O>
 	extends ActivePromiseCount,

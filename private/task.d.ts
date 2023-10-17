@@ -1,5 +1,5 @@
 import { PromisePoolExecutor } from "../public/pool";
-import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
+import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 export interface GenericTaskOptionsPrivate {
 	pool: PromisePoolExecutor;
@@ -7,14 +7,14 @@ export interface GenericTaskOptionsPrivate {
 	triggerNowCallback: () => void;
 	detach: () => void;
 }
-export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
+export declare class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _groups;
 	private readonly _generator;
 	private readonly _taskGroup;
 	private _invocations;
 	private _invocationLimit;
 	private _result?;
-	private _returnResult;
+	private _returnResult?;
 	private _state;
 	private _rejection?;
 	/**
@@ -27,10 +27,7 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	private readonly _triggerCallback;
 	private readonly _detachCallback;
 	private readonly _resultConverter?;
-	constructor(
-		privateOptions: GenericTaskOptionsPrivate,
-		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
-	);
+	constructor(privateOptions: GenericTaskOptionsPrivate, options: GenericTaskConvertedOptions<I, R>);
 	get activePromiseCount(): number;
 	get invocations(): number;
 	get invocationLimit(): number;
@@ -46,7 +43,7 @@ export declare class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	/**
 	 * Returns a promise which resolves when the task completes.
 	 */
-	promise(): Promise<any>;
+	promise(): Promise<R>;
 	/**
 	 * Pauses an active task, preventing any additional promises from being generated.
 	 */

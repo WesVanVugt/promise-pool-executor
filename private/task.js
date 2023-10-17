@@ -26,7 +26,7 @@ class PromisePoolTaskPrivate {
 		this._state = options.paused ? task_1.TaskState.Paused : task_1.TaskState.Active;
 		if (!(0, utils_1.isNull)(options.invocationLimit)) {
 			if (typeof options.invocationLimit !== "number") {
-				throw new Error("Invalid invocation limit: " + options.invocationLimit);
+				throw new Error(`Invalid invocation limit: ${options.invocationLimit}`);
 			}
 			this._invocationLimit = options.invocationLimit;
 		}
@@ -105,16 +105,16 @@ class PromisePoolTaskPrivate {
 	get state() {
 		return this._state;
 	}
-	promise() {
+	async promise() {
 		if (this._rejection) {
 			if (this._rejection.promise) {
 				const promise = this._rejection.promise;
 				this._rejection.promise = undefined;
 				return promise;
 			}
-			return Promise.reject(this._rejection.error);
+			throw this._rejection.error;
 		} else if (this._state === task_1.TaskState.Terminated) {
-			return Promise.resolve(this._returnResult);
+			return this._returnResult;
 		}
 		const deferred = defer();
 		this._deferreds.push(deferred);
@@ -197,9 +197,6 @@ class PromisePoolTaskPrivate {
 			}
 			return;
 		}
-		if (!(promise instanceof Promise)) {
-			promise = Promise.resolve(promise);
-		}
 		this._groups.forEach((group) => {
 			group._activePromiseCount++;
 			if (group._frequencyLimit !== Infinity) {
@@ -211,11 +208,13 @@ class PromisePoolTaskPrivate {
 		if (this._invocations >= this._invocationLimit) {
 			this.end();
 		}
-		promise
-			.catch((err) => {
+		(async () => {
+			let result;
+			try {
+				result = await promise;
+			} catch (err) {
 				this._reject(err);
-			})
-			.then((result) => {
+			} finally {
 				debug("Promise ended.");
 				this._groups.forEach((group) => {
 					group._activePromiseCount--;
@@ -228,7 +227,8 @@ class PromisePoolTaskPrivate {
 					this.end();
 				}
 				this._triggerCallback();
-			});
+			}
+		})();
 	}
 	_resolve() {
 		if (this._rejection || !this._result) {
