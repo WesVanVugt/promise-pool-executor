@@ -1,3 +1,4 @@
+import { strict as assert } from "node:assert";
 import timeSpan from "time-span";
 import util from "util";
 import * as Pool from "../index";
@@ -96,14 +97,6 @@ const expectHandledRejection = async () =>
 	});
 
 /**
- * Expects an unhandled promise rejection.
- * @param expectedError The error expected to be received with the rejection (optional).
- */
-const expectUnhandledRejection = async (expectedError: Error) => {
-	await expect(waitForUnhandledRejection()).rejects.toBe(expectedError);
-};
-
-/**
  * Returns the sum of an array of numbers.
  */
 const sum = (nums: number[]) => {
@@ -121,6 +114,7 @@ const unhandledRejectionListener = (err: unknown) => {
 	throw err;
 };
 
+// TODO: Is this needed?
 const rejectionHandledListener = () => {
 	debug("Unexpected rejectionHandled event");
 	// Fail the test
@@ -386,7 +380,7 @@ describe("Exception Handling", () => {
 						return Promise.resolve();
 					},
 				}),
-			).toThrowError(/^Invalid concurrency limit: 0$/);
+			).toThrow(/^Invalid concurrency limit: 0$/);
 		});
 
 		test("Group From Another Pool", () => {
@@ -404,7 +398,7 @@ describe("Exception Handling", () => {
 						}),
 					],
 				}),
-			).toThrowError(/^options.groups contains a group belonging to a different pool$/);
+			).toThrow(/^options.groups contains a group belonging to a different pool$/);
 		});
 	});
 
@@ -414,7 +408,7 @@ describe("Exception Handling", () => {
 
 			const error = new Error();
 			await Promise.all([
-				expectUnhandledRejection(error),
+				expect(waitForUnhandledRejection()).rejects.toBe(error),
 				pool.addGenericTask({
 					generator: () => {
 						throw error;
@@ -435,7 +429,7 @@ describe("Exception Handling", () => {
 				},
 				invocationLimit: 1,
 			});
-			return expectUnhandledRejection(error);
+			await expect(waitForUnhandledRejection()).rejects.toBe(error);
 		});
 
 		test("Late Rejection Handling", async () => {
@@ -449,7 +443,7 @@ describe("Exception Handling", () => {
 				},
 				invocationLimit: 1,
 			});
-			await expectUnhandledRejection(error);
+			await expect(waitForUnhandledRejection()).rejects.toBe(error);
 			await Promise.all([expectHandledRejection(), expect(task.promise()).rejects.toBe(error)]);
 		});
 
@@ -471,8 +465,8 @@ describe("Exception Handling", () => {
 				},
 				invocationLimit: 1,
 			});
-			await expectUnhandledRejection(errors[0]);
-			await expectUnhandledRejection(errors[1]);
+			await expect(waitForUnhandledRejection()).rejects.toBe(errors[0]);
+			await expect(waitForUnhandledRejection()).rejects.toBe(errors[1]);
 		});
 
 		// This scenario creates two tasks at the same time
@@ -501,7 +495,7 @@ describe("Exception Handling", () => {
 					})
 					.promise(),
 			).rejects.toBe(errors[0]);
-			await expectUnhandledRejection(errors[1]);
+			await expect(waitForUnhandledRejection()).rejects.toBe(errors[1]);
 		});
 
 		test("Unhandled Followed By Rejection With pool.waitForIdle", async () => {
@@ -517,7 +511,7 @@ describe("Exception Handling", () => {
 				generator: () => realWait(1),
 				invocationLimit: 1,
 			});
-			await expectUnhandledRejection(errors[0]);
+			await expect(waitForUnhandledRejection()).rejects.toBe(errors[0]);
 			pool.addGenericTask({
 				generator: () => {
 					throw errors[1];
@@ -797,6 +791,7 @@ describe("Miscellaneous Features", () => {
 			expect(elapsed()).toBe(2 * TICK);
 		});
 
+		// eslint-disable-next-line jest/expect-expect
 		test("No Task", async () => {
 			const pool = new Pool.PromisePoolExecutor();
 
@@ -1288,9 +1283,9 @@ describe("Task Specializations", () => {
 					[1, 2, 3].map(async (_, index) => {
 						const promise = batcher.getResult(undefined);
 						if (index === 1) {
-							expect(runCount).toBe(0);
+							assert.equal(runCount, 0);
 							batcher.send();
-							expect(runCount).toBe(1);
+							assert.equal(runCount, 1);
 						}
 						await promise;
 						return elapsed();
@@ -1315,12 +1310,12 @@ describe("Task Specializations", () => {
 					[1, 2, 3].map(async (_, index) => {
 						const promise = batcher.getResult(undefined);
 						if (index === 1) {
-							expect(runCount).toBe(0);
+							assert.equal(runCount, 0);
 							batcher.send();
-							expect(runCount).toBe(1);
+							assert.equal(runCount, 1);
 						} else if (index === 2) {
 							batcher.send();
-							expect(runCount).toBe(1);
+							assert.equal(runCount, 1);
 						}
 						await promise;
 						return elapsed();
@@ -1424,15 +1419,9 @@ describe("Task Specializations", () => {
 				});
 
 				await Promise.all([
-					expect(task.getResult(0)).rejects.toThrowError(
-						/^batchingFunction output length does not equal the input length$/,
-					),
-					expect(task.getResult(1)).rejects.toThrowError(
-						/^batchingFunction output length does not equal the input length$/,
-					),
-					expect(task.getResult(2)).rejects.toThrowError(
-						/^batchingFunction output length does not equal the input length$/,
-					),
+					expect(task.getResult(0)).rejects.toThrow(/^batchingFunction output length does not equal the input length$/),
+					expect(task.getResult(1)).rejects.toThrow(/^batchingFunction output length does not equal the input length$/),
+					expect(task.getResult(2)).rejects.toThrow(/^batchingFunction output length does not equal the input length$/),
 				]);
 			});
 			test("End Task", async () => {
@@ -1448,8 +1437,8 @@ describe("Task Specializations", () => {
 				expect(task.state).toBe(Pool.TaskState.Terminated);
 
 				await Promise.all([
-					expect(firstPromise).rejects.toThrowError(/^This task has ended and cannot process more items$/),
-					expect(task.getResult(undefined)).rejects.toThrowError(/^This task has ended and cannot process more items$/),
+					expect(firstPromise).rejects.toThrow(/^This task has ended and cannot process more items$/),
+					expect(task.getResult(undefined)).rejects.toThrow(/^This task has ended and cannot process more items$/),
 				]);
 			});
 		});

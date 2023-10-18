@@ -9,12 +9,13 @@ const config = {
 		project: ["./tsconfig.eslint.json"],
 	},
 	ignorePatterns: ["*.d.ts"],
-	plugins: ["@typescript-eslint", "prettier"],
+	plugins: ["@typescript-eslint", "jest", "prettier"],
 	extends: [
 		"eslint:recommended",
 		"plugin:@typescript-eslint/eslint-recommended",
 		"plugin:@typescript-eslint/recommended",
 		"plugin:@typescript-eslint/recommended-requiring-type-checking",
+		"plugin:jest/recommended",
 	],
 	rules: {
 		"@typescript-eslint/no-base-to-string": 2,
