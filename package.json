@@ -34,7 +34,7 @@
 		"node": ">=8"
 	},
 	"dependencies": {
-		"p-defer": "^1.0.0",
+		"p-defer": "^3.0.0",
 		"promise-batcher": "^1.1.1"
 	},
 	"devDependencies": {

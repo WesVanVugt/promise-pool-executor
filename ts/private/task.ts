@@ -1,4 +1,4 @@
-import defer from "p-defer";
+import defer, { DeferredPromise } from "p-defer";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
@@ -29,7 +29,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * promise may be generated.
 	 */
 	private _generating?: boolean;
-	private readonly _deferreds: Array<Deferred<R>> = [];
+	private readonly _deferreds: Array<DeferredPromise<R>> = [];
 	private readonly _pool: PromisePoolExecutor;
 	private readonly _triggerCallback: () => void;
 	private readonly _detachCallback: () => void;

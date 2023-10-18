@@ -27,10 +27,6 @@ var __exportStar =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BATCHER_RETRY_TOKEN = void 0;
-__exportStar(require("./public/group"), exports);
-__exportStar(require("./public/persistent-batch"), exports);
-__exportStar(require("./public/pool"), exports);
-__exportStar(require("./public/task"), exports);
 var promise_batcher_1 = require("promise-batcher");
 Object.defineProperty(exports, "BATCHER_RETRY_TOKEN", {
 	enumerable: true,
@@ -38,3 +34,7 @@ Object.defineProperty(exports, "BATCHER_RETRY_TOKEN", {
 		return promise_batcher_1.BATCHER_RETRY_TOKEN;
 	},
 });
+__exportStar(require("./public/group"), exports);
+__exportStar(require("./public/persistent-batch"), exports);
+__exportStar(require("./public/pool"), exports);
+__exportStar(require("./public/task"), exports);

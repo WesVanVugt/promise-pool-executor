@@ -1,4 +1,4 @@
-import defer from "p-defer";
+import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
 import { TaskError, isNull } from "./utils";
@@ -12,7 +12,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	public _frequencyStarts: number[] = [];
 	public _activeTaskCount = 0;
 	public _activePromiseCount = 0;
-	private readonly _deferreds: Array<Deferred<void>> = [];
+	private readonly _deferreds: Array<DeferredPromise<void>> = [];
 	/**
 	 * This flag prevents a rejection from being removed before nextTick is called.
 	 * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.

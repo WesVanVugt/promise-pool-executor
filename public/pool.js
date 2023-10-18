@@ -6,7 +6,6 @@ var __importDefault =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolExecutor = void 0;
-const next_tick_1 = __importDefault(require("next-tick"));
 const util_1 = __importDefault(require("util"));
 const group_1 = require("../private/group");
 const persistent_batch_1 = require("../private/persistent-batch");
@@ -188,7 +187,7 @@ class PromisePoolExecutor {
 		}
 		this._clearTriggerTimeout();
 		this._nextTriggerTime = -1;
-		(0, next_tick_1.default)(() => {
+		process.nextTick(() => {
 			if (this._nextTriggerTime === -1) {
 				this._nextTriggerTime = undefined;
 				this._triggerNow();

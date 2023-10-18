@@ -63,8 +63,6 @@ const wait = (ms: number) =>
 	});
 
 const waitForUnhandledRejection = (): Promise<void> => {
-	process._original().removeListener("unhandledRejection", unhandledRejectionListener);
-
 	return new Promise((resolve, reject) => {
 		const timeout = realSetTimeout(() => {
 			resetUnhandledRejectionListener();
@@ -108,13 +106,6 @@ const sum = (nums: number[]) => {
 	return total;
 };
 
-const unhandledRejectionListener = (err: unknown) => {
-	debug("unhandledRejectionListener: %O", err);
-	// Fail the test
-	throw err;
-};
-
-// TODO: Is this needed?
 const rejectionHandledListener = () => {
 	debug("Unexpected rejectionHandled event");
 	// Fail the test
@@ -123,7 +114,6 @@ const rejectionHandledListener = () => {
 
 const resetUnhandledRejectionListener = () => {
 	process._original().removeAllListeners("unhandledRejection");
-	process._original().addListener("unhandledRejection", unhandledRejectionListener);
 };
 
 const resetHandledRejectionListener = () => {

@@ -1,5 +1,4 @@
 // @ts-check
-// TODO: Move this into an appropriate file
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 process._original = (function (_original) {

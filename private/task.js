@@ -6,7 +6,7 @@ var __importDefault =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolTaskPrivate = void 0;
-const defer = require("p-defer");
+const p_defer_1 = __importDefault(require("p-defer"));
 const util_1 = __importDefault(require("util"));
 const task_1 = require("../public/task");
 const utils_1 = require("./utils");
@@ -115,7 +115,7 @@ class PromisePoolTaskPrivate {
 		} else if (this._state === task_1.TaskState.Terminated) {
 			return this._returnResult;
 		}
-		const deferred = defer();
+		const deferred = (0, p_defer_1.default)();
 		this._deferreds.push(deferred);
 		return deferred.promise;
 	}

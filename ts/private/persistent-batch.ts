@@ -1,4 +1,4 @@
-import defer from "p-defer";
+import defer, { DeferredPromise } from "p-defer";
 import { Batcher, BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
@@ -13,8 +13,8 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
 		let immediate: boolean | Error;
-		let delayDeferred: Deferred<void> | undefined;
-		let taskDeferred: Deferred<void> | undefined;
+		let delayDeferred: DeferredPromise<void> | undefined;
+		let taskDeferred: DeferredPromise<void> | undefined;
 
 		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
