@@ -1,9 +1,9 @@
-import defer = require("p-defer");
+import defer from "p-defer";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { isNull, TaskError } from "./utils";
+import { TaskError, isNull } from "./utils";
 
 const debug = util.debuglog("promise-pool-executor:task");
 
@@ -223,7 +223,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 
 		let time = 0;
 		for (const group of this._groups) {
-			const busyTime: number = group._busyTime();
+			const busyTime = group._busyTime();
 			if (busyTime > time) {
 				time = busyTime;
 			}
@@ -281,7 +281,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 			}
 		}
 		// TODO: Remove inferrable typing. Use linting rule?
-		const resultIndex: number = this._invocations;
+		const resultIndex = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {
 			// this will not detach the task since there are active promises

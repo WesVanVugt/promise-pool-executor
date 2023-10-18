@@ -1,6 +1,5 @@
-import defer = require("p-defer");
-import { Batcher } from "promise-batcher";
-import { BatchingResult } from "promise-batcher";
+import defer from "p-defer";
+import { Batcher, BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask, TaskState } from "../public/task";
@@ -71,7 +70,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 				}
 				taskDeferred = defer();
 				if (delayDeferred) {
-					const localDelayDefered: Deferred<void> = delayDeferred;
+					const localDelayDefered = delayDeferred;
 					delayDeferred = undefined;
 					localDelayDefered.resolve();
 				} else {

@@ -1,4 +1,3 @@
-import nextTick from "next-tick";
 import util from "util";
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
@@ -249,7 +248,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * resolved to an array containing the results of the task.
 	 */
 	public addBatchTask<T, R>(options: BatchTaskOptions<T, R>): PromisePoolTask<R[]> {
-		let index: number = 0;
+		let index = 0;
 
 		// Unacceptable values: NaN, <=0, type not number/function
 		if (
@@ -270,9 +269,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 				if (index >= data.length) {
 					return; // No data to process
 				}
-				const oldIndex: number = index;
+				const oldIndex = index;
 				if (typeof batchSizeOption === "function") {
-					const batchSize: number = batchSizeOption(data.length - oldIndex, this.freeSlots);
+					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					// Unacceptable values: NaN, <=0, type not number
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
 						return Promise.reject(new Error("Invalid batch size: " + batchSize));
@@ -355,7 +354,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 		this._clearTriggerTimeout();
 		this._nextTriggerTime = -1;
-		nextTick(() => {
+		process.nextTick(() => {
 			if (this._nextTriggerTime === -1) {
 				this._nextTriggerTime = undefined;
 				this._triggerNow();
@@ -380,7 +379,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 
 		this._clearTriggerTimeout();
 
-		let soonest: number = Infinity;
+		let soonest = Infinity;
 		let busyTime: number;
 
 		for (const task of this._tasks) {

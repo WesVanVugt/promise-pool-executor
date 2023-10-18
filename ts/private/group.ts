@@ -1,7 +1,7 @@
-import defer = require("p-defer");
+import defer from "p-defer";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { isNull, TaskError } from "./utils";
+import { TaskError, isNull } from "./utils";
 
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
@@ -128,7 +128,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	public _cleanFrequencyStarts(now: number): void {
 		// Remove the frequencyStarts entries which are outside of the window
 		if (this._frequencyStarts.length > 0) {
-			const time: number = now - this._frequencyWindow;
+			const time = now - this._frequencyWindow;
 			let i = 0;
 			while (i < this._frequencyStarts.length && this._frequencyStarts[i] <= time) {
 				i++;
@@ -230,7 +230,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			return Promise.resolve();
 		}
 
-		const deferred: Deferred<void> = defer();
+		const deferred = defer<void>();
 		this._deferreds.push(deferred);
 		return deferred.promise;
 	}
