@@ -85,8 +85,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	/**
 	 * All tasks which are active or waiting.
 	 */
-	// TODO: Use set?
-	private readonly _tasks: Array<PromisePoolTaskPrivate<unknown>> = [];
+	private readonly _tasks: Set<PromisePoolTaskPrivate<unknown>> = new Set();
 	private readonly _globalGroup: PromisePoolGroupPrivate;
 	/**
 	 * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
@@ -205,8 +204,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			options as GenericTaskConvertedOptions<I, R>,
 		);
 		if (task.state <= TaskState.Paused) {
-			// Attach the task
-			this._tasks.push(task as PromisePoolTaskPrivate<unknown, unknown>);
+			this._tasks.add(task as PromisePoolTaskPrivate<unknown, unknown>);
 		}
 		this._triggerNow();
 		return task;
@@ -338,9 +336,9 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		// Remove the frequencyStarts entries which are outside of the window
 		const now = Date.now();
 		this._globalGroup._cleanFrequencyStarts(now);
-		this._tasks.forEach((task) => {
+		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
-		});
+		}
 	}
 
 	private _clearTriggerTimeout(): void {
@@ -382,22 +380,21 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 
 		this._clearTriggerTimeout();
 
-		let taskIndex: number = 0;
-		let task: PromisePoolTaskPrivate<unknown>;
 		let soonest: number = Infinity;
 		let busyTime: number;
 
-		while (taskIndex < this._tasks.length) {
-			task = this._tasks[taskIndex];
-			busyTime = task._busyTime();
-			debug("BusyTime: %o", busyTime);
+		for (const task of this._tasks) {
+			for (;;) {
+				busyTime = task._busyTime();
+				debug("BusyTime: %o", busyTime);
 
-			if (!busyTime) {
-				task._run();
-			} else {
-				taskIndex++;
-				if (busyTime < soonest) {
-					soonest = busyTime;
+				if (!busyTime) {
+					task._run();
+				} else {
+					if (busyTime < soonest) {
+						soonest = busyTime;
+					}
+					break;
 				}
 			}
 		}
@@ -423,10 +420,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	}
 
 	private _removeTask(task: PromisePoolTaskPrivate<unknown>) {
-		const i = this._tasks.indexOf(task);
-		if (i !== -1) {
+		if (this._tasks.delete(task)) {
 			debug("Task removed");
-			this._tasks.splice(i, 1);
 		}
 	}
 }

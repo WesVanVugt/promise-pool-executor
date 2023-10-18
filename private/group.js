@@ -106,9 +106,9 @@ class PromisePoolGroupPrivate {
 	}
 	_resolve() {
 		if (!this._rejection && this._deferreds.length) {
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.resolve();
-			});
+			}
 			this._deferreds.length = 0;
 		}
 	}
@@ -125,9 +125,9 @@ class PromisePoolGroupPrivate {
 		if (this._deferreds.length) {
 			handled = true;
 			this._locallyHandled = true;
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.reject(err.error);
-			});
+			}
 			this._deferreds.length = 0;
 		}
 		this._recentRejection = true;
@@ -147,12 +147,12 @@ class PromisePoolGroupPrivate {
 		if (this._rejection) {
 			this._locallyHandled = true;
 			if (this._secondaryRejections.length) {
-				this._secondaryRejections.forEach((rejection) => {
+				for (const rejection of this._secondaryRejections) {
 					if (rejection.promise) {
 						rejection.promise.catch(() => {});
 						rejection.promise = undefined;
 					}
-				});
+				}
 				this._secondaryRejections.length = 0;
 			}
 			if (this._rejection.promise) {

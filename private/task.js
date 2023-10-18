@@ -11,7 +11,6 @@ const util_1 = __importDefault(require("util"));
 const task_1 = require("../public/task");
 const utils_1 = require("./utils");
 const debug = util_1.default.debuglog("promise-pool-executor:task");
-const GLOBAL_GROUP_INDEX = 0;
 class PromisePoolTaskPrivate {
 	constructor(privateOptions, options) {
 		this._invocations = 0;
@@ -34,11 +33,11 @@ class PromisePoolTaskPrivate {
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
 			const groups = options.groups;
-			groups.forEach((group) => {
+			for (const group of groups) {
 				if (group._pool !== this._pool) {
 					throw new Error("options.groups contains a group belonging to a different pool");
 				}
-			});
+			}
 			this._groups.push(...groups);
 		}
 		this._generator = options.generator;
@@ -46,9 +45,9 @@ class PromisePoolTaskPrivate {
 			this.end();
 			return;
 		}
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			group._incrementTasks();
-		});
+		}
 	}
 	get activePromiseCount() {
 		return this._taskGroup._activePromiseCount;
@@ -94,12 +93,12 @@ class PromisePoolTaskPrivate {
 	}
 	get freeSlots() {
 		let freeSlots = this._invocationLimit - this._invocations;
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			const slots = group.freeSlots;
 			if (slots < freeSlots) {
 				freeSlots = slots;
 			}
-		});
+		}
 		return freeSlots;
 	}
 	get state() {
@@ -145,9 +144,9 @@ class PromisePoolTaskPrivate {
 			debug("State: %o", "Terminated");
 			this._state = task_1.TaskState.Terminated;
 			if (this._taskGroup._activeTaskCount > 0) {
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._decrementTasks();
-				});
+				}
 			}
 			this._resolve();
 		}
@@ -166,11 +165,11 @@ class PromisePoolTaskPrivate {
 		return time;
 	}
 	_cleanFrequencyStarts(now) {
-		this._groups.forEach((group, index) => {
-			if (index > GLOBAL_GROUP_INDEX) {
-				group._cleanFrequencyStarts(now);
-			}
-		});
+		const groups = this._groups.values();
+		groups.next();
+		for (const group of groups) {
+			group._cleanFrequencyStarts(now);
+		}
 	}
 	_run() {
 		if (this._generating) {
@@ -197,12 +196,12 @@ class PromisePoolTaskPrivate {
 			}
 			return;
 		}
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			group._activePromiseCount++;
 			if (group._frequencyLimit !== Infinity) {
 				group._frequencyStarts.push(Date.now());
 			}
-		});
+		}
 		const resultIndex = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {
@@ -216,9 +215,9 @@ class PromisePoolTaskPrivate {
 				this._reject(err);
 			} finally {
 				debug("Promise ended.");
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._activePromiseCount--;
-				});
+				}
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
 				if (result !== undefined && this._result) {
 					this._result[resultIndex] = result;
@@ -248,9 +247,9 @@ class PromisePoolTaskPrivate {
 		}
 		this._result = undefined;
 		if (this._deferreds.length) {
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.resolve(this._returnResult);
-			});
+			}
 			this._deferreds.length = 0;
 		}
 	}
@@ -267,16 +266,16 @@ class PromisePoolTaskPrivate {
 		this.end();
 		if (this._deferreds.length) {
 			handled = true;
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.reject(taskError.error);
-			});
+			}
 			this._deferreds.length = 0;
 		}
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			if (group._reject(taskError)) {
 				handled = true;
 			}
-		});
+		}
 		if (!handled) {
 			taskError.promise = Promise.reject(err);
 		}

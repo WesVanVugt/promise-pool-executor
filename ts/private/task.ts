@@ -7,8 +7,6 @@ import { isNull, TaskError } from "./utils";
 
 const debug = util.debuglog("promise-pool-executor:task");
 
-const GLOBAL_GROUP_INDEX = 0;
-
 export interface GenericTaskOptionsPrivate {
 	pool: PromisePoolExecutor;
 	globalGroup: PromisePoolGroupPrivate;
@@ -56,11 +54,11 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
 			const groups = options.groups as PromisePoolGroupPrivate[];
-			groups.forEach((group) => {
+			for (const group of groups) {
 				if (group._pool !== this._pool) {
 					throw new Error("options.groups contains a group belonging to a different pool");
 				}
-			});
+			}
 			this._groups.push(...groups);
 		}
 		// eslint-disable-next-line @typescript-eslint/unbound-method
@@ -72,9 +70,9 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 			return;
 		}
 
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			group._incrementTasks();
-		});
+		}
 
 		// The creator will trigger the promises to run
 	}
@@ -133,12 +131,12 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 
 	public get freeSlots(): number {
 		let freeSlots: number = this._invocationLimit - this._invocations;
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			const slots = group.freeSlots;
 			if (slots < freeSlots) {
 				freeSlots = slots;
 			}
-		});
+		}
 		return freeSlots;
 	}
 
@@ -206,9 +204,9 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 			this._state = TaskState.Terminated;
 
 			if (this._taskGroup._activeTaskCount > 0) {
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._decrementTasks();
-				});
+				}
 			}
 			this._resolve();
 		}
@@ -234,11 +232,12 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	}
 
 	public _cleanFrequencyStarts(now: number): void {
-		this._groups.forEach((group, index) => {
-			if (index > GLOBAL_GROUP_INDEX) {
-				group._cleanFrequencyStarts(now);
-			}
-		});
+		const groups = this._groups.values();
+		// Skip the global group
+		groups.next();
+		for (const group of groups) {
+			group._cleanFrequencyStarts(now);
+		}
 	}
 
 	/**
@@ -275,12 +274,12 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 			return;
 		}
 
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			group._activePromiseCount++;
 			if (group._frequencyLimit !== Infinity) {
 				group._frequencyStarts.push(Date.now());
 			}
-		});
+		}
 		// TODO: Remove inferrable typing. Use linting rule?
 		const resultIndex: number = this._invocations;
 		this._invocations++;
@@ -298,10 +297,9 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 				this._reject(err);
 			} finally {
 				debug("Promise ended.");
-				// TODO: Use for
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._activePromiseCount--;
-				});
+				}
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
 				// Avoid storing the result if it is undefined.
 				// Some tasks may have countless iterations and never return anything, so this could eat memory.
@@ -344,9 +342,9 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		this._result = undefined;
 
 		if (this._deferreds.length) {
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.resolve(this._returnResult);
-			});
+			}
 			this._deferreds.length = 0;
 		}
 	}
@@ -369,16 +367,16 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 
 		if (this._deferreds.length) {
 			handled = true;
-			this._deferreds.forEach((deferred) => {
+			for (const deferred of this._deferreds) {
 				deferred.reject(taskError.error);
-			});
+			}
 			this._deferreds.length = 0;
 		}
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			if (group._reject(taskError)) {
 				handled = true;
 			}
-		});
+		}
 
 		if (!handled) {
 			// Create an unhandled rejection which may be handled later

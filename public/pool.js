@@ -17,7 +17,7 @@ const debug = util_1.default.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
 class PromisePoolExecutor {
 	constructor(options) {
-		this._tasks = [];
+		this._tasks = new Set();
 		let groupOptions;
 		if (!(0, utils_1.isNull)(options)) {
 			if (typeof options === "object") {
@@ -75,7 +75,7 @@ class PromisePoolExecutor {
 			options,
 		);
 		if (task.state <= task_2.TaskState.Paused) {
-			this._tasks.push(task);
+			this._tasks.add(task);
 		}
 		this._triggerNow();
 		return task;
@@ -171,9 +171,9 @@ class PromisePoolExecutor {
 	_cleanFrequencyStarts() {
 		const now = Date.now();
 		this._globalGroup._cleanFrequencyStarts(now);
-		this._tasks.forEach((task) => {
+		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
-		});
+		}
 	}
 	_clearTriggerTimeout() {
 		if (this._nextTriggerTimeout) {
@@ -206,20 +206,19 @@ class PromisePoolExecutor {
 		debug("Trigger promises");
 		this._cleanFrequencyStarts();
 		this._clearTriggerTimeout();
-		let taskIndex = 0;
-		let task;
 		let soonest = Infinity;
 		let busyTime;
-		while (taskIndex < this._tasks.length) {
-			task = this._tasks[taskIndex];
-			busyTime = task._busyTime();
-			debug("BusyTime: %o", busyTime);
-			if (!busyTime) {
-				task._run();
-			} else {
-				taskIndex++;
-				if (busyTime < soonest) {
-					soonest = busyTime;
+		for (const task of this._tasks) {
+			for (;;) {
+				busyTime = task._busyTime();
+				debug("BusyTime: %o", busyTime);
+				if (!busyTime) {
+					task._run();
+				} else {
+					if (busyTime < soonest) {
+						soonest = busyTime;
+					}
+					break;
 				}
 			}
 		}
@@ -242,10 +241,8 @@ class PromisePoolExecutor {
 		}
 	}
 	_removeTask(task) {
-		const i = this._tasks.indexOf(task);
-		if (i !== -1) {
+		if (this._tasks.delete(task)) {
 			debug("Task removed");
-			this._tasks.splice(i, 1);
 		}
 	}
 }
