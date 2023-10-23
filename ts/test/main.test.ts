@@ -1,37 +1,17 @@
 import { strict as assert } from "node:assert";
 import timeSpan from "time-span";
+import { expectType } from "ts-expect";
 import util from "util";
 import * as Pool from "../index";
 import { autoAdvanceTimers } from "./setup";
 
 const realSetTimeout = setTimeout;
 const realWait = util.promisify(setTimeout);
+const nextTick = () =>
+	new Promise((resolve) => {
+		process.nextTick(resolve);
+	});
 const debug = util.debuglog("promise-pool-executor:test");
-
-// Verify that the types needed can be imported
-const typingImportTest:
-	| Pool.PromisePoolExecutor
-	// Group
-	| Pool.PromisePoolGroup
-	| Pool.PromisePoolGroupOptions
-	// General Tasks
-	| Pool.PromisePoolTask<unknown>
-	| Pool.GenericTaskOptions<unknown>
-	| Pool.GenericTaskConvertedOptions<unknown, unknown>
-	| Pool.SingleTaskOptions<unknown, unknown>
-	| Pool.LinearTaskOptions<unknown>
-	| Pool.BatchTaskOptions<unknown, unknown>
-	| Pool.EachTaskOptions<unknown, unknown>
-	| Pool.TaskState
-	// Persistent Batch Task
-	| Pool.PersistentBatchTask<unknown, unknown>
-	| Pool.PersistentBatchTaskOptions<unknown, unknown>
-	| Pool.BatchingResult<never>
-	| undefined = undefined;
-// TODO: Use ts-expect?
-if (typingImportTest) {
-	// satisfy TypeScript's need to use the variable
-}
 
 interface PromisePoolGroupPrivate extends Pool.PromisePoolGroup {
 	readonly _frequencyStarts: readonly number[];
@@ -130,6 +110,29 @@ beforeEach(() => {
 	jest.clearAllTimers();
 	resetUnhandledRejectionListener();
 	resetHandledRejectionListener();
+});
+
+describe("Typings", () => {
+	// eslint-disable-next-line jest/expect-expect
+	test("Exports", () => {
+		expectType<
+			| Pool.BatchingResult<never>
+			| Pool.BatchTaskOptions<unknown, unknown>
+			| Pool.EachTaskOptions<unknown, unknown>
+			| Pool.GenericTaskConvertedOptions<unknown, unknown>
+			| Pool.GenericTaskOptions<unknown>
+			| Pool.LinearTaskOptions<unknown>
+			| Pool.PersistentBatchTask<unknown, unknown>
+			| Pool.PersistentBatchTaskOptions<unknown, unknown>
+			| Pool.PromisePoolExecutor
+			| Pool.PromisePoolGroup
+			| Pool.PromisePoolGroupOptions
+			| Pool.PromisePoolTask<unknown>
+			| Pool.SingleTaskOptions<unknown, unknown>
+			| Pool.TaskState
+			| true
+		>(true);
+	});
 });
 
 describe("Concurrency", () => {
@@ -704,6 +707,49 @@ describe("Miscellaneous Features", () => {
 		const results = await task.promise();
 		// The task must return the expected non-array result
 		expect(results).toStrictEqual([TICK, 2 * TICK, 2 * TICK]);
+	});
+
+	test("Get and Set Pool Status", async () => {
+		const pool = new Pool.PromisePoolExecutor({
+			concurrencyLimit: 2,
+			frequencyLimit: 3,
+			frequencyWindow: 2 * TICK,
+		});
+
+		const task = pool.addGenericTask({
+			async generator() {
+				await wait(2 * TICK);
+			},
+			invocationLimit: 5,
+		});
+		await Promise.all([
+			pool.waitForIdle(),
+			(async () => {
+				expect(pool.concurrencyLimit).toBe(2);
+				expect(pool.frequencyLimit).toBe(3);
+				expect(pool.frequencyWindow).toBe(2 * TICK);
+				expect(pool.activeTaskCount).toBe(1);
+				expect(pool.activePromiseCount).toBe(2);
+				expect(pool.freeSlots).toBe(0);
+				pool.concurrencyLimit = 5;
+				expect(pool.concurrencyLimit).toBe(5);
+				expect(pool.activePromiseCount).toBe(2);
+				await nextTick();
+				expect(pool.activePromiseCount).toBe(3);
+				pool.frequencyLimit = 4;
+				expect(pool.frequencyLimit).toBe(4);
+				expect(pool.activePromiseCount).toBe(3);
+				await nextTick();
+				expect(pool.activePromiseCount).toBe(4);
+				await wait(TICK);
+				expect(task.invocations).toBe(4);
+				pool.frequencyWindow = TICK;
+				expect(pool.frequencyWindow).toBe(TICK);
+				expect(task.invocations).toBe(4);
+				await nextTick();
+				expect(task.invocations).toBe(5);
+			})(),
+		]);
 	});
 
 	test("Get Task Status", async () => {

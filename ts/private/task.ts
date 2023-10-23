@@ -8,10 +8,10 @@ import { TaskError, isNull } from "./utils";
 const debug = util.debuglog("promise-pool-executor:task");
 
 export interface GenericTaskOptionsPrivate {
-	pool: PromisePoolExecutor;
-	globalGroup: PromisePoolGroupPrivate;
-	triggerNowCallback: () => void;
-	detach: () => void;
+	readonly pool: PromisePoolExecutor;
+	readonly globalGroup: PromisePoolGroupPrivate;
+	readonly triggerNowCallback: () => void;
+	readonly detach: () => void;
 }
 
 export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
