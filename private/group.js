@@ -21,9 +21,9 @@ class PromisePoolGroupPrivate {
 		if (!options) {
 			options = {};
 		}
-		this.concurrencyLimit = options.concurrencyLimit;
-		this.frequencyLimit = options.frequencyLimit;
-		this.frequencyWindow = options.frequencyWindow;
+		this.concurrencyLimit = (0, utils_1.isNull)(options.concurrencyLimit) ? Infinity : options.concurrencyLimit;
+		this.frequencyLimit = (0, utils_1.isNull)(options.frequencyLimit) ? Infinity : options.frequencyLimit;
+		this.frequencyWindow = (0, utils_1.isNull)(options.frequencyWindow) ? 1000 : options.frequencyWindow;
 		this._triggerNextCallback = triggerNextCallback;
 	}
 	get activeTaskCount() {
@@ -35,14 +35,11 @@ class PromisePoolGroupPrivate {
 	get concurrencyLimit() {
 		return this._concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._concurrencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._concurrencyLimit = val;
-		} else {
-			throw new Error(`Invalid concurrency limit: ${val}`);
+	set concurrencyLimit(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
+		this._concurrencyLimit = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}
@@ -50,14 +47,11 @@ class PromisePoolGroupPrivate {
 	get frequencyLimit() {
 		return this._frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._frequencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyLimit = val;
-		} else {
-			throw new Error(`Invalid frequency limit: ${val}`);
+	set frequencyLimit(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
+		this._frequencyLimit = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}
@@ -65,14 +59,11 @@ class PromisePoolGroupPrivate {
 	get frequencyWindow() {
 		return this._frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._frequencyWindow = 1000;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyWindow = val;
-		} else {
-			throw new Error(`Invalid frequency window: ${val}`);
+	set frequencyWindow(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
+		this._frequencyWindow = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}

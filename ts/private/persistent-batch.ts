@@ -90,24 +90,24 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 		return this._task.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._task.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._task.concurrencyLimit = v;
 	}
 
 	public get frequencyLimit(): number {
 		return this._task.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._task.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._task.frequencyLimit = v;
 	}
 
 	public get frequencyWindow(): number {
 		return this._task.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._task.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._task.frequencyWindow = v;
 	}
 
 	public get freeSlots(): number {

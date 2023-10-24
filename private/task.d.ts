@@ -2,10 +2,10 @@ import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
 export interface GenericTaskOptionsPrivate {
-	pool: PromisePoolExecutor;
-	globalGroup: PromisePoolGroupPrivate;
-	triggerNowCallback: () => void;
-	detach: () => void;
+	readonly pool: PromisePoolExecutor;
+	readonly globalGroup: PromisePoolGroupPrivate;
+	readonly triggerNowCallback: () => void;
+	readonly detach: () => void;
 }
 export declare class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _groups;
@@ -31,13 +31,13 @@ export declare class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask
 	get activePromiseCount(): number;
 	get invocations(): number;
 	get invocationLimit(): number;
-	set invocationLimit(val: number);
+	set invocationLimit(v: number);
 	get concurrencyLimit(): number;
-	set concurrencyLimit(val: number);
+	set concurrencyLimit(v: number);
 	get frequencyLimit(): number;
-	set frequencyLimit(val: number);
+	set frequencyLimit(v: number);
 	get frequencyWindow(): number;
-	set frequencyWindow(val: number);
+	set frequencyWindow(v: number);
 	get freeSlots(): number;
 	get state(): TaskState;
 	/**

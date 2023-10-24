@@ -8,11 +8,11 @@ export declare class PersistentBatchTaskPrivate<I, O> implements PersistentBatch
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>);
 	get activePromiseCount(): number;
 	get concurrencyLimit(): number;
-	set concurrencyLimit(val: number);
+	set concurrencyLimit(v: number);
 	get frequencyLimit(): number;
-	set frequencyLimit(val: number);
+	set frequencyLimit(v: number);
 	get frequencyWindow(): number;
-	set frequencyWindow(val: number);
+	set frequencyWindow(v: number);
 	get freeSlots(): number;
 	get state(): TaskState;
 	getResult(input: I): Promise<O>;

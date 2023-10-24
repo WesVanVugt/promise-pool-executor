@@ -14,7 +14,6 @@ const debug = util_1.default.debuglog("promise-pool-executor:task");
 class PromisePoolTaskPrivate {
 	constructor(privateOptions, options) {
 		this._invocations = 0;
-		this._invocationLimit = Infinity;
 		this._result = [];
 		this._deferreds = [];
 		debug("Creating task");
@@ -23,12 +22,7 @@ class PromisePoolTaskPrivate {
 		this._detachCallback = privateOptions.detach;
 		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? task_1.TaskState.Paused : task_1.TaskState.Active;
-		if (!(0, utils_1.isNull)(options.invocationLimit)) {
-			if (typeof options.invocationLimit !== "number") {
-				throw new Error(`Invalid invocation limit: ${options.invocationLimit}`);
-			}
-			this._invocationLimit = options.invocationLimit;
-		}
+		this.invocationLimit = (0, utils_1.isNull)(options.invocationLimit) ? Infinity : options.invocationLimit;
 		this._taskGroup = privateOptions.pool.addGroup(options);
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
@@ -58,38 +52,34 @@ class PromisePoolTaskPrivate {
 	get invocationLimit() {
 		return this._invocationLimit;
 	}
-	set invocationLimit(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._invocationLimit = Infinity;
-		} else if (!isNaN(val) && typeof val === "number" && val >= 0) {
-			this._invocationLimit = val;
-			if (this._invocations >= this._invocationLimit) {
-				this.end();
-			}
-		} else {
-			throw new Error("Invalid invocation limit: " + val);
+	set invocationLimit(v) {
+		var _a;
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error("Invalid invocationLimit: " + v);
 		}
-		if (this._triggerCallback) {
-			this._triggerCallback();
+		this._invocationLimit = v;
+		if (this._invocations >= this._invocationLimit) {
+			this.end();
 		}
+		(_a = this._triggerCallback) === null || _a === void 0 ? void 0 : _a.call(this);
 	}
 	get concurrencyLimit() {
 		return this._taskGroup.concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		this._taskGroup.concurrencyLimit = val;
+	set concurrencyLimit(v) {
+		this._taskGroup.concurrencyLimit = v;
 	}
 	get frequencyLimit() {
 		return this._taskGroup.frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		this._taskGroup.frequencyLimit = val;
+	set frequencyLimit(v) {
+		this._taskGroup.frequencyLimit = v;
 	}
 	get frequencyWindow() {
 		return this._taskGroup.frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		this._taskGroup.frequencyWindow = val;
+	set frequencyWindow(v) {
+		this._taskGroup.frequencyWindow = v;
 	}
 	get freeSlots() {
 		let freeSlots = this._invocationLimit - this._invocations;

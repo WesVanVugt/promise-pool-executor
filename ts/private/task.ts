@@ -19,7 +19,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _generator: (invocation: number) => I | PromiseLike<I> | undefined | null | void;
 	private readonly _taskGroup: PromisePoolGroupPrivate;
 	private _invocations = 0;
-	private _invocationLimit = Infinity;
+	private _invocationLimit!: number;
 	private _result?: I[] = [];
 	private _returnResult?: R;
 	private _state: TaskState;
@@ -43,12 +43,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? TaskState.Paused : TaskState.Active;
 
-		if (!isNull(options.invocationLimit)) {
-			if (typeof options.invocationLimit !== "number") {
-				throw new Error(`Invalid invocation limit: ${options.invocationLimit as string}`);
-			}
-			this._invocationLimit = options.invocationLimit;
-		}
+		this.invocationLimit = isNull(options.invocationLimit) ? Infinity : options.invocationLimit;
 		// Create a group exclusively for this task. This may throw errors.
 		this._taskGroup = privateOptions.pool.addGroup(options) as PromisePoolGroupPrivate;
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
@@ -89,44 +84,39 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		return this._invocationLimit;
 	}
 
-	public set invocationLimit(val: number) {
-		if (isNull(val)) {
-			this._invocationLimit = Infinity;
-		} else if (!isNaN(val) && typeof val === "number" && val >= 0) {
-			this._invocationLimit = val;
-			if (this._invocations >= this._invocationLimit) {
-				this.end();
-			}
-		} else {
-			throw new Error("Invalid invocation limit: " + val);
+	public set invocationLimit(v: number) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error("Invalid invocationLimit: " + v);
 		}
-		if (this._triggerCallback) {
-			this._triggerCallback();
+		this._invocationLimit = v;
+		if (this._invocations >= this._invocationLimit) {
+			this.end();
 		}
+		this._triggerCallback?.();
 	}
 
 	public get concurrencyLimit(): number {
 		return this._taskGroup.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._taskGroup.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._taskGroup.concurrencyLimit = v;
 	}
 
 	public get frequencyLimit(): number {
 		return this._taskGroup.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._taskGroup.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._taskGroup.frequencyLimit = v;
 	}
 
 	public get frequencyWindow(): number {
 		return this._taskGroup.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._taskGroup.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._taskGroup.frequencyWindow = v;
 	}
 
 	public get freeSlots(): number {

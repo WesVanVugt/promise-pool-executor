@@ -363,17 +363,84 @@ describe("Exception Handling", () => {
 	});
 
 	describe("Invalid Configuration", () => {
-		test("Invalid Parameters", () => {
+		test("concurrencyLimit not a number", () => {
 			const pool = new Pool.PromisePoolExecutor();
-
 			expect(() =>
 				pool.addGenericTask({
-					concurrencyLimit: 0, // invalid
-					generator: () => {
-						return Promise.resolve();
-					},
+					concurrencyLimit: "a" as unknown as number,
+					generator: async () => {},
 				}),
-			).toThrow(/^Invalid concurrency limit: 0$/);
+			).toThrow(/^Invalid concurrencyLimit: a$/);
+		});
+
+		test("concurrencyLimit is NaN", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					concurrencyLimit: NaN,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid concurrencyLimit: NaN$/);
+		});
+
+		test("frequencyLimit not a number", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					frequencyLimit: "a" as unknown as number,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid frequencyLimit: a$/);
+		});
+
+		test("frequencyLimit is NaN", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					frequencyLimit: NaN,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid frequencyLimit: NaN$/);
+		});
+
+		test("frequencyWindow not a number", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					frequencyWindow: "a" as unknown as number,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid frequencyWindow: a$/);
+		});
+
+		test("frequencyWindow is NaN", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					frequencyWindow: NaN,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid frequencyWindow: NaN$/);
+		});
+
+		test("invocationLimit not a number", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					invocationLimit: "a" as unknown as number,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid invocationLimit: a$/);
+		});
+
+		test("invocationLimit is NaN", () => {
+			const pool = new Pool.PromisePoolExecutor();
+			expect(() =>
+				pool.addGenericTask({
+					invocationLimit: NaN,
+					generator: async () => {},
+				}),
+			).toThrow(/^Invalid invocationLimit: NaN$/);
 		});
 
 		test("Group From Another Pool", () => {

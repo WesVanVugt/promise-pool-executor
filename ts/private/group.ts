@@ -40,9 +40,9 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			options = {};
 		}
 		// Throw errors if applicable
-		this.concurrencyLimit = options.concurrencyLimit as number;
-		this.frequencyLimit = options.frequencyLimit as number;
-		this.frequencyWindow = options.frequencyWindow as number;
+		this.concurrencyLimit = isNull(options.concurrencyLimit) ? Infinity : options.concurrencyLimit;
+		this.frequencyLimit = isNull(options.frequencyLimit) ? Infinity : options.frequencyLimit;
+		this.frequencyWindow = isNull(options.frequencyWindow) ? 1000 : options.frequencyWindow;
 
 		// Set the callback afterwards so it does not get triggered during creation
 		this._triggerNextCallback = triggerNextCallback;
@@ -60,14 +60,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		return this._concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		if (isNull(val)) {
-			this._concurrencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._concurrencyLimit = val;
-		} else {
-			throw new Error(`Invalid concurrency limit: ${val}`);
+	public set concurrencyLimit(v: number) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
+		this._concurrencyLimit = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}
@@ -77,14 +74,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		return this._frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		if (isNull(val)) {
-			this._frequencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyLimit = val;
-		} else {
-			throw new Error(`Invalid frequency limit: ${val}`);
+	public set frequencyLimit(v: number) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
+		this._frequencyLimit = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}
@@ -94,14 +88,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		return this._frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		if (isNull(val)) {
-			this._frequencyWindow = 1000;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyWindow = val;
-		} else {
-			throw new Error(`Invalid frequency window: ${val}`);
+	public set frequencyWindow(v: number) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
+		this._frequencyWindow = v;
 		if (this._triggerNextCallback) {
 			this._triggerNextCallback();
 		}

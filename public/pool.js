@@ -34,20 +34,20 @@ class PromisePoolExecutor {
 	get concurrencyLimit() {
 		return this._globalGroup.concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		this._globalGroup.concurrencyLimit = val;
+	set concurrencyLimit(v) {
+		this._globalGroup.concurrencyLimit = v;
 	}
 	get frequencyLimit() {
 		return this._globalGroup.frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		this._globalGroup.frequencyLimit = val;
+	set frequencyLimit(v) {
+		this._globalGroup.frequencyLimit = v;
 	}
 	get frequencyWindow() {
 		return this._globalGroup.frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		this._globalGroup.frequencyWindow = val;
+	set frequencyWindow(v) {
+		this._globalGroup.frequencyWindow = v;
 	}
 	get activeTaskCount() {
 		return this._globalGroup.activeTaskCount;
@@ -109,7 +109,7 @@ class PromisePoolExecutor {
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batch size: " + options.batchSize);
+			throw new Error("Invalid batchSize: " + options.batchSize);
 		}
 		const data = options.data;
 		const generator = options.generator;
@@ -126,7 +126,7 @@ class PromisePoolExecutor {
 				if (typeof batchSizeOption === "function") {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batch size: " + batchSize));
+						return Promise.reject(new Error("Invalid batchSize: " + batchSize));
 					}
 					index += batchSize;
 				} else {
@@ -167,8 +167,7 @@ class PromisePoolExecutor {
 	waitForIdle() {
 		return this._globalGroup.waitForIdle();
 	}
-	_cleanFrequencyStarts() {
-		const now = Date.now();
+	_cleanFrequencyStarts(now) {
 		this._globalGroup._cleanFrequencyStarts(now);
 		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
@@ -203,7 +202,8 @@ class PromisePoolExecutor {
 		this._triggering = true;
 		this._triggerAgain = false;
 		debug("Trigger promises");
-		this._cleanFrequencyStarts();
+		const now = Date.now();
+		this._cleanFrequencyStarts(now);
 		this._clearTriggerTimeout();
 		let soonest = Infinity;
 		let busyTime;
@@ -225,18 +225,13 @@ class PromisePoolExecutor {
 		if (this._triggerAgain) {
 			return this._triggerNow();
 		}
-		let time;
 		if (soonest !== Infinity) {
-			time = Date.now();
-			if (time >= soonest) {
-				return this._triggerNow();
-			}
 			this._nextTriggerTime = soonest;
 			this._nextTriggerTimeout = setTimeout(() => {
 				this._nextTriggerTimeout = undefined;
 				this._nextTriggerTime = 0;
 				this._triggerNow();
-			}, soonest - time);
+			}, soonest - now);
 		}
 	}
 	_removeTask(task) {

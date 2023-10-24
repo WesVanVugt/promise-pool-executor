@@ -81,20 +81,20 @@ class PersistentBatchTaskPrivate {
 	get concurrencyLimit() {
 		return this._task.concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		this._task.concurrencyLimit = val;
+	set concurrencyLimit(v) {
+		this._task.concurrencyLimit = v;
 	}
 	get frequencyLimit() {
 		return this._task.frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		this._task.frequencyLimit = val;
+	set frequencyLimit(v) {
+		this._task.frequencyLimit = v;
 	}
 	get frequencyWindow() {
 		return this._task.frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		this._task.frequencyWindow = val;
+	set frequencyWindow(v) {
+		this._task.frequencyWindow = v;
 	}
 	get freeSlots() {
 		return this._task.freeSlots;

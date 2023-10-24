@@ -89,17 +89,17 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	 * The maximum number of promises allowed to be active simultaneously in the pool.
 	 */
 	get concurrencyLimit(): number;
-	set concurrencyLimit(val: number);
+	set concurrencyLimit(v: number);
 	/**
 	 * The maximum number promises allowed to be generated within the time window specified by {frequencyWindow}.
 	 */
 	get frequencyLimit(): number;
-	set frequencyLimit(val: number);
+	set frequencyLimit(v: number);
 	/**
 	 * The time window in milliseconds to use for {frequencyLimit}.
 	 */
 	get frequencyWindow(): number;
-	set frequencyWindow(val: number);
+	set frequencyWindow(v: number);
 	/**
 	 * The number of tasks active in the pool.
 	 */

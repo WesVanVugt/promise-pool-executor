@@ -35,11 +35,11 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	get activeTaskCount(): number;
 	get activePromiseCount(): number;
 	get concurrencyLimit(): number;
-	set concurrencyLimit(val: number);
+	set concurrencyLimit(v: number);
 	get frequencyLimit(): number;
-	set frequencyLimit(val: number);
+	set frequencyLimit(v: number);
 	get frequencyWindow(): number;
-	set frequencyWindow(val: number);
+	set frequencyWindow(v: number);
 	get freeSlots(): number;
 	_getFreeSlots(): number;
 	/**

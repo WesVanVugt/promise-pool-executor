@@ -124,8 +124,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._globalGroup.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._globalGroup.concurrencyLimit = v;
 	}
 
 	/**
@@ -135,8 +135,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._globalGroup.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._globalGroup.frequencyLimit = v;
 	}
 
 	/**
@@ -146,8 +146,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._globalGroup.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._globalGroup.frequencyWindow = v;
 	}
 
 	/**
@@ -255,7 +255,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batch size: " + options.batchSize);
+			throw new Error("Invalid batchSize: " + options.batchSize);
 		}
 
 		const data = options.data;
@@ -274,7 +274,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					// Unacceptable values: NaN, <=0, type not number
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batch size: " + batchSize));
+						return Promise.reject(new Error("Invalid batchSize: " + batchSize));
 					}
 					index += batchSize;
 				} else {
@@ -331,9 +331,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.waitForIdle();
 	}
 
-	private _cleanFrequencyStarts(): void {
+	private _cleanFrequencyStarts(now: number): void {
 		// Remove the frequencyStarts entries which are outside of the window
-		const now = Date.now();
 		this._globalGroup._cleanFrequencyStarts(now);
 		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
@@ -375,8 +374,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		this._triggering = true;
 		this._triggerAgain = false;
 		debug("Trigger promises");
-		this._cleanFrequencyStarts();
-
+		const now = Date.now();
+		this._cleanFrequencyStarts(now);
 		this._clearTriggerTimeout();
 
 		let soonest = Infinity;
@@ -402,19 +401,13 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			return this._triggerNow();
 		}
 
-		let time: number;
 		if (soonest !== Infinity) {
-			time = Date.now();
-			if (time >= soonest) {
-				return this._triggerNow();
-			}
-
 			this._nextTriggerTime = soonest;
 			this._nextTriggerTimeout = setTimeout(() => {
 				this._nextTriggerTimeout = undefined;
 				this._nextTriggerTime = 0;
 				this._triggerNow();
-			}, soonest - time);
+			}, soonest - now);
 		}
 	}
 
