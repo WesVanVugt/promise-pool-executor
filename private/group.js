@@ -108,21 +108,19 @@ class PromisePoolGroupPrivate {
 			this._deferreds.length = 0;
 		}
 	}
-	_reject(err) {
+	_reject(promise) {
 		if (this._rejection) {
 			if (this._locallyHandled) {
-				return true;
+				(0, utils_1.handleRejection)(promise);
 			}
-			this._secondaryRejections.push(err);
-			return false;
+			this._secondaryRejections.push(promise);
+			return;
 		}
-		let handled = false;
-		this._rejection = err;
+		this._rejection = promise;
 		if (this._deferreds.length) {
-			handled = true;
 			this._locallyHandled = true;
 			for (const deferred of this._deferreds) {
-				deferred.reject(err.error);
+				deferred.resolve(promise);
 			}
 			this._deferreds.length = 0;
 		}
@@ -137,26 +135,17 @@ class PromisePoolGroupPrivate {
 				}
 			}
 		});
-		return handled;
 	}
 	waitForIdle() {
 		if (this._rejection) {
 			this._locallyHandled = true;
 			if (this._secondaryRejections.length) {
 				for (const rejection of this._secondaryRejections) {
-					if (rejection.promise) {
-						rejection.promise.catch(() => {});
-						rejection.promise = undefined;
-					}
+					(0, utils_1.handleRejection)(rejection);
 				}
 				this._secondaryRejections.length = 0;
 			}
-			if (this._rejection.promise) {
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			return Promise.reject(this._rejection.error);
+			return this._rejection;
 		}
 		if (this._activeTaskCount <= 0) {
 			return Promise.resolve();

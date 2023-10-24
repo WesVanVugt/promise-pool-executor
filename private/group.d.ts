@@ -1,6 +1,5 @@
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { TaskError } from "./utils";
 /** Internal use only */
 export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	_pool: PromisePoolExecutor;
@@ -59,7 +58,7 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	/**
 	 * Rejects all pending waitForIdle promises using the provided error.
 	 */
-	_reject(err: TaskError): boolean;
+	_reject(promise: Promise<never>): void;
 	/**
 	 * Returns a promise which resolves when the group becomes idle.
 	 */

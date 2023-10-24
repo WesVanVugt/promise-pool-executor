@@ -3,7 +3,7 @@ import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { TaskError, isNull } from "./utils";
+import { isNull } from "./utils";
 
 const debug = util.debuglog("promise-pool-executor:task");
 
@@ -23,7 +23,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private _result?: I[] = [];
 	private _returnResult?: R;
 	private _state: TaskState;
-	private _rejection?: TaskError;
+	private _rejection?: Promise<never>;
 	/**
 	 * Set to true while the generator function is being run. Prevents the task from being terminated since a final
 	 * promise may be generated.
@@ -139,13 +139,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 */
 	public async promise(): Promise<R> {
 		if (this._rejection) {
-			if (this._rejection.promise) {
-				// First handling of this rejection. Return the unhandled promise.
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			throw this._rejection.error;
+			return this._rejection;
 		} else if (this._state === TaskState.Terminated) {
 			return this._returnResult!;
 		}
@@ -346,31 +340,20 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 			return;
 		}
 
-		const taskError: TaskError = {
-			error: err,
-		};
-		this._rejection = taskError;
-		let handled = false;
+		const promise = Promise.reject(err);
+		this._rejection = promise;
 
 		// This may detach the task
 		this.end();
 
 		if (this._deferreds.length) {
-			handled = true;
 			for (const deferred of this._deferreds) {
-				deferred.reject(taskError.error);
+				deferred.resolve(promise);
 			}
 			this._deferreds.length = 0;
 		}
 		for (const group of this._groups) {
-			if (group._reject(taskError)) {
-				handled = true;
-			}
-		}
-
-		if (!handled) {
-			// Create an unhandled rejection which may be handled later
-			taskError.promise = Promise.reject(err);
+			group._reject(promise);
 		}
 	}
 }

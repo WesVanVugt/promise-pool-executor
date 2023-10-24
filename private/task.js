@@ -96,12 +96,7 @@ class PromisePoolTaskPrivate {
 	}
 	async promise() {
 		if (this._rejection) {
-			if (this._rejection.promise) {
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			throw this._rejection.error;
+			return this._rejection;
 		} else if (this._state === task_1.TaskState.Terminated) {
 			return this._returnResult;
 		}
@@ -248,26 +243,17 @@ class PromisePoolTaskPrivate {
 			debug("This task already failed. Redundant error: %O", err);
 			return;
 		}
-		const taskError = {
-			error: err,
-		};
-		this._rejection = taskError;
-		let handled = false;
+		const promise = Promise.reject(err);
+		this._rejection = promise;
 		this.end();
 		if (this._deferreds.length) {
-			handled = true;
 			for (const deferred of this._deferreds) {
-				deferred.reject(taskError.error);
+				deferred.resolve(promise);
 			}
 			this._deferreds.length = 0;
 		}
 		for (const group of this._groups) {
-			if (group._reject(taskError)) {
-				handled = true;
-			}
-		}
-		if (!handled) {
-			taskError.promise = Promise.reject(err);
+			group._reject(promise);
 		}
 	}
 }

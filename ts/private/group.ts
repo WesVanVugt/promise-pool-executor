@@ -1,7 +1,7 @@
 import defer, { DeferredPromise } from "p-defer";
 import { PromisePoolGroup, PromisePoolGroupOptions } from "../public/group";
 import { PromisePoolExecutor } from "../public/pool";
-import { TaskError, isNull } from "./utils";
+import { handleRejection, isNull } from "./utils";
 
 /** Internal use only */
 export class PromisePoolGroupPrivate implements PromisePoolGroup {
@@ -22,7 +22,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	 * The error that the pool was rejected with.
 	 * Clears when activePromiseCount reaches 0 and recentRejection is false.
 	 */
-	private _rejection?: TaskError;
+	private _rejection?: Promise<never>;
 	/**
 	 * This flag indicates whether the rejection was handled by this group. This is used to flag subsequent rejections
 	 * within the group as handled.
@@ -31,7 +31,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	/**
 	 * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
 	 */
-	private readonly _secondaryRejections: TaskError[] = [];
+	private readonly _secondaryRejections: Array<Promise<never>> = [];
 	private readonly _triggerNextCallback: () => void;
 
 	constructor(pool: PromisePoolExecutor, triggerNextCallback: () => void, options?: PromisePoolGroupOptions) {
@@ -158,22 +158,20 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	/**
 	 * Rejects all pending waitForIdle promises using the provided error.
 	 */
-	public _reject(err: TaskError): boolean {
+	public _reject(promise: Promise<never>): void {
 		if (this._rejection) {
 			if (this._locallyHandled) {
-				return true;
+				handleRejection(promise);
 			}
-			this._secondaryRejections.push(err);
-			return false;
+			this._secondaryRejections.push(promise);
+			return;
 		}
-		let handled = false;
 
-		this._rejection = err;
+		this._rejection = promise;
 		if (this._deferreds.length) {
-			handled = true;
 			this._locallyHandled = true;
 			for (const deferred of this._deferreds) {
-				deferred.reject(err.error);
+				deferred.resolve(promise);
 			}
 			this._deferreds.length = 0;
 		}
@@ -190,7 +188,6 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 				}
 			}
 		});
-		return handled;
 	}
 
 	/**
@@ -201,21 +198,11 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			this._locallyHandled = true;
 			if (this._secondaryRejections.length) {
 				for (const rejection of this._secondaryRejections) {
-					if (rejection.promise) {
-						rejection.promise.catch(() => {
-							// handle the rejection
-						});
-						rejection.promise = undefined;
-					}
+					handleRejection(rejection);
 				}
 				this._secondaryRejections.length = 0;
 			}
-			if (this._rejection.promise) {
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			return Promise.reject(this._rejection.error);
+			return this._rejection;
 		}
 		if (this._activeTaskCount <= 0) {
 			return Promise.resolve();
