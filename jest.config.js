@@ -1,4 +1,5 @@
 // @ts-check
+
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 process._original = (function (_original) {
@@ -9,6 +10,7 @@ process._original = (function (_original) {
 const config = {
 	preset: "ts-jest",
 	collectCoverage: true,
+	setupFilesAfterEnv: ["./ts/test/jestSetupEnv.ts"],
 	coverageThreshold: {
 		global: {
 			branches: 100,

@@ -35,6 +35,24 @@ export const catchHandledRejection = () => catchRejectionEvent("rejectionHandled
 export const isCatchingUnhandledRejection = () => rejectionEventHandlerSets.unhandledRejection.size > 0;
 export const isCatchingHandledRejection = () => rejectionEventHandlerSets.rejectionHandled.size > 0;
 
+export const setupCatchingRejections = () => {
+	const [unhandled] = process._original().listeners("unhandledRejection");
+	process._original().removeListener("unhandledRejection", unhandled);
+	process._original().addListener("unhandledRejection", (...args) => {
+		if (!isCatchingUnhandledRejection()) {
+			return unhandled(...args);
+		}
+	});
+};
+
+export const failOnHandledRejection = () => {
+	process._original().addListener("rejectionHandled", () => {
+		if (!isCatchingHandledRejection()) {
+			throw new Error("Unexpected rejectionHandled event");
+		}
+	});
+};
+
 export const clearCatchingRejections = () => {
 	for (const eventName of REJECTION_EVENT_NAMES) {
 		const handlerSet = rejectionEventHandlerSets[eventName];

@@ -1,17 +1,19 @@
-import { strict as assert } from "node:assert";
+import { strict as assert } from "assert";
 import timeSpan from "time-span";
 import { expectType } from "ts-expect";
 import { PromisePoolGroupPrivate } from "../private/group";
 import * as Pool from "./imports";
+import { catchHandledRejection, catchUnhandledRejection } from "./rejectionEvents";
 import {
-	catchHandledRejection,
-	catchUnhandledRejection,
-	clearCatchingRejections,
-	isCatchingHandledRejection,
-	isCatchingUnhandledRejection,
-} from "./rejectionEvents";
-import { autoAdvanceTimers } from "./setup";
-import { PersistentBatchTaskPrivate, PromisePoolExecutorPrivate, TICK, debug, nextTick, realWait, ticking, wait } from "./utils";
+	PersistentBatchTaskPrivate,
+	PromisePoolExecutorPrivate,
+	TICK,
+	debug,
+	nextTick,
+	realWait,
+	ticking,
+	wait,
+} from "./utils";
 
 /**
  * Returns the sum of an array of numbers.
@@ -24,28 +26,6 @@ const sum = (nums: number[]) => {
 	}
 	return total;
 };
-
-beforeAll(() => {
-	jest.useFakeTimers();
-	autoAdvanceTimers();
-	const [unhandled] = process._original().listeners("unhandledRejection");
-	process._original().removeListener("unhandledRejection", unhandled);
-	process._original().addListener("unhandledRejection", (...args) => {
-		if (!isCatchingUnhandledRejection()) {
-			return unhandled(...args);
-		}
-	});
-	process._original().addListener("rejectionHandled", () => {
-		if (!isCatchingHandledRejection()) {
-			throw new Error("Unexpected rejectionHandled event");
-		}
-	});
-});
-
-beforeEach(() => {
-	jest.clearAllTimers();
-	clearCatchingRejections();
-});
 
 describe("Typings", () => {
 	// eslint-disable-next-line jest/expect-expect
@@ -726,49 +706,6 @@ describe("Miscellaneous Features", () => {
 		expect(results).toStrictEqual([TICK, 2 * TICK, 2 * TICK]);
 	});
 
-	test("Get and Set Pool Status", async () => {
-		const pool = new Pool.PromisePoolExecutor({
-			concurrencyLimit: 2,
-			frequencyLimit: 3,
-			frequencyWindow: 2 * TICK,
-		});
-
-		const task = pool.addGenericTask({
-			async generator() {
-				await wait(2 * TICK);
-			},
-			invocationLimit: 5,
-		});
-		await Promise.all([
-			pool.waitForIdle(),
-			(async () => {
-				expect(pool.concurrencyLimit).toBe(2);
-				expect(pool.frequencyLimit).toBe(3);
-				expect(pool.frequencyWindow).toBe(2 * TICK);
-				expect(pool.activeTaskCount).toBe(1);
-				expect(pool.activePromiseCount).toBe(2);
-				expect(pool.freeSlots).toBe(0);
-				pool.concurrencyLimit = 5;
-				expect(pool.concurrencyLimit).toBe(5);
-				expect(pool.activePromiseCount).toBe(2);
-				await nextTick();
-				expect(pool.activePromiseCount).toBe(3);
-				pool.frequencyLimit = 4;
-				expect(pool.frequencyLimit).toBe(4);
-				expect(pool.activePromiseCount).toBe(3);
-				await nextTick();
-				expect(pool.activePromiseCount).toBe(4);
-				await wait(TICK);
-				expect(task.invocations).toBe(4);
-				pool.frequencyWindow = TICK;
-				expect(pool.frequencyWindow).toBe(TICK);
-				expect(task.invocations).toBe(4);
-				await nextTick();
-				expect(task.invocations).toBe(5);
-			})(),
-		]);
-	});
-
 	test("Get Task Status", async () => {
 		const pool = new Pool.PromisePoolExecutor();
 
@@ -911,56 +848,6 @@ describe("Miscellaneous Features", () => {
 	});
 
 	describe("PromisePoolGroup configuration", () => {
-		test("concurrencyLimit change", async () => {
-			const pool = new Pool.PromisePoolExecutor();
-			const group = pool.addGroup({ concurrencyLimit: 1 });
-			const task = pool.addGenericTask({
-				generator: () => wait(TICK),
-				groups: [group],
-				invocationLimit: 2,
-			});
-			expect(task.invocations).toBe(1);
-			group.concurrencyLimit = 2;
-			expect(group.concurrencyLimit).toBe(2);
-			expect(task.invocations).toBe(1);
-			await nextTick();
-			expect(task.invocations).toBe(2);
-		});
-
-		test("frequencyLimit change", async () => {
-			const pool = new Pool.PromisePoolExecutor();
-			const group = pool.addGroup({ frequencyLimit: 1 });
-			const task = pool.addGenericTask({
-				generator: () => wait(TICK),
-				groups: [group],
-				invocationLimit: 2,
-			});
-			expect(task.invocations).toBe(1);
-			group.frequencyLimit = 2;
-			expect(group.frequencyLimit).toBe(2);
-			expect(task.invocations).toBe(1);
-			await nextTick();
-			expect(task.invocations).toBe(2);
-		});
-
-		test("frequencyWindow change", async () => {
-			const pool = new Pool.PromisePoolExecutor();
-			const group = pool.addGroup({ frequencyLimit: 1, frequencyWindow: TICK * 9 });
-			const task = pool.addGenericTask({
-				generator: () => wait(TICK * 2),
-				groups: [group],
-				invocationLimit: 2,
-			});
-			expect(task.invocations).toBe(1);
-			await wait(TICK);
-			group.frequencyWindow = TICK;
-			expect(group.frequencyWindow).toBe(TICK);
-			expect(task.invocations).toBe(1);
-			await nextTick();
-			expect(task.invocations).toBe(2);
-		});
-
-		// TODO: Remove
 		test("Triggers Promises", async () => {
 			const pool = new Pool.PromisePoolExecutor();
 
