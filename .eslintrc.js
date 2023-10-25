@@ -29,6 +29,7 @@ const config = {
 		"@typescript-eslint/return-await": "error",
 		"no-console": "error",
 		"no-sequences": "error",
+		"no-warning-comments": "error",
 		"prettier/prettier": "error",
 	},
 };

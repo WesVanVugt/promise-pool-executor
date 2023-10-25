@@ -1,3 +1,4 @@
+import { strict as assert } from "assert";
 import defer, { DeferredPromise } from "p-defer";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
@@ -38,12 +39,9 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	public constructor(privateOptions: GenericTaskOptionsPrivate, options: GenericTaskConvertedOptions<I, R>) {
 		debug("Creating task");
 		this._pool = privateOptions.pool;
-		this._triggerCallback = privateOptions.triggerNowCallback;
-		this._detachCallback = privateOptions.detach;
 		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? TaskState.Paused : TaskState.Active;
 
-		this.invocationLimit = isNull(options.invocationLimit) ? Infinity : options.invocationLimit;
 		// Create a group exclusively for this task. This may throw errors.
 		this._taskGroup = privateOptions.pool.addGroup(options) as PromisePoolGroupPrivate;
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
@@ -59,16 +57,16 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 
-		// Resolve the promise only after all options have been validated
-		if (!isNull(options.invocationLimit) && options.invocationLimit <= 0) {
-			this.end();
-			return;
-		}
+		// This may terminate the task
+		this.invocationLimit = isNull(options.invocationLimit) ? Infinity : options.invocationLimit;
 
-		for (const group of this._groups) {
-			group._incrementTasks();
+		if ((this._state as TaskState) !== TaskState.Terminated) {
+			for (const group of this._groups) {
+				group._incrementTasks();
+			}
 		}
-
+		this._detachCallback = privateOptions.detach;
+		this._triggerCallback = privateOptions.triggerNowCallback;
 		// The creator will trigger the promises to run
 	}
 
@@ -179,9 +177,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		if (this._state < TaskState.Exhausted) {
 			debug("State: %o", "Exhausted");
 			this._state = TaskState.Exhausted;
-			if (this._taskGroup._activeTaskCount > 0) {
-				this._detachCallback();
-			}
+			this._detachCallback?.();
 		}
 		if (!this._generating && this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
 			debug("State: %o", "Terminated");
@@ -228,16 +224,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * Private. Invokes the task.
 	 */
 	public _run(): void {
-		if (this._generating) {
-			// This should never happen
-			throw new Error("Internal Error: Task is already being run");
-		}
-		if (this._invocations >= this._invocationLimit) {
-			// TODO: Make a test for this
-			// This may detach / resolve the task if no promises are active
-			this.end();
-			return;
-		}
+		assert(!this._generating, "Internal Error: Task is already being run");
 		debug("Running generator");
 
 		let promise: PromiseLike<I> | I | undefined | null | void;
@@ -264,7 +251,6 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 				group._frequencyStarts.push(Date.now());
 			}
 		}
-		// TODO: Remove inferrable typing. Use linting rule?
 		const resultIndex = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {

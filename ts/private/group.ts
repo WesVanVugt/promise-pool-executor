@@ -65,9 +65,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
 		this._concurrencyLimit = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._triggerNextCallback?.();
 	}
 
 	public get frequencyLimit(): number {
@@ -79,9 +77,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
 		this._frequencyLimit = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._triggerNextCallback?.();
 	}
 
 	public get frequencyWindow(): number {
@@ -93,9 +89,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
 		this._frequencyWindow = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._triggerNextCallback?.();
 	}
 
 	public get freeSlots(): number {
