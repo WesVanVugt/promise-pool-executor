@@ -4,16 +4,7 @@ import { expectType } from "ts-expect";
 import { PromisePoolGroupPrivate } from "../private/group";
 import * as Pool from "./imports";
 import { catchHandledRejection, catchUnhandledRejection } from "./rejectionEvents";
-import {
-	PersistentBatchTaskPrivate,
-	PromisePoolExecutorPrivate,
-	TICK,
-	debug,
-	nextTick,
-	realWait,
-	ticking,
-	wait,
-} from "./utils";
+import { PersistentBatchTaskPrivate, PromisePoolExecutorPrivate, TICK, debug, realWait, ticking, wait } from "./utils";
 
 /**
  * Returns the sum of an array of numbers.
@@ -288,104 +279,6 @@ describe("Exception Handling", () => {
 		).rejects.toBe(errors[0]);
 		// Wait to ensure that the second rejection happens within the scope of this test without issue
 		await wait(TICK * 9);
-	});
-
-	describe("Invalid Configuration", () => {
-		test("concurrencyLimit not a number", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					concurrencyLimit: "a" as unknown as number,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid concurrencyLimit: a$/);
-		});
-
-		test("concurrencyLimit is NaN", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					concurrencyLimit: NaN,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid concurrencyLimit: NaN$/);
-		});
-
-		test("frequencyLimit not a number", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					frequencyLimit: "a" as unknown as number,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid frequencyLimit: a$/);
-		});
-
-		test("frequencyLimit is NaN", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					frequencyLimit: NaN,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid frequencyLimit: NaN$/);
-		});
-
-		test("frequencyWindow not a number", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					frequencyWindow: "a" as unknown as number,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid frequencyWindow: a$/);
-		});
-
-		test("frequencyWindow is NaN", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					frequencyWindow: NaN,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid frequencyWindow: NaN$/);
-		});
-
-		test("invocationLimit not a number", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					invocationLimit: "a" as unknown as number,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid invocationLimit: a$/);
-		});
-
-		test("invocationLimit is NaN", () => {
-			const pool = new Pool.PromisePoolExecutor();
-			expect(() =>
-				pool.addGenericTask({
-					invocationLimit: NaN,
-					generator: () => {},
-				}),
-			).toThrow(/^Invalid invocationLimit: NaN$/);
-		});
-
-		test("Group From Another Pool", () => {
-			const pool1 = new Pool.PromisePoolExecutor();
-			const pool2 = new Pool.PromisePoolExecutor();
-
-			expect(() =>
-				pool1.addGenericTask({
-					generator: () => {},
-					groups: [
-						pool2.addGroup({
-							concurrencyLimit: 1,
-						}),
-					],
-				}),
-			).toThrow(/^options.groups contains a group belonging to a different pool$/);
-		});
 	});
 
 	describe("Unhandled Rejection", () => {

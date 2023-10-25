@@ -66,3 +66,36 @@ describe("Configuration change", () => {
 		expect(task.invocations).toBe(2);
 	});
 });
+
+describe("Invalid Configuration", () => {
+	test("invocationLimit not a number", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() =>
+			pool.addGenericTask({
+				invocationLimit: "a" as unknown as number,
+				generator: () => {},
+			}),
+		).toThrow(/^Invalid invocationLimit: a$/);
+	});
+
+	test("invocationLimit is NaN", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() =>
+			pool.addGenericTask({
+				invocationLimit: NaN,
+				generator: () => {},
+			}),
+		).toThrow(/^Invalid invocationLimit: NaN$/);
+	});
+
+	test("Group From Another Pool", () => {
+		const pool1 = new PromisePoolExecutor();
+		const pool2 = new PromisePoolExecutor();
+		expect(() =>
+			pool1.addGenericTask({
+				generator: () => {},
+				groups: [pool2.addGroup({ concurrencyLimit: 1 })],
+			}),
+		).toThrow(/^options.groups contains a group belonging to a different pool$/);
+	});
+});

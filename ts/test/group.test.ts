@@ -51,3 +51,37 @@ describe("Configuration change", () => {
 		expect(task.invocations).toBe(2);
 	});
 });
+
+describe("Invalid Configuration", () => {
+	test("concurrencyLimit not a number", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ concurrencyLimit: "a" as unknown as number })).toThrow(
+			/^Invalid concurrencyLimit: a$/,
+		);
+	});
+
+	test("concurrencyLimit is NaN", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ concurrencyLimit: NaN })).toThrow(/^Invalid concurrencyLimit: NaN$/);
+	});
+
+	test("frequencyLimit not a number", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ frequencyLimit: "a" as unknown as number })).toThrow(/^Invalid frequencyLimit: a$/);
+	});
+
+	test("frequencyLimit is NaN", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ frequencyLimit: NaN })).toThrow(/^Invalid frequencyLimit: NaN$/);
+	});
+
+	test("frequencyWindow not a number", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ frequencyWindow: "a" as unknown as number })).toThrow(/^Invalid frequencyWindow: a$/);
+	});
+
+	test("frequencyWindow is NaN", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addGroup({ frequencyWindow: NaN })).toThrow(/^Invalid frequencyWindow: NaN$/);
+	});
+});
