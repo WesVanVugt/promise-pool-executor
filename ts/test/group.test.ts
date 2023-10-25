@@ -1,6 +1,19 @@
 import { PromisePoolExecutor } from "./imports";
 import { TICK, nextTick, wait } from "./utils";
 
+describe("Construction", () => {
+	test("Default state", async () => {
+		const pool = new PromisePoolExecutor();
+		const group = pool.addGroup();
+		expect(group.concurrencyLimit).toBe(Infinity);
+		expect(group.frequencyLimit).toBe(Infinity);
+		expect(group.frequencyWindow).toBe(1000);
+		expect(group.activePromiseCount).toBe(0);
+		expect(group.activeTaskCount).toBe(0);
+		expect(group.freeSlots).toBe(Infinity);
+	});
+});
+
 describe("Configuration change", () => {
 	test("concurrencyLimit change", async () => {
 		const pool = new PromisePoolExecutor();

@@ -99,3 +99,21 @@ describe("Invalid Configuration", () => {
 		).toThrow(/^options.groups contains a group belonging to a different pool$/);
 	});
 });
+
+describe("resultConverter", () => {
+	test("Error handling", async () => {
+		const pool = new PromisePoolExecutor();
+		const err = new Error("a");
+		await expect(() =>
+			pool
+				.addGenericTask({
+					invocationLimit: 1,
+					generator: () => 1,
+					resultConverter: () => {
+						throw err;
+					},
+				})
+				.promise(),
+		).rejects.toBe(err);
+	});
+});
