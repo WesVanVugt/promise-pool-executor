@@ -32,7 +32,7 @@ export interface FreeSlots {
 	readonly freeSlots: number;
 }
 
-export interface PromisePoolGroup extends PromisePoolGroupOptions, ActivePromiseCount, FreeSlots {
+export interface PromisePoolGroup extends ConcurrencyLimit, FrequencyLimit, ActivePromiseCount, FreeSlots {
 	/**
 	 * The number of tasks currently active or paused.
 	 */

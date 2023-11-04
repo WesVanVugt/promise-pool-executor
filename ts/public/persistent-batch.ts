@@ -1,5 +1,5 @@
 import { BatchingResult } from "promise-batcher";
-import { ActivePromiseCount, FreeSlots, PromisePoolGroupOptions } from "./group";
+import { ActivePromiseCount, ConcurrencyLimit, FreeSlots, FrequencyLimit, PromisePoolGroupOptions } from "./group";
 import { EndMethod, TaskStateProperty } from "./task";
 
 export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOptions {
@@ -28,7 +28,8 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
 
 export interface PersistentBatchTask<I, O>
 	extends ActivePromiseCount,
-		PromisePoolGroupOptions,
+		ConcurrencyLimit,
+		FrequencyLimit,
 		FreeSlots,
 		TaskStateProperty,
 		EndMethod {

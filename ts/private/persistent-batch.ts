@@ -1,3 +1,4 @@
+import assert from "assert/strict";
 import defer, { DeferredPromise } from "p-defer";
 import { Batcher, BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
@@ -12,46 +13,43 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 	private readonly _task: PromisePoolTask<unknown>;
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
-		let immediate: boolean | Error;
-		let delayDeferred: DeferredPromise<void> | undefined;
-		let taskDeferred: DeferredPromise<void> | undefined;
+		let synchronousResult: boolean | Error;
+		let waitForTask: DeferredPromise<void> | undefined;
+		let waitForBatcher: DeferredPromise<void> | undefined;
 
 		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 		this._batcher = new Batcher<I, O>({
-			batchingFunction: (inputs) => {
-				if (!taskDeferred) {
-					throw new Error("Expected taskPromise to be set (internal error).");
-				}
-				const localTaskDeferred = taskDeferred;
-				taskDeferred = undefined;
+			batchingFunction: async (inputs) => {
+				assert(waitForBatcher, "Expected taskPromise to be set (internal error).");
+				const localWaitForBatcher = waitForBatcher;
+				waitForBatcher = undefined;
 
-				return (async () => {
-					try {
-						return await this._generator(inputs);
-					} finally {
-						// Do not send errors to the task, since they will be received via the getResult promises
-						localTaskDeferred.resolve();
-					}
-				})();
+				try {
+					return await this._generator(inputs);
+				} finally {
+					// Do not send errors to the task, since they will be received via the getResult promises
+					localWaitForBatcher.resolve();
+				}
 			},
 			delayFunction: () => {
-				if (delayDeferred) {
-					throw new Error("Expected delayDeferred not to be set (internal error).");
-				}
+				assert(!waitForTask, "Expected waitForTask not to be set (internal error).");
 				if (this._task.state >= TaskState.Exhausted) {
 					throw new Error("This task has ended and cannot process more items");
 				}
-				immediate = false;
+				synchronousResult = false;
+				// Wake the task to allow processing
 				this._task.resume();
-				if (immediate) {
-					if (immediate !== true) {
-						throw immediate as Error;
+				// If the task is ready or errored immediately, process that
+				if (synchronousResult) {
+					if (synchronousResult !== true) {
+						throw synchronousResult as Error;
 					}
 					return;
 				}
-				delayDeferred = defer();
-				return delayDeferred.promise;
+				// The task is not ready, so we wait for it
+				waitForTask = defer();
+				return waitForTask.promise;
 			},
 			maxBatchSize: options.maxBatchSize,
 			queuingDelay: options.queuingDelay,
@@ -64,19 +62,19 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 			frequencyWindow: options.frequencyWindow,
 			generator: () => {
 				this._task.pause();
-				if (taskDeferred) {
-					immediate = new Error("Expected taskDeferred not to be set (internal error).");
+				if (waitForBatcher) {
+					synchronousResult = new Error("Expected taskDeferred not to be set (internal error).");
 					return;
 				}
-				taskDeferred = defer();
-				if (delayDeferred) {
-					const localDelayDefered = delayDeferred;
-					delayDeferred = undefined;
-					localDelayDefered.resolve();
+				waitForBatcher = defer();
+				if (waitForTask) {
+					const localWaitForTask = waitForTask;
+					waitForTask = undefined;
+					localWaitForTask.resolve();
 				} else {
-					immediate = true;
+					synchronousResult = true;
 				}
-				return taskDeferred.promise;
+				return waitForBatcher.promise;
 			},
 			paused: true,
 		});
@@ -132,4 +130,6 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 	public end(): void {
 		this._task.end();
 	}
+
+	// TODO: waitForIdle?
 }

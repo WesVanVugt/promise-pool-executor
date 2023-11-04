@@ -1,4 +1,4 @@
-import { strict as assert } from "assert";
+import assert from "assert/strict";
 import defer, { DeferredPromise } from "p-defer";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";

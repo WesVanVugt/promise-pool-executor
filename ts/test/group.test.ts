@@ -5,12 +5,12 @@ describe("Construction", () => {
 	test("Default state", async () => {
 		const pool = new PromisePoolExecutor();
 		const group = pool.addGroup();
-		expect(group.concurrencyLimit).toBe(Infinity);
-		expect(group.frequencyLimit).toBe(Infinity);
-		expect(group.frequencyWindow).toBe(1000);
-		expect(group.activePromiseCount).toBe(0);
-		expect(group.activeTaskCount).toBe(0);
-		expect(group.freeSlots).toBe(Infinity);
+		expect<number>(group.concurrencyLimit).toBe(Infinity);
+		expect<number>(group.frequencyLimit).toBe(Infinity);
+		expect<number>(group.frequencyWindow).toBe(1000);
+		expect<number>(group.activePromiseCount).toBe(0);
+		expect<number>(group.activeTaskCount).toBe(0);
+		expect<number>(group.freeSlots).toBe(Infinity);
 	});
 });
 

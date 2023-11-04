@@ -7,12 +7,12 @@ describe("Construction", () => {
 		const task = pool.addPersistentBatchTask({
 			generator: () => [],
 		});
-		expect(task.concurrencyLimit).toBe(Infinity);
-		expect(task.frequencyLimit).toBe(Infinity);
-		expect(task.frequencyWindow).toBe(1000);
-		expect(task.activePromiseCount).toBe(0);
-		expect(task.freeSlots).toBe(Infinity);
-		expect(task.state).toBe(TaskState.Paused);
+		expect<number>(task.concurrencyLimit).toBe(Infinity);
+		expect<number>(task.frequencyLimit).toBe(Infinity);
+		expect<number>(task.frequencyWindow).toBe(1000);
+		expect<number>(task.activePromiseCount).toBe(0);
+		expect<number>(task.freeSlots).toBe(Infinity);
+		expect<TaskState>(task.state).toBe(TaskState.Paused);
 	});
 });
 

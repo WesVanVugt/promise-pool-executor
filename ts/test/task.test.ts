@@ -9,13 +9,13 @@ describe("Configuration change", () => {
 			invocationLimit: 2,
 			concurrencyLimit: 1,
 		});
-		expect(task.invocations).toBe(1);
-		expect(task.invocationLimit).toBe(2);
-		expect(task.state).toBe(TaskState.Active);
+		expect<number>(task.invocations).toBe(1);
+		expect<number>(task.invocationLimit).toBe(2);
+		expect<number>(task.state).toBe(TaskState.Active);
 		task.invocationLimit = 1;
-		expect(task.invocations).toBe(1);
-		expect(task.invocationLimit).toBe(1);
-		expect(task.state).toBe(TaskState.Exhausted);
+		expect<number>(task.invocations).toBe(1);
+		expect<number>(task.invocationLimit).toBe(1);
+		expect<TaskState>(task.state).toBe(TaskState.Exhausted);
 	});
 
 	test("concurrencyLimit change", async () => {
