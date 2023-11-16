@@ -13,7 +13,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 	private readonly _task: PromisePoolTask<unknown>;
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
-		let synchronousResult: boolean | Error;
+		let synchronousResult = false;
 		let waitForTask: DeferredPromise<void> | undefined;
 		let waitForBatcher: DeferredPromise<void> | undefined;
 
@@ -21,7 +21,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 		this._generator = options.generator;
 		this._batcher = new Batcher<I, O>({
 			batchingFunction: async (inputs) => {
-				assert(waitForBatcher, "Expected taskPromise to be set (internal error).");
+				assert(waitForBatcher, "Expected taskPromise to be set");
 				const localWaitForBatcher = waitForBatcher;
 				waitForBatcher = undefined;
 
@@ -33,7 +33,7 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 				}
 			},
 			delayFunction: () => {
-				assert(!waitForTask, "Expected waitForTask not to be set (internal error).");
+				assert(!waitForTask, "Expected waitForTask not to be set");
 				if (this._task.state >= TaskState.Exhausted) {
 					throw new Error("This task has ended and cannot process more items");
 				}
@@ -42,9 +42,6 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 				this._task.resume();
 				// If the task is ready or errored immediately, process that
 				if (synchronousResult) {
-					if (synchronousResult !== true) {
-						throw synchronousResult as Error;
-					}
 					return;
 				}
 				// The task is not ready, so we wait for it
@@ -62,15 +59,11 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 			frequencyWindow: options.frequencyWindow,
 			generator: () => {
 				this._task.pause();
-				if (waitForBatcher) {
-					synchronousResult = new Error("Expected taskDeferred not to be set (internal error).");
-					return;
-				}
+				assert(!waitForBatcher, "Expected taskDeferred not to be set.");
 				waitForBatcher = defer();
 				if (waitForTask) {
-					const localWaitForTask = waitForTask;
+					waitForTask.resolve();
 					waitForTask = undefined;
-					localWaitForTask.resolve();
 				} else {
 					synchronousResult = true;
 				}
