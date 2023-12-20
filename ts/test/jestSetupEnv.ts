@@ -1,14 +1,13 @@
+import failOnConsole from "jest-fail-on-console";
 import { clearCatchingRejections, failOnHandledRejection, setupCatchingRejections } from "./rejectionEvents";
-import { autoAdvanceTimers } from "./setup";
+import "./setup";
 
-beforeAll(() => {
-	jest.useFakeTimers();
-	autoAdvanceTimers();
-	setupCatchingRejections();
-	failOnHandledRejection();
-});
+failOnConsole();
+setupCatchingRejections();
+failOnHandledRejection();
 
 beforeEach(() => {
 	jest.clearAllTimers();
+	jest.resetAllMocks();
 	clearCatchingRejections();
 });

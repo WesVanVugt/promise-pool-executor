@@ -11,6 +11,10 @@ const config = {
 	preset: "ts-jest",
 	collectCoverage: true,
 	setupFilesAfterEnv: ["./ts/test/jestSetupEnv.ts"],
+	fakeTimers: {
+		enableGlobally: true,
+		doNotFake: ["clearImmediate", "nextTick", "queueMicrotask", "setImmediate"],
+	},
 	coverageThreshold: {
 		global: {
 			branches: 100,

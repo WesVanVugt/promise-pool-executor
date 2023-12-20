@@ -16,6 +16,7 @@ import {
 
 const debug = util.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
+let warnedThrottle = false;
 
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 	/**
@@ -79,7 +80,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 }
 
 export class PromisePoolExecutor implements PromisePoolGroup {
-	private _nextTriggerTime?: number;
+	private _nextTriggerTime = Infinity;
 	private _nextTriggerTimeout?: ReturnType<typeof setTimeout>;
 	/**
 	 * All tasks which are active or waiting.
@@ -168,7 +169,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * The number of promises which can be created before reaching the pool's configured limits.
 	 */
 	public get freeSlots(): number {
-		return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
+		return this._globalGroup.freeSlots;
 	}
 
 	/**
@@ -255,7 +256,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batchSize: " + options.batchSize);
+			throw new Error(`Invalid batchSize: ${options.batchSize}`);
 		}
 
 		const data = options.data;
@@ -274,7 +275,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					// Unacceptable values: NaN, <=0, type not number
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batchSize: " + batchSize));
+						throw new Error(`Invalid batchSize: ${batchSize}`);
 					}
 					index += batchSize;
 				} else {
@@ -344,7 +345,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			clearTimeout(this._nextTriggerTimeout);
 			this._nextTriggerTimeout = undefined;
 		}
-		this._nextTriggerTime = undefined;
+		this._nextTriggerTime = Infinity;
 	}
 
 	private _triggerNextTick(): void {
@@ -355,7 +356,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		this._nextTriggerTime = -1;
 		process.nextTick(() => {
 			if (this._nextTriggerTime === -1) {
-				this._nextTriggerTime = undefined;
+				this._nextTriggerTime = Infinity;
 				this._triggerNow();
 			}
 		});
@@ -378,15 +379,28 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		this._cleanFrequencyStarts(now);
 		this._clearTriggerTimeout();
 
-		let soonest = Infinity;
-		let busyTime: number;
-
+		let soonest = this._nextTriggerTime;
+		let lastTask: PromisePoolTaskPrivate<unknown, unknown> | undefined;
 		for (const task of this._tasks) {
 			for (;;) {
-				busyTime = task._busyTime();
+				const busyTime = task._busyTime();
 				debug("BusyTime: %o", busyTime);
 
 				if (!busyTime) {
+					if (task.activePromiseCount > 100000) {
+						if (lastTask === task) {
+							soonest = -1;
+							if (!warnedThrottle) {
+								warnedThrottle = true;
+								console.warn(
+									"[PromisePoolExecutor] Throttling task with activePromiseCount %o.",
+									task.activePromiseCount,
+								);
+							}
+							break;
+						}
+						lastTask = task;
+					}
 					task._run();
 				} else {
 					if (busyTime < soonest) {
@@ -401,13 +415,17 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			return this._triggerNow();
 		}
 
-		if (soonest !== Infinity) {
-			this._nextTriggerTime = soonest;
-			this._nextTriggerTimeout = setTimeout(() => {
-				this._nextTriggerTimeout = undefined;
-				this._nextTriggerTime = 0;
-				this._triggerNow();
-			}, soonest - now);
+		if (soonest < this._nextTriggerTime) {
+			if (soonest === -1) {
+				this._triggerNextTick();
+			} else {
+				this._nextTriggerTime = soonest;
+				this._nextTriggerTimeout = setTimeout(() => {
+					this._nextTriggerTimeout = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				}, soonest - now);
+			}
 		}
 	}
 

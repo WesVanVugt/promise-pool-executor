@@ -1,10 +1,10 @@
 import { PromisePoolExecutor, TaskState } from "./imports";
+// import { autoAdvanceTimers } from "./setup";
 import { TICK, nextTick, wait } from "./utils";
 
 describe("Configuration change", () => {
 	test("invocationLimit change", async () => {
-		const pool = new PromisePoolExecutor();
-		const task = pool.addGenericTask({
+		const task = new PromisePoolExecutor().addGenericTask({
 			generator: () => wait(TICK),
 			invocationLimit: 2,
 			concurrencyLimit: 1,
@@ -19,8 +19,7 @@ describe("Configuration change", () => {
 	});
 
 	test("concurrencyLimit change", async () => {
-		const pool = new PromisePoolExecutor();
-		const task = pool.addGenericTask({
+		const task = new PromisePoolExecutor().addGenericTask({
 			generator: () => wait(TICK),
 			invocationLimit: 2,
 			concurrencyLimit: 1,
@@ -35,8 +34,7 @@ describe("Configuration change", () => {
 	});
 
 	test("frequencyLimit change", async () => {
-		const pool = new PromisePoolExecutor();
-		const task = pool.addGenericTask({
+		const task = new PromisePoolExecutor().addGenericTask({
 			generator: () => wait(TICK),
 			invocationLimit: 2,
 			frequencyLimit: 1,
@@ -50,8 +48,7 @@ describe("Configuration change", () => {
 	});
 
 	test("frequencyWindow change", async () => {
-		const pool = new PromisePoolExecutor();
-		const task = pool.addGenericTask({
+		const task = new PromisePoolExecutor().addGenericTask({
 			generator: () => wait(TICK * 2),
 			invocationLimit: 2,
 			frequencyLimit: 1,
@@ -69,9 +66,8 @@ describe("Configuration change", () => {
 
 describe("Invalid Configuration", () => {
 	test("invocationLimit not a number", () => {
-		const pool = new PromisePoolExecutor();
 		expect(() =>
-			pool.addGenericTask({
+			new PromisePoolExecutor().addGenericTask({
 				invocationLimit: "a" as unknown as number,
 				generator: () => {},
 			}),
@@ -79,9 +75,8 @@ describe("Invalid Configuration", () => {
 	});
 
 	test("invocationLimit is NaN", () => {
-		const pool = new PromisePoolExecutor();
 		expect(() =>
-			pool.addGenericTask({
+			new PromisePoolExecutor().addGenericTask({
 				invocationLimit: NaN,
 				generator: () => {},
 			}),
@@ -89,12 +84,10 @@ describe("Invalid Configuration", () => {
 	});
 
 	test("Group From Another Pool", () => {
-		const pool1 = new PromisePoolExecutor();
-		const pool2 = new PromisePoolExecutor();
 		expect(() =>
-			pool1.addGenericTask({
+			new PromisePoolExecutor().addGenericTask({
 				generator: () => {},
-				groups: [pool2.addGroup({ concurrencyLimit: 1 })],
+				groups: [new PromisePoolExecutor().addGroup({ concurrencyLimit: 1 })],
 			}),
 		).toThrow(/^options.groups contains a group belonging to a different pool$/);
 	});
@@ -102,10 +95,9 @@ describe("Invalid Configuration", () => {
 
 describe("resultConverter", () => {
 	test("Error handling", async () => {
-		const pool = new PromisePoolExecutor();
 		const err = new Error("a");
 		await expect(() =>
-			pool
+			new PromisePoolExecutor()
 				.addGenericTask({
 					invocationLimit: 1,
 					generator: () => 1,
@@ -115,5 +107,53 @@ describe("resultConverter", () => {
 				})
 				.promise(),
 		).rejects.toBe(err);
+	});
+});
+
+describe(".addGenericTask", () => {
+	test("Synchronous infinite loop protection", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation();
+		const task = new PromisePoolExecutor().addGenericTask({
+			generator: async () => {
+				await wait(TICK);
+			},
+		});
+		expect(task.activePromiseCount).toBe(100002);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith("[PromisePoolExecutor] Throttling task with activePromiseCount %o.", 100002);
+		process.nextTick(() => {
+			// Break the infinite loop after 1 tick
+			task.concurrencyLimit = 1;
+		});
+		await nextTick();
+		expect(task.activePromiseCount).toBe(100003);
+	});
+});
+
+describe(".addBatchTask", () => {
+	test("Invalid batchSize", () => {
+		const pool = new PromisePoolExecutor();
+		expect(() => pool.addBatchTask({ batchSize: NaN, data: [], generator: () => undefined })).toThrow(
+			/^Invalid batchSize: NaN$/,
+		);
+		expect(() => pool.addBatchTask({ batchSize: -1, data: [], generator: () => undefined })).toThrow(
+			/^Invalid batchSize: -1$/,
+		);
+		expect(() =>
+			pool.addBatchTask({ batchSize: "a" as unknown as number, data: [], generator: () => undefined }),
+		).toThrow(/^Invalid batchSize: a$/);
+	});
+
+	test("batchSize function returns invalid value", async () => {
+		const pool = new PromisePoolExecutor();
+		await expect(
+			pool.addBatchTask({ batchSize: () => NaN, data: [1], generator: () => undefined }).promise(),
+		).rejects.toThrow(/^Invalid batchSize: NaN$/);
+		await expect(
+			pool.addBatchTask({ batchSize: () => -1, data: [1], generator: () => undefined }).promise(),
+		).rejects.toThrow(/^Invalid batchSize: -1$/);
+		await expect(
+			pool.addBatchTask({ batchSize: () => "a" as unknown as number, data: [1], generator: () => undefined }).promise(),
+		).rejects.toThrow(/^Invalid batchSize: a$/);
 	});
 });

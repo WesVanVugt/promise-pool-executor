@@ -27,7 +27,7 @@ const config = {
 		"@typescript-eslint/prefer-readonly": "error",
 		"@typescript-eslint/require-await": "off",
 		"@typescript-eslint/return-await": "error",
-		"no-console": "error",
+		"no-console": ["error", { allow: ["warn", "error"] }],
 		"no-sequences": "error",
 		"no-warning-comments": "error",
 		"prettier/prettier": "error",

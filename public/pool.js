@@ -109,7 +109,7 @@ class PromisePoolExecutor {
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batchSize: " + options.batchSize);
+			throw new Error(`Invalid batchSize: ${options.batchSize}`);
 		}
 		const data = options.data;
 		const generator = options.generator;
@@ -126,7 +126,7 @@ class PromisePoolExecutor {
 				if (typeof batchSizeOption === "function") {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batchSize: " + batchSize));
+						throw new Error(`Invalid batchSize: ${batchSize}`);
 					}
 					index += batchSize;
 				} else {
