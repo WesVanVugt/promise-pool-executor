@@ -34,6 +34,10 @@ export interface PersistentBatchTask<I, O>
 		TaskStateProperty,
 		EndMethod {
 	/**
+	 * The number of times the task has been invoked.
+	 */
+	readonly invocations: number;
+	/**
 	 * Returns a promise which resolves or rejects with the individual result returned from the task's generator
 	 * function.
 	 */

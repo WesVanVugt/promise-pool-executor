@@ -15,6 +15,7 @@ const config = {
 		enableGlobally: true,
 		doNotFake: ["clearImmediate", "nextTick", "queueMicrotask", "setImmediate"],
 	},
+	collectCoverageFrom: ["./ts/**/*"],
 	coverageThreshold: {
 		global: {
 			branches: 100,

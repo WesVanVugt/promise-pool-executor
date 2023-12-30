@@ -77,6 +77,10 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 		return this._task.activePromiseCount;
 	}
 
+	public get invocations(): number {
+		return this._task.invocations;
+	}
+
 	public get concurrencyLimit(): number {
 		return this._task.concurrencyLimit;
 	}

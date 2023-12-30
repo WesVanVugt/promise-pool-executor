@@ -1,5 +1,5 @@
 import timeSpan from "time-span";
-import { PromisePoolExecutor, TaskState } from "./imports";
+import { BATCHER_RETRY_TOKEN, PromisePoolExecutor, TaskState } from "./imports";
 import { TICK } from "./utils";
 
 describe("Construction", () => {
@@ -8,6 +8,7 @@ describe("Construction", () => {
 		const task = pool.addPersistentBatchTask({
 			generator: () => [],
 		});
+		expect<number>(task.invocations).toBe(0);
 		expect<number>(task.concurrencyLimit).toBe(Infinity);
 		expect<number>(task.frequencyLimit).toBe(Infinity);
 		expect<number>(task.frequencyWindow).toBe(1000);
@@ -83,5 +84,17 @@ describe("Integration", () => {
 			})(),
 		]);
 		expect(elapsed()).toBe(0);
+	});
+
+	test("Retries", async () => {
+		const pool = new PromisePoolExecutor();
+		const task = pool.addPersistentBatchTask<number, string>({
+			generator: (input) => input.map((v, i) => (i === 0 ? String(v) : BATCHER_RETRY_TOKEN)),
+			queuingDelay: TICK,
+		});
+		const elapsed = timeSpan();
+		await expect(Promise.all([3, 1, 2].map((v) => task.getResult(v)))).resolves.toEqual(["3", "1", "2"]);
+		expect(task.invocations).toBe(3);
+		expect(elapsed()).toBe(3 * TICK);
 	});
 });
