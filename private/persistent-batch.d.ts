@@ -7,6 +7,7 @@ export declare class PersistentBatchTaskPrivate<I, O> implements PersistentBatch
 	private readonly _task;
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>);
 	get activePromiseCount(): number;
+	get invocations(): number;
 	get concurrencyLimit(): number;
 	set concurrencyLimit(v: number);
 	get frequencyLimit(): number;

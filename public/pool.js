@@ -14,8 +14,10 @@ const utils_1 = require("../private/utils");
 const task_2 = require("./task");
 const debug = util_1.default.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
+let warnedThrottle = false;
 class PromisePoolExecutor {
 	constructor(options) {
+		this._nextTriggerTime = Infinity;
 		this._tasks = new Set();
 		let groupOptions;
 		if (!(0, utils_1.isNull)(options)) {
@@ -56,10 +58,10 @@ class PromisePoolExecutor {
 		return this._globalGroup.activePromiseCount;
 	}
 	get freeSlots() {
-		return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
+		return this._globalGroup.freeSlots;
 	}
 	addGroup(options) {
-		return new group_1.PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
+		return new group_1.PromisePoolGroupPrivate(this, () => this._triggerImmediate(), options);
 	}
 	addGenericTask(options) {
 		const task = new task_1.PromisePoolTaskPrivate(
@@ -173,27 +175,24 @@ class PromisePoolExecutor {
 			task._cleanFrequencyStarts(now);
 		}
 	}
-	_clearTriggerTimeout() {
-		if (this._nextTriggerTimeout) {
-			clearTimeout(this._nextTriggerTimeout);
-			this._nextTriggerTimeout = undefined;
-		}
-		this._nextTriggerTime = undefined;
-	}
-	_triggerNextTick() {
+	_triggerImmediate() {
+		var _a;
 		if (this._nextTriggerTime === -1) {
 			return;
 		}
-		this._clearTriggerTimeout();
+		(_a = this._nextTriggerClear) === null || _a === void 0 ? void 0 : _a.call(this);
 		this._nextTriggerTime = -1;
-		process.nextTick(() => {
-			if (this._nextTriggerTime === -1) {
-				this._nextTriggerTime = undefined;
-				this._triggerNow();
-			}
+		const immediate = setImmediate(() => {
+			this._nextTriggerClear = undefined;
+			this._nextTriggerTime = Infinity;
+			this._triggerNow();
 		});
+		this._nextTriggerClear = () => {
+			clearImmediate(immediate);
+		};
 	}
 	_triggerNow() {
+		var _a;
 		if (this._triggering) {
 			debug("Setting triggerAgain flag.");
 			this._triggerAgain = true;
@@ -204,14 +203,27 @@ class PromisePoolExecutor {
 		debug("Trigger promises");
 		const now = Date.now();
 		this._cleanFrequencyStarts(now);
-		this._clearTriggerTimeout();
-		let soonest = Infinity;
-		let busyTime;
+		let soonest = this._nextTriggerTime;
+		let lastTask;
 		for (const task of this._tasks) {
 			for (;;) {
-				busyTime = task._busyTime();
+				const busyTime = task._busyTime();
 				debug("BusyTime: %o", busyTime);
 				if (!busyTime) {
+					if (task.activePromiseCount > 100000) {
+						if (lastTask === task) {
+							soonest = -1;
+							if (!warnedThrottle) {
+								warnedThrottle = true;
+								console.warn(
+									"[PromisePoolExecutor] Throttling task with activePromiseCount %o.",
+									task.activePromiseCount,
+								);
+							}
+							break;
+						}
+						lastTask = task;
+					}
 					task._run();
 				} else {
 					if (busyTime < soonest) {
@@ -223,15 +235,32 @@ class PromisePoolExecutor {
 		}
 		this._triggering = false;
 		if (this._triggerAgain) {
+			debug("TriggerAgain");
 			return this._triggerNow();
 		}
-		if (soonest !== Infinity) {
-			this._nextTriggerTime = soonest;
-			this._nextTriggerTimeout = setTimeout(() => {
-				this._nextTriggerTimeout = undefined;
-				this._nextTriggerTime = 0;
-				this._triggerNow();
-			}, soonest - now);
+		debug("Soonest: %o", soonest);
+		if (soonest !== this._nextTriggerTime) {
+			switch (soonest) {
+				case -1:
+					this._triggerImmediate();
+					break;
+				case Infinity:
+					this._nextTriggerClear();
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = soonest;
+					break;
+				default:
+					(_a = this._nextTriggerClear) === null || _a === void 0 ? void 0 : _a.call(this);
+					this._nextTriggerTime = soonest;
+					const timeout = setTimeout(() => {
+						this._nextTriggerClear = undefined;
+						this._nextTriggerTime = Infinity;
+						this._triggerNow();
+					}, soonest - now);
+					this._nextTriggerClear = () => {
+						clearTimeout(timeout);
+					};
+			}
 		}
 	}
 	_removeTask(task) {

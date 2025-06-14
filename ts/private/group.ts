@@ -14,7 +14,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	public _activePromiseCount = 0;
 	private readonly _deferreds: Array<DeferredPromise<void>> = [];
 	/**
-	 * This flag prevents a rejection from being removed before nextTick is called.
+	 * This flag prevents a rejection from being removed before setImmediate is called.
 	 * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
 	 */
 	private _recentRejection = false;
@@ -29,7 +29,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	 */
 	private _locallyHandled = false;
 	/**
-	 * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
+	 * Contains any additional rejections so they can be flagged as handled before setImmediate fires if applicable
 	 */
 	private readonly _secondaryRejections: Array<Promise<never>> = [];
 	private readonly _triggerNextCallback: () => void;
@@ -171,8 +171,8 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		}
 
 		this._recentRejection = true;
-		// The group error state should reset on the next tick
-		process.nextTick(() => {
+		// The group error state should reset after expired timers are handled
+		setImmediate(() => {
 			this._recentRejection = false;
 			if (this._activeTaskCount < 1) {
 				this._rejection = undefined;

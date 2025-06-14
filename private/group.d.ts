@@ -11,7 +11,7 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	_activePromiseCount: number;
 	private readonly _deferreds;
 	/**
-	 * This flag prevents a rejection from being removed before nextTick is called.
+	 * This flag prevents a rejection from being removed before setImmediate is called.
 	 * This way, you can be certain that when calling waitForIdle after adding a task, the error will get handled.
 	 */
 	private _recentRejection;
@@ -26,7 +26,7 @@ export declare class PromisePoolGroupPrivate implements PromisePoolGroup {
 	 */
 	private _locallyHandled;
 	/**
-	 * Contains any additional rejections so they can be flagged as handled before the nextTick fires if applicable
+	 * Contains any additional rejections so they can be flagged as handled before setImmediate fires if applicable
 	 */
 	private readonly _secondaryRejections;
 	private readonly _triggerNextCallback;

@@ -2,8 +2,8 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
-process._original = (function (_original) {
-	return () => _original;
+process.actual = (function (actual) {
+	return () => actual;
 })(process);
 
 /** @type {import("jest").Config} */
@@ -13,7 +13,6 @@ const config = {
 	setupFilesAfterEnv: ["./ts/test/jestSetupEnv.ts"],
 	fakeTimers: {
 		enableGlobally: true,
-		doNotFake: ["clearImmediate", "nextTick", "queueMicrotask", "setImmediate"],
 	},
 	collectCoverageFrom: ["./ts/**/*"],
 	coverageThreshold: {

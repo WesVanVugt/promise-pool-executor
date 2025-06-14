@@ -6,47 +6,39 @@ var __importDefault =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PersistentBatchTaskPrivate = void 0;
+const strict_1 = __importDefault(require("assert/strict"));
 const p_defer_1 = __importDefault(require("p-defer"));
 const promise_batcher_1 = require("promise-batcher");
 const task_1 = require("../public/task");
 class PersistentBatchTaskPrivate {
 	constructor(pool, options) {
-		let immediate;
-		let delayDeferred;
-		let taskDeferred;
+		let synchronousResult = false;
+		let waitForTask;
+		let waitForBatcher;
 		this._generator = options.generator;
 		this._batcher = new promise_batcher_1.Batcher({
-			batchingFunction: (inputs) => {
-				if (!taskDeferred) {
-					throw new Error("Expected taskPromise to be set (internal error).");
+			batchingFunction: async (inputs) => {
+				(0, strict_1.default)(waitForBatcher, "Expected taskPromise to be set");
+				const localWaitForBatcher = waitForBatcher;
+				waitForBatcher = undefined;
+				try {
+					return await this._generator(inputs);
+				} finally {
+					localWaitForBatcher.resolve();
 				}
-				const localTaskDeferred = taskDeferred;
-				taskDeferred = undefined;
-				return (async () => {
-					try {
-						return await this._generator(inputs);
-					} finally {
-						localTaskDeferred.resolve();
-					}
-				})();
 			},
 			delayFunction: () => {
-				if (delayDeferred) {
-					throw new Error("Expected delayDeferred not to be set (internal error).");
-				}
+				(0, strict_1.default)(!waitForTask, "Expected waitForTask not to be set");
 				if (this._task.state >= task_1.TaskState.Exhausted) {
 					throw new Error("This task has ended and cannot process more items");
 				}
-				immediate = false;
+				synchronousResult = false;
 				this._task.resume();
-				if (immediate) {
-					if (immediate !== true) {
-						throw immediate;
-					}
+				if (synchronousResult) {
 					return;
 				}
-				delayDeferred = (0, p_defer_1.default)();
-				return delayDeferred.promise;
+				waitForTask = (0, p_defer_1.default)();
+				return waitForTask.promise;
 			},
 			maxBatchSize: options.maxBatchSize,
 			queuingDelay: options.queuingDelay,
@@ -58,25 +50,24 @@ class PersistentBatchTaskPrivate {
 			frequencyWindow: options.frequencyWindow,
 			generator: () => {
 				this._task.pause();
-				if (taskDeferred) {
-					immediate = new Error("Expected taskDeferred not to be set (internal error).");
-					return;
-				}
-				taskDeferred = (0, p_defer_1.default)();
-				if (delayDeferred) {
-					const localDelayDefered = delayDeferred;
-					delayDeferred = undefined;
-					localDelayDefered.resolve();
+				(0, strict_1.default)(!waitForBatcher, "Expected taskDeferred not to be set.");
+				waitForBatcher = (0, p_defer_1.default)();
+				if (waitForTask) {
+					waitForTask.resolve();
+					waitForTask = undefined;
 				} else {
-					immediate = true;
+					synchronousResult = true;
 				}
-				return taskDeferred.promise;
+				return waitForBatcher.promise;
 			},
 			paused: true,
 		});
 	}
 	get activePromiseCount() {
 		return this._task.activePromiseCount;
+	}
+	get invocations() {
+		return this._task.invocations;
 	}
 	get concurrencyLimit() {
 		return this._task.concurrencyLimit;

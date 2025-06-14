@@ -36,37 +36,34 @@ class PromisePoolGroupPrivate {
 		return this._concurrencyLimit;
 	}
 	set concurrencyLimit(v) {
+		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
 		this._concurrencyLimit = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
 	}
 	get frequencyLimit() {
 		return this._frequencyLimit;
 	}
 	set frequencyLimit(v) {
+		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
 		this._frequencyLimit = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
 	}
 	get frequencyWindow() {
 		return this._frequencyWindow;
 	}
 	set frequencyWindow(v) {
+		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
 		this._frequencyWindow = v;
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
 	}
 	get freeSlots() {
 		if (this._frequencyLimit !== Infinity) {
@@ -125,7 +122,7 @@ class PromisePoolGroupPrivate {
 			this._deferreds.length = 0;
 		}
 		this._recentRejection = true;
-		process.nextTick(() => {
+		setImmediate(() => {
 			this._recentRejection = false;
 			if (this._activeTaskCount < 1) {
 				this._rejection = undefined;

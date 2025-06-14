@@ -17,7 +17,7 @@ const catchRejectionEvent = async (eventName: RejectionEventNames) =>
 				return;
 			}
 			handlerSet.delete(handler);
-			process._original().removeListener(eventName, handler);
+			process.actual().removeListener(eventName, handler);
 			if (eventName === "rejectionHandled") {
 				resolve(err as Promise<never>);
 			} else {
@@ -25,7 +25,7 @@ const catchRejectionEvent = async (eventName: RejectionEventNames) =>
 			}
 		};
 		handlerSet.add(handler);
-		process._original().addListener(eventName as "unhandledRejection", handler);
+		process.actual().addListener(eventName as "unhandledRejection", handler);
 	});
 
 export const catchUnhandledRejection = () => catchRejectionEvent("unhandledRejection");
@@ -36,9 +36,9 @@ export const isCatchingUnhandledRejection = () => rejectionEventHandlerSets.unha
 export const isCatchingHandledRejection = () => rejectionEventHandlerSets.rejectionHandled.size > 0;
 
 export const setupCatchingRejections = () => {
-	const [unhandled] = process._original().listeners("unhandledRejection");
-	process._original().removeListener("unhandledRejection", unhandled);
-	process._original().addListener("unhandledRejection", (...args) => {
+	const [unhandled] = process.actual().listeners("unhandledRejection");
+	process.actual().removeListener("unhandledRejection", unhandled);
+	process.actual().addListener("unhandledRejection", (...args) => {
 		if (!isCatchingUnhandledRejection()) {
 			return unhandled(...args);
 		}
@@ -46,7 +46,7 @@ export const setupCatchingRejections = () => {
 };
 
 export const failOnHandledRejection = () => {
-	process._original().addListener("rejectionHandled", () => {
+	process.actual().addListener("rejectionHandled", () => {
 		if (!isCatchingHandledRejection()) {
 			throw new Error("Unexpected rejectionHandled event");
 		}
@@ -57,7 +57,7 @@ export const clearCatchingRejections = () => {
 	for (const eventName of REJECTION_EVENT_NAMES) {
 		const handlerSet = rejectionEventHandlerSets[eventName];
 		for (const handler of handlerSet) {
-			process._original().removeListener(eventName, handler);
+			process.actual().removeListener(eventName, handler);
 		}
 		handlerSet.clear();
 	}

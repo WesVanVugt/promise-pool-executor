@@ -6,6 +6,7 @@ var __importDefault =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolTaskPrivate = void 0;
+const strict_1 = __importDefault(require("assert/strict"));
 const p_defer_1 = __importDefault(require("p-defer"));
 const util_1 = __importDefault(require("util"));
 const task_1 = require("../public/task");
@@ -18,11 +19,8 @@ class PromisePoolTaskPrivate {
 		this._deferreds = [];
 		debug("Creating task");
 		this._pool = privateOptions.pool;
-		this._triggerCallback = privateOptions.triggerNowCallback;
-		this._detachCallback = privateOptions.detach;
 		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? task_1.TaskState.Paused : task_1.TaskState.Active;
-		this.invocationLimit = (0, utils_1.isNull)(options.invocationLimit) ? Infinity : options.invocationLimit;
 		this._taskGroup = privateOptions.pool.addGroup(options);
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
@@ -35,13 +33,14 @@ class PromisePoolTaskPrivate {
 			this._groups.push(...groups);
 		}
 		this._generator = options.generator;
-		if (!(0, utils_1.isNull)(options.invocationLimit) && options.invocationLimit <= 0) {
-			this.end();
-			return;
+		this.invocationLimit = (0, utils_1.isNull)(options.invocationLimit) ? Infinity : options.invocationLimit;
+		if (this._state !== task_1.TaskState.Terminated) {
+			for (const group of this._groups) {
+				group._incrementTasks();
+			}
 		}
-		for (const group of this._groups) {
-			group._incrementTasks();
-		}
+		this._detachCallback = privateOptions.detach;
+		this._triggerCallback = privateOptions.triggerNowCallback;
 	}
 	get activePromiseCount() {
 		return this._taskGroup._activePromiseCount;
@@ -118,12 +117,11 @@ class PromisePoolTaskPrivate {
 		}
 	}
 	end() {
+		var _a;
 		if (this._state < task_1.TaskState.Exhausted) {
 			debug("State: %o", "Exhausted");
 			this._state = task_1.TaskState.Exhausted;
-			if (this._taskGroup._activeTaskCount > 0) {
-				this._detachCallback();
-			}
+			(_a = this._detachCallback) === null || _a === void 0 ? void 0 : _a.call(this);
 		}
 		if (!this._generating && this._state < task_1.TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
 			debug("State: %o", "Terminated");
@@ -157,13 +155,7 @@ class PromisePoolTaskPrivate {
 		}
 	}
 	_run() {
-		if (this._generating) {
-			throw new Error("Internal Error: Task is already being run");
-		}
-		if (this._invocations >= this._invocationLimit) {
-			this.end();
-			return;
-		}
+		(0, strict_1.default)(!this._generating, "Internal Error: Task is already being run");
 		debug("Running generator");
 		let promise;
 		this._generating = true;

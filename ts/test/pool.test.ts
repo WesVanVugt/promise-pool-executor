@@ -1,5 +1,6 @@
+import { setImmediate } from "timers/promises";
 import { PromisePoolExecutor } from "./imports";
-import { TICK, nextTick, wait } from "./utils";
+import { setTimeout, TICK } from "./utils";
 
 describe("Construction", () => {
 	test("Default state", () => {
@@ -39,7 +40,7 @@ describe("Integration", () => {
 	test("Rate limited by global group", async () => {
 		const pool = new PromisePoolExecutor({ concurrencyLimit: 1 });
 		pool.addGenericTask({
-			generator: () => wait(TICK),
+			generator: () => setTimeout(TICK),
 			invocationLimit: 2,
 		});
 		await Promise.all([
@@ -49,7 +50,7 @@ describe("Integration", () => {
 				expect(pool.activePromiseCount).toBe(1);
 				pool.concurrencyLimit = 2;
 				expect(pool.activePromiseCount).toBe(1);
-				await nextTick();
+				await setImmediate();
 				expect(pool.activePromiseCount).toBe(2);
 			})(),
 		]);

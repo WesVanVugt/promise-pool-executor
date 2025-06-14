@@ -1,11 +1,10 @@
 import { PromisePoolExecutor, TaskState } from "./imports";
-// import { autoAdvanceTimers } from "./setup";
-import { TICK, nextTick, wait } from "./utils";
+import { setTimeout, setImmediate, TICK } from "./utils";
 
 describe("Configuration change", () => {
 	test("invocationLimit change", async () => {
 		const task = new PromisePoolExecutor().addGenericTask({
-			generator: () => wait(TICK),
+			generator: () => setTimeout(TICK),
 			invocationLimit: 2,
 			concurrencyLimit: 1,
 		});
@@ -20,7 +19,7 @@ describe("Configuration change", () => {
 
 	test("concurrencyLimit change", async () => {
 		const task = new PromisePoolExecutor().addGenericTask({
-			generator: () => wait(TICK),
+			generator: () => setTimeout(TICK),
 			invocationLimit: 2,
 			concurrencyLimit: 1,
 		});
@@ -29,13 +28,13 @@ describe("Configuration change", () => {
 		task.concurrencyLimit = 2;
 		expect(task.concurrencyLimit).toBe(2);
 		expect(task.invocations).toBe(1);
-		await nextTick();
+		await setImmediate();
 		expect(task.invocations).toBe(2);
 	});
 
 	test("frequencyLimit change", async () => {
 		const task = new PromisePoolExecutor().addGenericTask({
-			generator: () => wait(TICK),
+			generator: () => setTimeout(TICK),
 			invocationLimit: 2,
 			frequencyLimit: 1,
 		});
@@ -43,23 +42,24 @@ describe("Configuration change", () => {
 		task.frequencyLimit = 2;
 		expect(task.frequencyLimit).toBe(2);
 		expect(task.invocations).toBe(1);
-		await nextTick();
+		await setImmediate();
 		expect(task.invocations).toBe(2);
 	});
 
 	test("frequencyWindow change", async () => {
 		const task = new PromisePoolExecutor().addGenericTask({
-			generator: () => wait(TICK * 2),
+			generator: () => setTimeout(TICK * 2),
 			invocationLimit: 2,
 			frequencyLimit: 1,
 			frequencyWindow: TICK * 9,
 		});
 		expect(task.invocations).toBe(1);
-		await wait(TICK);
+		await setTimeout(TICK);
+		expect(task.invocations).toBe(1);
 		task.frequencyWindow = TICK;
 		expect(task.frequencyWindow).toBe(TICK);
 		expect(task.invocations).toBe(1);
-		await nextTick();
+		await setImmediate();
 		expect(task.invocations).toBe(2);
 	});
 });
@@ -115,18 +115,16 @@ describe(".addGenericTask", () => {
 		const warn = jest.spyOn(console, "warn").mockImplementation();
 		const task = new PromisePoolExecutor().addGenericTask({
 			generator: async () => {
-				await wait(TICK);
+				await setTimeout(TICK);
 			},
 		});
 		expect(task.activePromiseCount).toBe(100002);
 		expect(warn).toHaveBeenCalledTimes(1);
 		expect(warn).toHaveBeenCalledWith("[PromisePoolExecutor] Throttling task with activePromiseCount %o.", 100002);
-		process.nextTick(() => {
-			// Break the infinite loop after 1 tick
-			task.concurrencyLimit = 1;
-		});
-		await nextTick();
+		warn.mockClear();
+		await setImmediate();
 		expect(task.activePromiseCount).toBe(100003);
+		expect(warn).not.toHaveBeenCalled();
 	});
 });
 

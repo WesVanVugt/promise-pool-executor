@@ -65,8 +65,8 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 	generator(this: PromisePoolTask<unknown>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
 export declare class PromisePoolExecutor implements PromisePoolGroup {
-	private _nextTriggerTime?;
-	private _nextTriggerTimeout?;
+	private _nextTriggerTime;
+	private _nextTriggerClear?;
 	/**
 	 * All tasks which are active or waiting.
 	 */
@@ -154,8 +154,7 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	 */
 	waitForIdle(): Promise<void>;
 	private _cleanFrequencyStarts;
-	private _clearTriggerTimeout;
-	private _triggerNextTick;
+	private _triggerImmediate;
 	/**
 	 * Private Method: Triggers promises to start.
 	 */

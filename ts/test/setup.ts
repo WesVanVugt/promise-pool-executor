@@ -1,11 +1,10 @@
-import EventEmitter from "events";
 import mimicFn from "mimic-fn";
 import { setImmediate } from "timers/promises";
 
-const AUTO_ADVANCE_SYMBOL = Symbol("AutoAdvanceTimers");
+const AUTO_ADVANCE_EVENT = "AutoAdvanceTimers";
 const HOOK_SYMBOL = Symbol("EventHook");
 
-const eventEmitter = new EventEmitter();
+const eventTarget = new EventTarget();
 
 const hookMethod = <T extends object, M extends jest.FunctionPropertyNames<Required<T>>>(object: T, method: M) => {
 	const fn = object[method] as (...args: unknown[]) => unknown;
@@ -18,7 +17,7 @@ const hookMethod = <T extends object, M extends jest.FunctionPropertyNames<Requi
 };
 
 export const autoAdvanceTimers = () => {
-	eventEmitter.emit(AUTO_ADVANCE_SYMBOL);
+	eventTarget.dispatchEvent(new CustomEvent("xxx"));
 };
 
 const applyHooks = () => {
@@ -45,7 +44,7 @@ const areTimersMocked = () => typeof (setTimeout as { clock?: { Date?: unknown }
 			applyHooks();
 		}
 		await new Promise((resolve) => {
-			eventEmitter.once(AUTO_ADVANCE_SYMBOL, resolve);
+			eventTarget.addEventListener(AUTO_ADVANCE_EVENT, resolve);
 		});
 	}
 })();

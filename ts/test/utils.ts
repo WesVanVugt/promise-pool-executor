@@ -1,12 +1,6 @@
 import util from "util";
 import { PersistentBatchTask, PromisePoolGroup, PromisePoolTask } from "./imports";
 
-export const realWait = util.promisify(setTimeout);
-export const nextTick = () =>
-	new Promise((resolve) => {
-		process.nextTick(resolve);
-	});
-
 export const debug = util.debuglog("promise-pool-executor:test");
 
 export interface PromisePoolGroupPrivate extends PromisePoolGroup {
@@ -33,15 +27,12 @@ export const TICK = 100;
 /**
  * Returns a promise which waits the specified amount of time before resolving.
  */
-export const wait = (ms: number) =>
-	new Promise<void>((res) => {
-		setTimeout(res, ms);
+export const setTimeout = (ms: number) =>
+	new Promise((resolve) => {
+		globalThis.setTimeout(resolve, ms);
 	});
 
-export const ticking = () => {
-	let ticked = false;
-	process.nextTick(() => {
-		ticked = true;
+export const setImmediate = () =>
+	new Promise((resolve) => {
+		globalThis.setImmediate(resolve);
 	});
-	return () => ticked;
-};

@@ -81,7 +81,7 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 
 export class PromisePoolExecutor implements PromisePoolGroup {
 	private _nextTriggerTime = Infinity;
-	private _nextTriggerTimeout?: ReturnType<typeof setTimeout>;
+	private _nextTriggerClear?: () => void;
 	/**
 	 * All tasks which are active or waiting.
 	 */
@@ -176,7 +176,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * Adds a group to the pool.
 	 */
 	public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
-		return new PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
+		return new PromisePoolGroupPrivate(this, () => this._triggerImmediate(), options);
 	}
 
 	/**
@@ -340,26 +340,20 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 	}
 
-	private _clearTriggerTimeout(): void {
-		if (this._nextTriggerTimeout) {
-			clearTimeout(this._nextTriggerTimeout);
-			this._nextTriggerTimeout = undefined;
-		}
-		this._nextTriggerTime = Infinity;
-	}
-
-	private _triggerNextTick(): void {
+	private _triggerImmediate(): void {
 		if (this._nextTriggerTime === -1) {
 			return;
 		}
-		this._clearTriggerTimeout();
+		this._nextTriggerClear?.();
 		this._nextTriggerTime = -1;
-		process.nextTick(() => {
-			if (this._nextTriggerTime === -1) {
-				this._nextTriggerTime = Infinity;
-				this._triggerNow();
-			}
+		const immediate = setImmediate(() => {
+			this._nextTriggerClear = undefined;
+			this._nextTriggerTime = Infinity;
+			this._triggerNow();
 		});
+		this._nextTriggerClear = () => {
+			clearImmediate(immediate);
+		};
 	}
 
 	/**
@@ -377,7 +371,6 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		debug("Trigger promises");
 		const now = Date.now();
 		this._cleanFrequencyStarts(now);
-		this._clearTriggerTimeout();
 
 		let soonest = this._nextTriggerTime;
 		let lastTask: PromisePoolTaskPrivate<unknown, unknown> | undefined;
@@ -412,19 +405,32 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 		this._triggering = false;
 		if (this._triggerAgain) {
+			debug("TriggerAgain");
 			return this._triggerNow();
 		}
 
-		if (soonest < this._nextTriggerTime) {
-			if (soonest === -1) {
-				this._triggerNextTick();
-			} else {
-				this._nextTriggerTime = soonest;
-				this._nextTriggerTimeout = setTimeout(() => {
-					this._nextTriggerTimeout = undefined;
-					this._nextTriggerTime = Infinity;
-					this._triggerNow();
-				}, soonest - now);
+		if (soonest !== this._nextTriggerTime) {
+			switch (soonest) {
+				case -1:
+					this._triggerImmediate();
+					break;
+				case Infinity:
+					this._nextTriggerClear!();
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = soonest;
+					break;
+				default:
+					this._nextTriggerClear?.();
+					this._nextTriggerTime = soonest;
+					// eslint-disable-next-line no-case-declarations
+					const timeout = setTimeout(() => {
+						this._nextTriggerClear = undefined;
+						this._nextTriggerTime = Infinity;
+						this._triggerNow();
+					}, soonest - now);
+					this._nextTriggerClear = () => {
+						clearTimeout(timeout);
+					};
 			}
 		}
 	}
