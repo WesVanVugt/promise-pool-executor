@@ -7,16 +7,16 @@ var __importDefault =
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolTaskPrivate = void 0;
 const strict_1 = __importDefault(require("assert/strict"));
-const p_defer_1 = __importDefault(require("p-defer"));
 const util_1 = __importDefault(require("util"));
 const task_1 = require("../public/task");
+const optional_defer_1 = require("./optional-defer");
 const utils_1 = require("./utils");
 const debug = util_1.default.debuglog("promise-pool-executor:task");
 class PromisePoolTaskPrivate {
 	constructor(privateOptions, options) {
 		this._invocations = 0;
 		this._result = [];
-		this._deferreds = [];
+		this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		debug("Creating task");
 		this._pool = privateOptions.pool;
 		this._resultConverter = options.resultConverter;
@@ -94,14 +94,7 @@ class PromisePoolTaskPrivate {
 		return this._state;
 	}
 	async promise() {
-		if (this._rejection) {
-			return this._rejection;
-		} else if (this._state === task_1.TaskState.Terminated) {
-			return this._returnResult;
-		}
-		const deferred = (0, p_defer_1.default)();
-		this._deferreds.push(deferred);
-		return deferred.promise;
+		return this._deferred.promise();
 	}
 	pause() {
 		if (this._state === task_1.TaskState.Active) {
@@ -207,46 +200,32 @@ class PromisePoolTaskPrivate {
 		})();
 	}
 	_resolve() {
-		if (this._rejection || !this._result) {
+		if (!this._result) {
 			return;
 		}
 		this._result.length = this._invocations;
 		this._state = task_1.TaskState.Terminated;
+		let returnResult;
 		if (this._resultConverter) {
 			try {
-				this._returnResult = this._resultConverter(this._result);
+				returnResult = this._resultConverter(this._result);
 			} catch (err) {
 				this._reject(err);
 				return;
 			}
 		} else {
-			this._returnResult = this._result;
+			returnResult = this._result;
 		}
 		this._result = undefined;
-		if (this._deferreds.length) {
-			for (const deferred of this._deferreds) {
-				deferred.resolve(this._returnResult);
-			}
-			this._deferreds.length = 0;
-		}
+		this._deferred.resolve(returnResult);
 	}
 	_reject(err) {
-		if (this._rejection) {
-			debug("This task already failed. Redundant error: %O", err);
-			return;
-		}
 		const promise = Promise.reject(err);
-		this._rejection = promise;
-		this.end();
-		if (this._deferreds.length) {
-			for (const deferred of this._deferreds) {
-				deferred.resolve(promise);
-			}
-			this._deferreds.length = 0;
-		}
+		this._deferred.resolve(promise);
 		for (const group of this._groups) {
 			group._reject(promise);
 		}
+		this.end();
 	}
 }
 exports.PromisePoolTaskPrivate = PromisePoolTaskPrivate;

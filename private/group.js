@@ -1,22 +1,14 @@
 "use strict";
-var __importDefault =
-	(this && this.__importDefault) ||
-	function (mod) {
-		return mod && mod.__esModule ? mod : { default: mod };
-	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolGroupPrivate = void 0;
-const p_defer_1 = __importDefault(require("p-defer"));
+const optional_defer_1 = require("./optional-defer");
 const utils_1 = require("./utils");
 class PromisePoolGroupPrivate {
 	constructor(pool, triggerNextCallback, options) {
 		this._frequencyStarts = [];
 		this._activeTaskCount = 0;
 		this._activePromiseCount = 0;
-		this._deferreds = [];
 		this._recentRejection = false;
-		this._locallyHandled = false;
-		this._secondaryRejections = [];
 		this._pool = pool;
 		if (!options) {
 			options = {};
@@ -97,73 +89,42 @@ class PromisePoolGroupPrivate {
 		}
 		return 0;
 	}
-	_resolve() {
-		if (!this._rejection && this._deferreds.length) {
-			for (const deferred of this._deferreds) {
-				deferred.resolve();
-			}
-			this._deferreds.length = 0;
-		}
-	}
 	_reject(promise) {
-		if (this._rejection) {
-			if (this._locallyHandled) {
-				(0, utils_1.handleRejection)(promise);
+		if (!this._deferred) {
+			if (this._activeTaskCount <= 0) {
+				return;
 			}
-			this._secondaryRejections.push(promise);
-			return;
+			this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		}
-		this._rejection = promise;
-		if (this._deferreds.length) {
-			this._locallyHandled = true;
-			for (const deferred of this._deferreds) {
-				deferred.resolve(promise);
-			}
-			this._deferreds.length = 0;
+		this._deferred.resolve(promise);
+		if (this._recentRejection) {
+			return;
 		}
 		this._recentRejection = true;
 		setImmediate(() => {
 			this._recentRejection = false;
-			if (this._activeTaskCount < 1) {
-				this._rejection = undefined;
-				this._locallyHandled = false;
-				if (this._secondaryRejections.length) {
-					this._secondaryRejections.length = 0;
-				}
+			if (this._activeTaskCount <= 0) {
+				this._deferred = undefined;
 			}
 		});
 	}
 	waitForIdle() {
-		if (this._rejection) {
-			this._locallyHandled = true;
-			if (this._secondaryRejections.length) {
-				for (const rejection of this._secondaryRejections) {
-					(0, utils_1.handleRejection)(rejection);
-				}
-				this._secondaryRejections.length = 0;
+		if (!this._deferred) {
+			if (this._activeTaskCount <= 0) {
+				return Promise.resolve();
 			}
-			return this._rejection;
+			this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		}
-		if (this._activeTaskCount <= 0) {
-			return Promise.resolve();
-		}
-		const deferred = (0, p_defer_1.default)();
-		this._deferreds.push(deferred);
-		return deferred.promise;
+		return this._deferred.promise();
 	}
 	_incrementTasks() {
 		this._activeTaskCount++;
 	}
 	_decrementTasks() {
 		this._activeTaskCount--;
-		if (this._activeTaskCount > 0) {
-			return;
-		}
-		if (this._rejection && !this._recentRejection) {
-			this._rejection = undefined;
-			this._locallyHandled = false;
-		} else {
-			this._resolve();
+		if (this._activeTaskCount <= 0 && this._deferred && !this._recentRejection) {
+			this._deferred.resolve(undefined);
+			this._deferred = undefined;
 		}
 	}
 }

@@ -14,6 +14,7 @@ const config = {
 	fakeTimers: {
 		enableGlobally: true,
 	},
+	maxWorkers: 1, // Needed to support use of "actual" above
 	collectCoverageFrom: ["./ts/**/*"],
 	coverageThreshold: {
 		global: {

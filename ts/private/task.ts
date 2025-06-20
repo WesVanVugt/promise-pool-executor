@@ -1,9 +1,9 @@
 import assert from "assert/strict";
-import defer, { DeferredPromise } from "p-defer";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
 import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
+import { OptionalDeferredPromise } from "./optional-defer";
 import { isNull } from "./utils";
 
 const debug = util.debuglog("promise-pool-executor:task");
@@ -22,15 +22,13 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private _invocations = 0;
 	private _invocationLimit!: number;
 	private _result?: I[] = [];
-	private _returnResult?: R;
 	private _state: TaskState;
-	private _rejection?: Promise<never>;
 	/**
 	 * Set to true while the generator function is being run. Prevents the task from being terminated since a final
 	 * promise may be generated.
 	 */
 	private _generating?: boolean;
-	private readonly _deferreds: Array<DeferredPromise<R>> = [];
+	private readonly _deferred = new OptionalDeferredPromise<R>();
 	private readonly _pool: PromisePoolExecutor;
 	private readonly _triggerCallback: () => void;
 	private readonly _detachCallback: () => void;
@@ -136,15 +134,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * Returns a promise which resolves when the task completes.
 	 */
 	public async promise(): Promise<R> {
-		if (this._rejection) {
-			return this._rejection;
-		} else if (this._state === TaskState.Terminated) {
-			return this._returnResult!;
-		}
-
-		const deferred = defer<R>();
-		this._deferreds.push(deferred);
-		return deferred.promise;
+		return this._deferred.promise();
 	}
 
 	/**
@@ -290,7 +280,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * Private. Resolves the task if possible. Should only be called by end()
 	 */
 	private _resolve(): void {
-		if (this._rejection || !this._result) {
+		if (!this._result) {
 			return;
 		}
 		// Set the length of the resulting array in case some undefined results affected this
@@ -298,48 +288,29 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 
 		this._state = TaskState.Terminated;
 
+		let returnResult: R;
 		if (this._resultConverter) {
 			try {
-				this._returnResult = this._resultConverter(this._result);
+				returnResult = this._resultConverter(this._result);
 			} catch (err) {
 				this._reject(err);
 				return;
 			}
 		} else {
-			this._returnResult = this._result as R;
+			returnResult = this._result as R;
 		}
 		// discard the original array to free memory
 		this._result = undefined;
 
-		if (this._deferreds.length) {
-			for (const deferred of this._deferreds) {
-				deferred.resolve(this._returnResult);
-			}
-			this._deferreds.length = 0;
-		}
+		this._deferred.resolve(returnResult);
 	}
 
 	private _reject(err: unknown) {
-		// Check if the task has already failed
-		if (this._rejection) {
-			debug("This task already failed. Redundant error: %O", err);
-			return;
-		}
-
 		const promise = Promise.reject(err);
-		this._rejection = promise;
-
-		// This may detach the task
-		this.end();
-
-		if (this._deferreds.length) {
-			for (const deferred of this._deferreds) {
-				deferred.resolve(promise);
-			}
-			this._deferreds.length = 0;
-		}
+		this._deferred.resolve(promise);
 		for (const group of this._groups) {
 			group._reject(promise);
 		}
+		this.end();
 	}
 }

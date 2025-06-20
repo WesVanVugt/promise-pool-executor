@@ -5,12 +5,8 @@ var __importDefault =
 		return mod && mod.__esModule ? mod : { default: mod };
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleRejection = exports.isNull = exports.debug = void 0;
+exports.isNull = exports.debug = void 0;
 const util_1 = __importDefault(require("util"));
 exports.debug = util_1.default.debuglog("promise-pool-executor");
 const isNull = (val) => val === undefined || val === null;
 exports.isNull = isNull;
-const handleRejection = (promise) => {
-	promise.catch(() => {});
-};
-exports.handleRejection = handleRejection;

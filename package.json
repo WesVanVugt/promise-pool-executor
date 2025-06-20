@@ -21,10 +21,10 @@
 	"repository": "WesVanVugt/promise-batcher",
 	"scripts": {
 		"prepare": "npm run build",
-		"build": "npm run clean && tsc -p ./tsconfig.build.json && tsc -p ./tsconfig.nocomments.json && prettier -w index.js index.d.ts private public",
+		"build": "npm run clean && tsc -p ./tsconfig.build.json && tsc -p ./tsconfig.nocomments.json && rm private/*.d.ts && prettier -w index.js index.d.ts private public",
 		"clean": "rm -rf index.js index.d.ts private public",
 		"test": "npm run lint && npm run test:local",
-		"test:local": "jest --color",
+		"test:local": "jest",
 		"test:debug": "cross-env NODE_DEBUG=promise-pool-executor* npm test",
 		"lint": "eslint --color --max-warnings 0 --ext .ts ."
 	},

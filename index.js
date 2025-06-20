@@ -14,11 +14,11 @@ var __createBinding =
 					};
 				}
 				Object.defineProperty(o, k2, desc);
-		  }
+			}
 		: function (o, m, k, k2) {
 				if (k2 === undefined) k2 = k;
 				o[k2] = m[k];
-		  });
+			});
 var __exportStar =
 	(this && this.__exportStar) ||
 	function (m, exports) {
