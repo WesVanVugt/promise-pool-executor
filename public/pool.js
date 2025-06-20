@@ -238,7 +238,6 @@ class PromisePoolExecutor {
 			debug("TriggerAgain");
 			return this._triggerNow();
 		}
-		debug("Soonest: %o", soonest);
 		if (soonest !== this._nextTriggerTime) {
 			switch (soonest) {
 				case -1:
