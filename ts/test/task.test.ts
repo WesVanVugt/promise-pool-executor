@@ -1,3 +1,4 @@
+import timeSpan from "time-span";
 import { PromisePoolExecutor, TaskState } from "./imports";
 import { setTimeout, setImmediate, TICK } from "./utils";
 
@@ -153,5 +154,43 @@ describe(".addBatchTask", () => {
 		await expect(
 			pool.addBatchTask({ batchSize: () => "a" as unknown as number, data: [1], generator: () => undefined }).promise(),
 		).rejects.toThrow(/^Invalid batchSize: a$/);
+	});
+});
+
+describe(".pause()", () => {
+	test("Pause/Resume Task", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const elapsed = timeSpan();
+		let runCount = 0;
+		const task = pool.addGenericTask({
+			generator() {
+				runCount++;
+				if (runCount === 2) {
+					this.pause();
+					this.pause();
+					// This iteration gets ignored
+					return undefined;
+				}
+				return (async () => {
+					await setTimeout(TICK);
+					return elapsed();
+				})();
+			},
+			invocationLimit: 3,
+		});
+		expect(runCount).toBe(2);
+		expect(task.invocations).toBe(1);
+		const [results] = await Promise.all([
+			task.promise(),
+			(async () => {
+				await setTimeout(TICK);
+				task.resume();
+				expect(runCount).toBe(4);
+				expect(task.invocations).toBe(3);
+				task.resume();
+			})(),
+		]);
+		expect(results).toStrictEqual([TICK, 2 * TICK, 2 * TICK]);
 	});
 });

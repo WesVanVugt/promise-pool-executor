@@ -372,7 +372,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		const now = Date.now();
 		this._cleanFrequencyStarts(now);
 
-		let soonest = this._nextTriggerTime;
+		let soonest = Infinity;
 		let lastTask: PromisePoolTaskPrivate<unknown, unknown> | undefined;
 		for (const task of this._tasks) {
 			for (;;) {

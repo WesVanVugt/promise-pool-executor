@@ -18,10 +18,10 @@ export interface GenericTaskOptionsPrivate {
 export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _groups: PromisePoolGroupPrivate[];
 	private readonly _generator: (invocation: number) => I | PromiseLike<I> | undefined | null | void;
+	private readonly _result: I[] = [];
 	private readonly _taskGroup: PromisePoolGroupPrivate;
 	private _invocations = 0;
 	private _invocationLimit!: number;
-	private _result?: I[] = [];
 	private _state: TaskState;
 	/**
 	 * Set to true while the generator function is being run. Prevents the task from being terminated since a final
@@ -263,7 +263,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
 				// Avoid storing the result if it is undefined.
 				// Some tasks may have countless iterations and never return anything, so this could eat memory.
-				if (result !== undefined && this._result) {
+				if (result !== undefined) {
 					this._result[resultIndex] = result;
 				}
 				if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
@@ -280,9 +280,6 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * Private. Resolves the task if possible. Should only be called by end()
 	 */
 	private _resolve(): void {
-		if (!this._result) {
-			return;
-		}
 		// Set the length of the resulting array in case some undefined results affected this
 		this._result.length = this._invocations;
 
@@ -299,9 +296,6 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 		} else {
 			returnResult = this._result as R;
 		}
-		// discard the original array to free memory
-		this._result = undefined;
-
 		this._deferred.resolve(returnResult);
 	}
 

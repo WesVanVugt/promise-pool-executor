@@ -1,3 +1,4 @@
+import timeSpan from "time-span";
 import { setImmediate } from "timers/promises";
 import { PromisePoolExecutor } from "./imports";
 import { setTimeout, TICK } from "./utils";
@@ -97,5 +98,74 @@ describe("Invalid Configuration", () => {
 	test("frequencyWindow is NaN", () => {
 		const pool = new PromisePoolExecutor();
 		expect(() => pool.addGroup({ frequencyWindow: NaN })).toThrow(/^Invalid frequencyWindow: NaN$/);
+	});
+});
+
+describe("waitForIdle", () => {
+	test("Simple", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const elapsed = timeSpan();
+		const group = pool.addGroup();
+		pool.addGenericTask({
+			generator: () => setTimeout(TICK),
+			groups: [group],
+			invocationLimit: 1,
+		});
+		await group.waitForIdle();
+		expect(elapsed()).toBe(TICK);
+	});
+
+	test("Child Task", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const elapsed = timeSpan();
+		const group = pool.addGroup();
+		pool.addGenericTask({
+			generator: async () => {
+				await setTimeout(TICK);
+				pool.addGenericTask({
+					generator: () => setTimeout(TICK),
+					groups: [group],
+					invocationLimit: 1,
+				});
+			},
+			groups: [group],
+			invocationLimit: 1,
+		});
+		await group.waitForIdle();
+		expect(elapsed()).toBe(2 * TICK);
+	});
+
+	test("Sync error", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const error = new Error("Test error");
+		const group = pool.addGroup();
+		pool.addGenericTask({
+			generator: async () => {
+				await setTimeout(TICK);
+				throw error;
+			},
+			groups: [group],
+			invocationLimit: 2,
+		});
+		// Subsequent rejections do not affect
+		await expect(group.waitForIdle()).rejects.toBe(error);
+	});
+
+	test("Async errors", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const error = new Error("Test error");
+		const group = pool.addGroup();
+		pool.addGenericTask({
+			generator: async (i) => {
+				throw i === 0 ? error : new Error("Extra error");
+			},
+			groups: [group],
+			invocationLimit: 2,
+		});
+		await expect(group.waitForIdle()).rejects.toBe(error);
 	});
 });

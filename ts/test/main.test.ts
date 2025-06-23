@@ -1,9 +1,24 @@
 import timeSpan from "time-span";
 import { expectType } from "ts-expect";
 import { PromisePoolGroupPrivate } from "../private/group";
-import * as Pool from "./imports";
+import {
+	BatchingResult,
+	BatchTaskOptions,
+	EachTaskOptions,
+	GenericTaskConvertedOptions,
+	GenericTaskOptions,
+	LinearTaskOptions,
+	PersistentBatchTask,
+	PersistentBatchTaskOptions,
+	PromisePoolExecutor,
+	PromisePoolGroup,
+	PromisePoolGroupOptions,
+	PromisePoolTask,
+	SingleTaskOptions,
+	TaskState,
+} from "./imports";
 import { catchHandledRejection, catchUnhandledRejection } from "./rejectionEvents";
-import { PromisePoolExecutorPrivate, TICK, debug, setTimeout } from "./utils";
+import { debug, PromisePoolExecutorPrivate, setTimeout, TICK } from "./utils";
 
 /**
  * Returns the sum of an array of numbers.
@@ -21,20 +36,20 @@ describe("Typings", () => {
 	// eslint-disable-next-line jest/expect-expect
 	test("Exports", () => {
 		expectType<
-			| Pool.BatchingResult<never>
-			| Pool.BatchTaskOptions<unknown, unknown>
-			| Pool.EachTaskOptions<unknown, unknown>
-			| Pool.GenericTaskConvertedOptions<unknown, unknown>
-			| Pool.GenericTaskOptions<unknown>
-			| Pool.LinearTaskOptions<unknown>
-			| Pool.PersistentBatchTask<unknown, unknown>
-			| Pool.PersistentBatchTaskOptions<unknown, unknown>
-			| Pool.PromisePoolExecutor
-			| Pool.PromisePoolGroup
-			| Pool.PromisePoolGroupOptions
-			| Pool.PromisePoolTask<unknown>
-			| Pool.SingleTaskOptions<unknown, unknown>
-			| Pool.TaskState
+			| BatchingResult<never>
+			| BatchTaskOptions<unknown, unknown>
+			| EachTaskOptions<unknown, unknown>
+			| GenericTaskConvertedOptions<unknown, unknown>
+			| GenericTaskOptions<unknown>
+			| LinearTaskOptions<unknown>
+			| PersistentBatchTask<unknown, unknown>
+			| PersistentBatchTaskOptions<unknown, unknown>
+			| PromisePoolExecutor
+			| PromisePoolGroup
+			| PromisePoolGroupOptions
+			| PromisePoolTask<unknown>
+			| SingleTaskOptions<unknown, unknown>
+			| TaskState
 			| true
 		>(true);
 	});
@@ -42,7 +57,7 @@ describe("Typings", () => {
 
 describe("invocationLimit", () => {
 	test("Zero limit", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 		pool.addGenericTask({
 			generator: () => setTimeout(TICK),
 			invocationLimit: 1,
@@ -61,7 +76,7 @@ describe("invocationLimit", () => {
 
 describe("concurrencyLimit", () => {
 	test("None (Infinite)", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const elapsed = timeSpan();
 		const results = await pool
@@ -77,7 +92,7 @@ describe("concurrencyLimit", () => {
 	});
 
 	test("Pool", async () => {
-		const pool = new Pool.PromisePoolExecutor(2);
+		const pool = new PromisePoolExecutor(2);
 
 		const elapsed = timeSpan();
 		const results = await pool
@@ -93,7 +108,7 @@ describe("concurrencyLimit", () => {
 	});
 
 	test("Task", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const elapsed = timeSpan();
 		const results = await pool
@@ -110,7 +125,7 @@ describe("concurrencyLimit", () => {
 	});
 
 	test("Group", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 		const group = pool.addGroup({
 			concurrencyLimit: 2,
 		});
@@ -133,7 +148,7 @@ describe("concurrencyLimit", () => {
 describe("frequencyLimit", () => {
 	describe("Pool", () => {
 		test("Steady Work", async () => {
-			const pool = new Pool.PromisePoolExecutor({
+			const pool = new PromisePoolExecutor({
 				frequencyLimit: 2,
 				frequencyWindow: TICK,
 			});
@@ -149,7 +164,7 @@ describe("frequencyLimit", () => {
 		});
 
 		test("Offset Calls", async () => {
-			const pool = new Pool.PromisePoolExecutor({
+			const pool = new PromisePoolExecutor({
 				concurrencyLimit: 1,
 				frequencyLimit: 2,
 				frequencyWindow: TICK * 3,
@@ -169,7 +184,7 @@ describe("frequencyLimit", () => {
 		});
 
 		test("Work Gap", async () => {
-			const pool = new Pool.PromisePoolExecutor({
+			const pool = new PromisePoolExecutor({
 				frequencyLimit: 2,
 				frequencyWindow: TICK,
 			});
@@ -196,7 +211,7 @@ describe("frequencyLimit", () => {
 	});
 
 	test("Group", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 		const group = pool.addGroup({
 			frequencyLimit: 2,
 			frequencyWindow: TICK,
@@ -215,7 +230,7 @@ describe("frequencyLimit", () => {
 	});
 
 	test("Should Not Collect Timestamps If Not Set", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 		await pool
 			.addGenericTask({
 				generator: () => {},
@@ -228,7 +243,7 @@ describe("frequencyLimit", () => {
 
 describe("Exception Handling", () => {
 	test("Generator Function (synchronous)", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const error = new Error();
 		await expect(
@@ -243,7 +258,7 @@ describe("Exception Handling", () => {
 	});
 
 	test("Promise Rejection", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const error = new Error();
 		await expect(
@@ -260,7 +275,7 @@ describe("Exception Handling", () => {
 	});
 
 	test("Multi-rejection", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const errors = [new Error("First"), new Error("Second")];
 		await expect(
@@ -280,7 +295,7 @@ describe("Exception Handling", () => {
 
 	describe("Unhandled Rejection", () => {
 		test("Generator Function (synchronous)", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			await Promise.all([
@@ -295,7 +310,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Promise Rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			pool.addGenericTask({
@@ -309,7 +324,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Late Rejection Handling", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			const task = pool.addGenericTask({
@@ -327,7 +342,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Multi-rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const errors = [new Error("first"), new Error("second")] as const;
 			// Create a task which fails without the test handling the error
@@ -352,7 +367,7 @@ describe("Exception Handling", () => {
 		// This scenario creates two tasks at the same time
 		// The first task rejects but is handled, while the second remains unhandled.
 		test("Handled Rejection Followed By Unhandled Rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const errors = [new Error("first"), new Error("second")];
 			// Create a task which will reject later without being handled
@@ -379,7 +394,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Unhandled Followed By Rejection With pool.waitForIdle", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const errors = [new Error("first"), new Error("second")];
 			pool.addGenericTask({
@@ -409,7 +424,7 @@ describe("Exception Handling", () => {
 
 	describe("pool.waitForIdle", () => {
 		test("Generator Function (synchronous)", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			pool.addGenericTask({
@@ -422,7 +437,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Promise Rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			pool.addGenericTask({
@@ -438,7 +453,7 @@ describe("Exception Handling", () => {
 		// In this scenario, a child task fails after its parent does. In this case, only the first error should
 		// be received, and the second should be handled by the pool.
 		test("Child Task Rejection Shadowed By Parent Rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error("Parent error");
 			let thrown = false;
@@ -468,7 +483,7 @@ describe("Exception Handling", () => {
 
 		describe("Clearing After Delay", () => {
 			test("Promise Rejection", async () => {
-				const pool = new Pool.PromisePoolExecutor();
+				const pool = new PromisePoolExecutor();
 				const error = new Error();
 				await expect(
 					pool
@@ -489,7 +504,7 @@ describe("Exception Handling", () => {
 
 	describe("group.waitForIdle", () => {
 		test("Generator Function (synchronous)", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			const group = pool.addGroup({});
@@ -504,7 +519,7 @@ describe("Exception Handling", () => {
 		});
 
 		test("Promise Rejection", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const error = new Error();
 			const group = pool.addGroup({});
@@ -524,7 +539,7 @@ describe("Exception Handling", () => {
 describe("Miscellaneous Features", () => {
 	describe("End Task", () => {
 		test("From Generator With No Promise", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const results = await pool
 				.addGenericTask({
@@ -537,7 +552,7 @@ describe("Miscellaneous Features", () => {
 		});
 
 		test("From Generator With Promise", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const results = await pool
 				.addGenericTask({
@@ -553,7 +568,7 @@ describe("Miscellaneous Features", () => {
 	});
 
 	test("Generator Recursion Prevention", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 		let runCount = 0;
 
 		await pool
@@ -572,31 +587,8 @@ describe("Miscellaneous Features", () => {
 		expect(runCount).toBe(1);
 	});
 
-	test("Pause/Resume Task", async () => {
-		const pool = new Pool.PromisePoolExecutor();
-
-		const elapsed = timeSpan();
-		const task = pool.addGenericTask({
-			async generator(index) {
-				if (index === 0) {
-					this.pause();
-				}
-				await setTimeout(TICK);
-				return elapsed();
-			},
-			invocationLimit: 3,
-		});
-		// eslint-disable-next-line @typescript-eslint/no-floating-promises
-		setTimeout(TICK).then(() => {
-			task.resume();
-		});
-		const results = await task.promise();
-		// The task must return the expected non-array result
-		expect(results).toStrictEqual([TICK, 2 * TICK, 2 * TICK]);
-	});
-
 	test("Get Task Status", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const status = await pool
 			.addGenericTask({
@@ -627,25 +619,26 @@ describe("Miscellaneous Features", () => {
 			frequencyWindow: 1000,
 			invocationLimit: 1,
 			invocations: 1,
-			state: Pool.TaskState.Exhausted,
+			state: TaskState.Exhausted,
 		});
 	});
 
 	describe("waitForIdle", () => {
 		test("Simple", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			pool.addGenericTask({
 				generator: () => setTimeout(TICK),
 				invocationLimit: 1,
 			});
-			await pool.waitForIdle();
+			await Promise.all([pool.waitForIdle(), pool.waitForIdle()]);
 			expect(elapsed()).toBe(TICK);
 		});
 
+		// WES TODO: Wrong category
 		test("Set concurrencyLimit", () => {
-			const pool = new Pool.PromisePoolExecutor(1);
+			const pool = new PromisePoolExecutor(1);
 
 			expect(pool.concurrencyLimit).toBe(1);
 			pool.concurrencyLimit = 2;
@@ -653,7 +646,7 @@ describe("Miscellaneous Features", () => {
 		});
 
 		test("Child Task", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			pool.addGenericTask({
@@ -672,53 +665,17 @@ describe("Miscellaneous Features", () => {
 
 		// eslint-disable-next-line jest/expect-expect
 		test("No Task", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			await pool.waitForIdle();
 		});
 	});
 
-	describe("waitForGroupIdle", () => {
-		test("Simple", async () => {
-			const pool = new Pool.PromisePoolExecutor();
-
-			const elapsed = timeSpan();
-			const group = pool.addGroup({});
-			pool.addGenericTask({
-				generator: () => setTimeout(TICK),
-				groups: [group],
-				invocationLimit: 1,
-			});
-			await group.waitForIdle();
-			expect(elapsed()).toBe(TICK);
-		});
-
-		test("Child Task", async () => {
-			const pool = new Pool.PromisePoolExecutor();
-
-			const elapsed = timeSpan();
-			const group = pool.addGroup({});
-			pool.addGenericTask({
-				generator: async () => {
-					await setTimeout(TICK);
-					pool.addGenericTask({
-						generator: () => setTimeout(TICK),
-						groups: [group],
-						invocationLimit: 1,
-					});
-				},
-				groups: [group],
-				invocationLimit: 1,
-			});
-			await group.waitForIdle();
-			expect(elapsed()).toBe(2 * TICK);
-		});
-	});
-
 	// TODO: Realtime configuration? Add "Get and Set Pool Status"?
 	describe("Configure Task", () => {
+		// TODO: Redundant?
 		test("invocationLimit Triggers Completion", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			const task = pool.addGenericTask({
@@ -727,36 +684,40 @@ describe("Miscellaneous Features", () => {
 				generator: elapsed,
 				invocationLimit: 2,
 			});
-			// eslint-disable-next-line @typescript-eslint/no-floating-promises
-			setTimeout(TICK).then(() => {
-				task.invocationLimit = 1;
-			});
-			const results = await task.promise();
+			const [results] = await Promise.all([
+				task.promise(),
+				(async () => {
+					await setTimeout(TICK);
+					task.invocationLimit = 1;
+				})(),
+			]);
 			expect([...results, elapsed()]).toStrictEqual([0, TICK]);
 		});
 	});
 
 	describe("PromisePoolGroup configuration", () => {
 		test("Triggers Promises", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			const group = pool.addGroup({
 				frequencyLimit: 1,
 				frequencyWindow: TICK * 2,
 			});
-			// eslint-disable-next-line @typescript-eslint/no-floating-promises
-			setTimeout(TICK).then(() => {
-				group.frequencyWindow = 1;
-				group.frequencyLimit = 1;
-			});
-			const results = await pool
-				.addGenericTask({
-					generator: elapsed,
-					groups: [group],
-					invocationLimit: 2,
-				})
-				.promise();
+			const [results] = await Promise.all([
+				pool
+					.addGenericTask({
+						generator: elapsed,
+						groups: [group],
+						invocationLimit: 2,
+					})
+					.promise(),
+				(async () => {
+					await setTimeout(TICK);
+					group.frequencyWindow = 1;
+					group.frequencyLimit = 1;
+				})(),
+			]);
 			expect(results).toStrictEqual([0, TICK]);
 		});
 	});
@@ -764,7 +725,7 @@ describe("Miscellaneous Features", () => {
 
 describe("Task Specializations", () => {
 	test("Single Task", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const elapsed = timeSpan();
 		let iteration = 0;
@@ -786,7 +747,7 @@ describe("Task Specializations", () => {
 	});
 
 	test("Linear Task", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+		const pool = new PromisePoolExecutor();
 
 		const elapsed = timeSpan();
 		const results = await pool
@@ -801,26 +762,40 @@ describe("Task Specializations", () => {
 		expect(results).toStrictEqual([TICK, 2 * TICK, 3 * TICK]);
 	});
 
-	test("Each Task", async () => {
-		const pool = new Pool.PromisePoolExecutor();
+	describe(".addEachTask", () => {
+		test("General usage", async () => {
+			const pool = new PromisePoolExecutor();
 
-		const elapsed = timeSpan();
-		const results = await pool
-			.addEachTask({
+			const elapsed = timeSpan();
+			const results = await pool
+				.addEachTask({
+					concurrencyLimit: Infinity,
+					data: [3, 2, 1],
+					generator: async (element) => {
+						await setTimeout(TICK * element);
+						return elapsed();
+					},
+				})
+				.promise();
+			expect(results).toStrictEqual([3 * TICK, 2 * TICK, TICK]);
+		});
+
+		test("Empty data", async () => {
+			const pool = new PromisePoolExecutor();
+
+			const task = pool.addEachTask({
 				concurrencyLimit: Infinity,
-				data: [3, 2, 1],
-				generator: async (element) => {
-					await setTimeout(TICK * element);
-					return elapsed();
-				},
-			})
-			.promise();
-		expect(results).toStrictEqual([3 * TICK, 2 * TICK, TICK]);
+				data: [],
+				generator: async () => 1,
+			});
+			expect(task.invocations).toBe(0);
+			expect(task.state).toBe(TaskState.Terminated);
+		});
 	});
 
 	describe("Batch Task", () => {
 		test("Static Batch Size", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			const results = await pool
@@ -838,7 +813,7 @@ describe("Task Specializations", () => {
 		});
 
 		test("Dynamic Batch Size", async () => {
-			const pool = new Pool.PromisePoolExecutor();
+			const pool = new PromisePoolExecutor();
 
 			const elapsed = timeSpan();
 			const results = await pool
@@ -856,6 +831,18 @@ describe("Task Specializations", () => {
 				})
 				.promise();
 			expect(results).toStrictEqual([2 * TICK, 4 * TICK]);
+		});
+
+		test("Empty data", async () => {
+			const pool = new PromisePoolExecutor();
+
+			const task = pool.addBatchTask({
+				batchSize: 2,
+				data: [],
+				generator: async () => 1,
+			});
+			expect(task.invocations).toBe(0);
+			expect(task.state).toBe(TaskState.Terminated);
 		});
 	});
 });

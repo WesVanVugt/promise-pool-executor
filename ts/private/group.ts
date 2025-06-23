@@ -154,6 +154,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 	public waitForIdle(): Promise<void> {
 		if (!this._deferred) {
 			if (this._activeTaskCount <= 0) {
+				// TODO: When can this happen?
 				return Promise.resolve();
 			}
 			this._deferred = new OptionalDeferredPromise();
