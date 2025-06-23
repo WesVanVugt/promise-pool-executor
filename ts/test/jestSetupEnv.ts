@@ -1,5 +1,5 @@
 import failOnConsole from "jest-fail-on-console";
-import { clearCatchingRejections, failOnHandledRejection, setupCatchingRejections } from "./rejectionEvents";
+import { failOnHandledRejection, setupCatchingRejections } from "./rejectionEvents";
 import "./setup";
 
 failOnConsole();
@@ -9,5 +9,4 @@ failOnHandledRejection();
 beforeEach(() => {
 	jest.clearAllTimers();
 	jest.resetAllMocks();
-	clearCatchingRejections();
 });

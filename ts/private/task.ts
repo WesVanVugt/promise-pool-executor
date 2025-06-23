@@ -151,7 +151,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	 * Resumes a paused task, allowing for the generation of additional promises.
 	 */
 	public resume(): void {
-		if (this._state === TaskState.Paused) {
+		if (this._state <= TaskState.Paused) {
 			debug("State: %o", "Active");
 			this._state = TaskState.Active;
 			this._triggerCallback();

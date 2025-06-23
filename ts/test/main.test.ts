@@ -696,6 +696,7 @@ describe("Miscellaneous Features", () => {
 	});
 
 	describe("PromisePoolGroup configuration", () => {
+		// TODO: Is this needed?
 		test("Triggers Promises", async () => {
 			const pool = new PromisePoolExecutor();
 

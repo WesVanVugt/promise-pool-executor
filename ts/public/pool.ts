@@ -192,10 +192,11 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	public addGenericTask<I, R>(
 		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<I, R>,
 	): PromisePoolTask<R | R[]> {
-		const task = new PromisePoolTaskPrivate(
+		const task = new PromisePoolTaskPrivate<R, I>(
 			{
 				detach: () => {
-					this._removeTask(task as PromisePoolTaskPrivate<unknown>);
+					this._tasks.delete(task as PromisePoolTaskPrivate<unknown>);
+					debug("Task removed");
 				},
 				globalGroup: this._globalGroup,
 				pool: this,
@@ -203,8 +204,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			},
 			options as GenericTaskConvertedOptions<I, R>,
 		);
-		if (task.state <= TaskState.Paused) {
-			this._tasks.add(task as PromisePoolTaskPrivate<unknown, unknown>);
+		if (task.state < TaskState.Exhausted) {
+			this._tasks.add(task as PromisePoolTaskPrivate<unknown>);
 		}
 		this._triggerNow();
 		return task;
@@ -430,11 +431,5 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 
 		this._setNextTrigger(soonest, now);
-	}
-
-	private _removeTask(task: PromisePoolTaskPrivate<unknown>) {
-		if (this._tasks.delete(task)) {
-			debug("Task removed");
-		}
 	}
 }

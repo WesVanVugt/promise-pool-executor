@@ -39,6 +39,7 @@ export const setupCatchingRejections = () => {
 	const [unhandled] = process.actual().listeners("unhandledRejection");
 	process.actual().removeListener("unhandledRejection", unhandled);
 	process.actual().addListener("unhandledRejection", (...args) => {
+		// istanbul ignore if -- Only called during failing tests
 		if (!isCatchingUnhandledRejection()) {
 			return unhandled(...args);
 		}
@@ -47,18 +48,9 @@ export const setupCatchingRejections = () => {
 
 export const failOnHandledRejection = () => {
 	process.actual().addListener("rejectionHandled", () => {
+		// istanbul ignore if -- Only called during failing tests
 		if (!isCatchingHandledRejection()) {
 			throw new Error("Unexpected rejectionHandled event");
 		}
 	});
-};
-
-export const clearCatchingRejections = () => {
-	for (const eventName of REJECTION_EVENT_NAMES) {
-		const handlerSet = rejectionEventHandlerSets[eventName];
-		for (const handler of handlerSet) {
-			process.actual().removeListener(eventName, handler);
-		}
-		handlerSet.clear();
-	}
 };

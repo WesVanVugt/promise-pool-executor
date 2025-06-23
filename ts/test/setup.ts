@@ -1,3 +1,4 @@
+// istanbul ignore file -- Not all code is required for this project
 import mimicFn from "mimic-fn";
 import { setImmediate } from "timers/promises";
 
@@ -17,7 +18,7 @@ const hookMethod = <T extends object, M extends jest.FunctionPropertyNames<Requi
 };
 
 export const autoAdvanceTimers = () => {
-	eventTarget.dispatchEvent(new CustomEvent("xxx"));
+	eventTarget.dispatchEvent(new Event(AUTO_ADVANCE_EVENT));
 };
 
 const applyHooks = () => {

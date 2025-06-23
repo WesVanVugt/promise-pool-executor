@@ -157,7 +157,7 @@ describe(".addBatchTask", () => {
 	});
 });
 
-describe(".pause()", () => {
+describe(".pause(), .resume()", () => {
 	test("Pause/Resume Task", async () => {
 		const pool = new PromisePoolExecutor();
 
@@ -192,5 +192,19 @@ describe(".pause()", () => {
 			})(),
 		]);
 		expect(results).toStrictEqual([TICK, 2 * TICK, 2 * TICK]);
+	});
+
+	test("Resume bypasses setImmediate", async () => {
+		const pool = new PromisePoolExecutor();
+
+		const task = pool.addGenericTask({
+			generator: () => setTimeout(TICK),
+			concurrencyLimit: 1,
+			invocationLimit: 2,
+		});
+		task.concurrencyLimit = Infinity;
+		expect(task.invocations).toBe(1);
+		task.resume();
+		expect(task.invocations).toBe(2);
 	});
 });
