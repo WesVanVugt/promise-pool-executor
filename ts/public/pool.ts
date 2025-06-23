@@ -176,7 +176,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * Adds a group to the pool.
 	 */
 	public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
-		return new PromisePoolGroupPrivate(this, () => this._triggerImmediate(), options);
+		return new PromisePoolGroupPrivate(this, () => this._setNextTrigger(0), options);
 	}
 
 	/**
@@ -340,20 +340,40 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		}
 	}
 
-	private _triggerImmediate(): void {
-		if (this._nextTriggerTime === -1) {
+	private _setNextTrigger(time: 0): void;
+	private _setNextTrigger(time: number, now: number): void;
+	private _setNextTrigger(time: number, now?: number): void {
+		if (time === this._nextTriggerTime) {
 			return;
 		}
+		this._nextTriggerTime = time;
 		this._nextTriggerClear?.();
-		this._nextTriggerTime = -1;
-		const immediate = setImmediate(() => {
-			this._nextTriggerClear = undefined;
-			this._nextTriggerTime = Infinity;
-			this._triggerNow();
-		});
-		this._nextTriggerClear = () => {
-			clearImmediate(immediate);
-		};
+		switch (time) {
+			case 0:
+				// eslint-disable-next-line no-case-declarations
+				const immediate = setImmediate(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				});
+				this._nextTriggerClear = () => {
+					clearImmediate(immediate);
+				};
+				break;
+			case Infinity:
+				this._nextTriggerClear = undefined;
+				break;
+			default:
+				// eslint-disable-next-line no-case-declarations
+				const timeout = setTimeout(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				}, time - now!);
+				this._nextTriggerClear = () => {
+					clearTimeout(timeout);
+				};
+		}
 	}
 
 	/**
@@ -382,7 +402,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 				if (!busyTime) {
 					if (task.activePromiseCount > 100000) {
 						if (lastTask === task) {
-							soonest = -1;
+							soonest = 0;
 							if (!warnedThrottle) {
 								warnedThrottle = true;
 								console.warn(
@@ -409,30 +429,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			return this._triggerNow();
 		}
 
-		if (soonest !== this._nextTriggerTime) {
-			switch (soonest) {
-				case -1:
-					this._triggerImmediate();
-					break;
-				case Infinity:
-					this._nextTriggerClear!();
-					this._nextTriggerClear = undefined;
-					this._nextTriggerTime = soonest;
-					break;
-				default:
-					this._nextTriggerClear?.();
-					this._nextTriggerTime = soonest;
-					// eslint-disable-next-line no-case-declarations
-					const timeout = setTimeout(() => {
-						this._nextTriggerClear = undefined;
-						this._nextTriggerTime = Infinity;
-						this._triggerNow();
-					}, soonest - now);
-					this._nextTriggerClear = () => {
-						clearTimeout(timeout);
-					};
-			}
-		}
+		this._setNextTrigger(soonest, now);
 	}
 
 	private _removeTask(task: PromisePoolTaskPrivate<unknown>) {
