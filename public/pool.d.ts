@@ -154,10 +154,9 @@ export declare class PromisePoolExecutor implements PromisePoolGroup {
 	 */
 	waitForIdle(): Promise<void>;
 	private _cleanFrequencyStarts;
-	private _triggerImmediate;
+	private _setNextTrigger;
 	/**
 	 * Private Method: Triggers promises to start.
 	 */
 	private _triggerNow;
-	private _removeTask;
 }

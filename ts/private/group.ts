@@ -101,7 +101,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		if (this._frequencyStarts.length > 0) {
 			const time = now - this._frequencyWindow;
 			let i = 0;
-			while (i < this._frequencyStarts.length && this._frequencyStarts[i] <= time) {
+			while (i < this._frequencyStarts.length && this._frequencyStarts[i]! <= time) {
 				i++;
 			}
 			if (i > 0) {
@@ -118,7 +118,7 @@ export class PromisePoolGroupPrivate implements PromisePoolGroup {
 		if (this._activePromiseCount >= this._concurrencyLimit) {
 			return Infinity;
 		} else if (this._frequencyLimit && this._frequencyStarts.length >= this._frequencyLimit) {
-			return this._frequencyStarts[0] + this._frequencyWindow;
+			return this._frequencyStarts[0]! + this._frequencyWindow;
 		}
 		return 0;
 	}

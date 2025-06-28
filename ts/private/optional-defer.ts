@@ -15,7 +15,7 @@ export class OptionalDeferredPromise<T> {
 			this.deferred = defer<T>();
 			if (this.results.length) {
 				this.settled = true;
-				this.deferred.resolve(this.results[0]!);
+				this.deferred.resolve(this.results[0]);
 				Promise.all(this.results).catch(() => {});
 				this.results.length = 0;
 			}

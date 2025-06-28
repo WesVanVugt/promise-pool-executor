@@ -300,6 +300,7 @@ export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	}
 
 	private _reject(err: unknown) {
+		// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
 		const promise = Promise.reject(err);
 		this._deferred.resolve(promise);
 		for (const group of this._groups) {

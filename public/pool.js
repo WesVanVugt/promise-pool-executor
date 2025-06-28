@@ -16,9 +16,13 @@ const debug = util_1.default.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
 let warnedThrottle = false;
 class PromisePoolExecutor {
+	_nextTriggerTime = Infinity;
+	_nextTriggerClear;
+	_tasks = new Set();
+	_globalGroup;
+	_triggering;
+	_triggerAgain;
 	constructor(options) {
-		this._nextTriggerTime = Infinity;
-		this._tasks = new Set();
 		let groupOptions;
 		if (!(0, utils_1.isNull)(options)) {
 			if (typeof options === "object") {
@@ -61,13 +65,14 @@ class PromisePoolExecutor {
 		return this._globalGroup.freeSlots;
 	}
 	addGroup(options) {
-		return new group_1.PromisePoolGroupPrivate(this, () => this._triggerImmediate(), options);
+		return new group_1.PromisePoolGroupPrivate(this, () => this._setNextTrigger(0), options);
 	}
 	addGenericTask(options) {
 		const task = new task_1.PromisePoolTaskPrivate(
 			{
 				detach: () => {
-					this._removeTask(task);
+					this._tasks.delete(task);
+					debug("Task removed");
 				},
 				globalGroup: this._globalGroup,
 				pool: this,
@@ -75,7 +80,7 @@ class PromisePoolExecutor {
 			},
 			options,
 		);
-		if (task.state <= task_2.TaskState.Paused) {
+		if (task.state < task_2.TaskState.Exhausted) {
 			this._tasks.add(task);
 		}
 		this._triggerNow();
@@ -175,24 +180,38 @@ class PromisePoolExecutor {
 			task._cleanFrequencyStarts(now);
 		}
 	}
-	_triggerImmediate() {
-		var _a;
-		if (this._nextTriggerTime === -1) {
+	_setNextTrigger(time, now) {
+		if (time === this._nextTriggerTime) {
 			return;
 		}
-		(_a = this._nextTriggerClear) === null || _a === void 0 ? void 0 : _a.call(this);
-		this._nextTriggerTime = -1;
-		const immediate = setImmediate(() => {
-			this._nextTriggerClear = undefined;
-			this._nextTriggerTime = Infinity;
-			this._triggerNow();
-		});
-		this._nextTriggerClear = () => {
-			clearImmediate(immediate);
-		};
+		this._nextTriggerTime = time;
+		this._nextTriggerClear?.();
+		switch (time) {
+			case 0:
+				const immediate = setImmediate(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				});
+				this._nextTriggerClear = () => {
+					clearImmediate(immediate);
+				};
+				break;
+			case Infinity:
+				this._nextTriggerClear = undefined;
+				break;
+			default:
+				const timeout = setTimeout(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				}, time - now);
+				this._nextTriggerClear = () => {
+					clearTimeout(timeout);
+				};
+		}
 	}
 	_triggerNow() {
-		var _a;
 		if (this._triggering) {
 			debug("Setting triggerAgain flag.");
 			this._triggerAgain = true;
@@ -203,7 +222,7 @@ class PromisePoolExecutor {
 		debug("Trigger promises");
 		const now = Date.now();
 		this._cleanFrequencyStarts(now);
-		let soonest = this._nextTriggerTime;
+		let soonest = Infinity;
 		let lastTask;
 		for (const task of this._tasks) {
 			for (;;) {
@@ -212,7 +231,7 @@ class PromisePoolExecutor {
 				if (!busyTime) {
 					if (task.activePromiseCount > 100000) {
 						if (lastTask === task) {
-							soonest = -1;
+							soonest = 0;
 							if (!warnedThrottle) {
 								warnedThrottle = true;
 								console.warn(
@@ -238,34 +257,7 @@ class PromisePoolExecutor {
 			debug("TriggerAgain");
 			return this._triggerNow();
 		}
-		if (soonest !== this._nextTriggerTime) {
-			switch (soonest) {
-				case -1:
-					this._triggerImmediate();
-					break;
-				case Infinity:
-					this._nextTriggerClear();
-					this._nextTriggerClear = undefined;
-					this._nextTriggerTime = soonest;
-					break;
-				default:
-					(_a = this._nextTriggerClear) === null || _a === void 0 ? void 0 : _a.call(this);
-					this._nextTriggerTime = soonest;
-					const timeout = setTimeout(() => {
-						this._nextTriggerClear = undefined;
-						this._nextTriggerTime = Infinity;
-						this._triggerNow();
-					}, soonest - now);
-					this._nextTriggerClear = () => {
-						clearTimeout(timeout);
-					};
-			}
-		}
-	}
-	_removeTask(task) {
-		if (this._tasks.delete(task)) {
-			debug("Task removed");
-		}
+		this._setNextTrigger(soonest, now);
 	}
 }
 exports.PromisePoolExecutor = PromisePoolExecutor;

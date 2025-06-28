@@ -4,11 +4,17 @@ exports.PromisePoolGroupPrivate = void 0;
 const optional_defer_1 = require("./optional-defer");
 const utils_1 = require("./utils");
 class PromisePoolGroupPrivate {
+	_pool;
+	_concurrencyLimit;
+	_frequencyLimit;
+	_frequencyWindow;
+	_frequencyStarts = [];
+	_activeTaskCount = 0;
+	_activePromiseCount = 0;
+	_deferred;
+	_recentRejection = false;
+	_triggerNextCallback;
 	constructor(pool, triggerNextCallback, options) {
-		this._frequencyStarts = [];
-		this._activeTaskCount = 0;
-		this._activePromiseCount = 0;
-		this._recentRejection = false;
 		this._pool = pool;
 		if (!options) {
 			options = {};
@@ -28,34 +34,31 @@ class PromisePoolGroupPrivate {
 		return this._concurrencyLimit;
 	}
 	set concurrencyLimit(v) {
-		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
 		this._concurrencyLimit = v;
-		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
+		this._triggerNextCallback?.();
 	}
 	get frequencyLimit() {
 		return this._frequencyLimit;
 	}
 	set frequencyLimit(v) {
-		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
 		this._frequencyLimit = v;
-		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
+		this._triggerNextCallback?.();
 	}
 	get frequencyWindow() {
 		return this._frequencyWindow;
 	}
 	set frequencyWindow(v) {
-		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
 		this._frequencyWindow = v;
-		(_a = this._triggerNextCallback) === null || _a === void 0 ? void 0 : _a.call(this);
+		this._triggerNextCallback?.();
 	}
 	get freeSlots() {
 		if (this._frequencyLimit !== Infinity) {

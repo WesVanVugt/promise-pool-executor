@@ -11,6 +11,9 @@ const p_defer_1 = __importDefault(require("p-defer"));
 const promise_batcher_1 = require("promise-batcher");
 const task_1 = require("../public/task");
 class PersistentBatchTaskPrivate {
+	_batcher;
+	_generator;
+	_task;
 	constructor(pool, options) {
 		let synchronousResult = false;
 		let waitForTask;

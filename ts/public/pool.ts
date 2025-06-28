@@ -225,7 +225,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			groups: options.groups,
 			invocationLimit: 1,
 			paused: options.paused,
-			resultConverter: (result) => result[0],
+			resultConverter: (result) => result[0]!,
 		});
 	}
 
@@ -314,7 +314,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 					// Last element
 					this.end();
 				}
-				return options.generator.call(this, data[index], index);
+				return options.generator.call(this, data[index]!, index);
 			},
 		});
 	}

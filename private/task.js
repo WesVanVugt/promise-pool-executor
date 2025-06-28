@@ -13,10 +13,20 @@ const optional_defer_1 = require("./optional-defer");
 const utils_1 = require("./utils");
 const debug = util_1.default.debuglog("promise-pool-executor:task");
 class PromisePoolTaskPrivate {
+	_groups;
+	_generator;
+	_result = [];
+	_taskGroup;
+	_invocations = 0;
+	_invocationLimit;
+	_state;
+	_generating;
+	_deferred = new optional_defer_1.OptionalDeferredPromise();
+	_pool;
+	_triggerCallback;
+	_detachCallback;
+	_resultConverter;
 	constructor(privateOptions, options) {
-		this._invocations = 0;
-		this._result = [];
-		this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		debug("Creating task");
 		this._pool = privateOptions.pool;
 		this._resultConverter = options.resultConverter;
@@ -52,7 +62,6 @@ class PromisePoolTaskPrivate {
 		return this._invocationLimit;
 	}
 	set invocationLimit(v) {
-		var _a;
 		if (typeof v !== "number" || isNaN(v)) {
 			throw new Error("Invalid invocationLimit: " + v);
 		}
@@ -60,7 +69,7 @@ class PromisePoolTaskPrivate {
 		if (this._invocations >= this._invocationLimit) {
 			this.end();
 		}
-		(_a = this._triggerCallback) === null || _a === void 0 ? void 0 : _a.call(this);
+		this._triggerCallback?.();
 	}
 	get concurrencyLimit() {
 		return this._taskGroup.concurrencyLimit;
@@ -103,18 +112,17 @@ class PromisePoolTaskPrivate {
 		}
 	}
 	resume() {
-		if (this._state === task_1.TaskState.Paused) {
+		if (this._state <= task_1.TaskState.Paused) {
 			debug("State: %o", "Active");
 			this._state = task_1.TaskState.Active;
 			this._triggerCallback();
 		}
 	}
 	end() {
-		var _a;
 		if (this._state < task_1.TaskState.Exhausted) {
 			debug("State: %o", "Exhausted");
 			this._state = task_1.TaskState.Exhausted;
-			(_a = this._detachCallback) === null || _a === void 0 ? void 0 : _a.call(this);
+			this._detachCallback?.();
 		}
 		if (!this._generating && this._state < task_1.TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
 			debug("State: %o", "Terminated");
@@ -189,7 +197,7 @@ class PromisePoolTaskPrivate {
 					group._activePromiseCount--;
 				}
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
-				if (result !== undefined && this._result) {
+				if (result !== undefined) {
 					this._result[resultIndex] = result;
 				}
 				if (this._state >= task_1.TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
@@ -200,9 +208,6 @@ class PromisePoolTaskPrivate {
 		})();
 	}
 	_resolve() {
-		if (!this._result) {
-			return;
-		}
 		this._result.length = this._invocations;
 		this._state = task_1.TaskState.Terminated;
 		let returnResult;
@@ -216,7 +221,6 @@ class PromisePoolTaskPrivate {
 		} else {
 			returnResult = this._result;
 		}
-		this._result = undefined;
 		this._deferred.resolve(returnResult);
 	}
 	_reject(err) {

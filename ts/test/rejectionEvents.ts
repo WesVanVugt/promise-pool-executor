@@ -1,6 +1,4 @@
-const REJECTION_EVENT_NAMES = ["unhandledRejection", "rejectionHandled"] as const;
-
-type RejectionEventNames = (typeof REJECTION_EVENT_NAMES)[number];
+type RejectionEventNames = "unhandledRejection" | "rejectionHandled";
 
 const rejectionEventHandlerSets: Readonly<Record<RejectionEventNames, Set<(...args: unknown[]) => void>>> = {
 	rejectionHandled: new Set(),
@@ -21,6 +19,7 @@ const catchRejectionEvent = async (eventName: RejectionEventNames) =>
 			if (eventName === "rejectionHandled") {
 				resolve(err as Promise<never>);
 			} else {
+				// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
 				reject(err);
 			}
 		};

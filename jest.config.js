@@ -1,7 +1,6 @@
 // @ts-check
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
+// @ts-expect-error -- custom property
 process.actual = (function (actual) {
 	return () => actual;
 })(process);

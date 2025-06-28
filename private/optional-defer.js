@@ -8,9 +8,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OptionalDeferredPromise = void 0;
 const p_defer_1 = __importDefault(require("p-defer"));
 class OptionalDeferredPromise {
-	constructor() {
-		this.results = [];
-	}
+	deferred;
+	settled;
+	results = [];
 	promise() {
 		if (!this.deferred) {
 			this.deferred = (0, p_defer_1.default)();

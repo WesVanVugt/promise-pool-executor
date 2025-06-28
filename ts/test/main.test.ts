@@ -283,7 +283,7 @@ describe("Exception Handling", () => {
 				.addGenericTask({
 					generator: async (i) => {
 						await setTimeout(TICK);
-						throw errors[i];
+						throw errors[i]!;
 					},
 					invocationLimit: 2,
 				})
@@ -374,7 +374,7 @@ describe("Exception Handling", () => {
 			pool.addGenericTask({
 				generator: async () => {
 					await setTimeout(TICK);
-					throw errors[1];
+					throw errors[1]!;
 				},
 				invocationLimit: 1,
 			});
@@ -384,7 +384,7 @@ describe("Exception Handling", () => {
 					.addGenericTask({
 						generator: async () => {
 							await setTimeout(TICK);
-							throw errors[0];
+							throw errors[0]!;
 						},
 						invocationLimit: 1,
 					})
@@ -398,7 +398,7 @@ describe("Exception Handling", () => {
 
 			const errors = [new Error("first"), new Error("second")];
 			pool.addGenericTask({
-				generator: () => Promise.reject(errors[0]),
+				generator: () => Promise.reject(errors[0]!),
 				invocationLimit: 1,
 			});
 			// Keep the global group busy so the error will not clear
@@ -409,7 +409,7 @@ describe("Exception Handling", () => {
 			await expect(catchUnhandledRejection()).rejects.toBe(errors[0]);
 			pool.addGenericTask({
 				generator: () => {
-					throw errors[1];
+					throw errors[1]!;
 				},
 				invocationLimit: 1,
 			});

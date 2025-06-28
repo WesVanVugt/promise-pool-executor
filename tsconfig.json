@@ -1,8 +1,8 @@
 {
 	"$schema": "https://json.schemastore.org/tsconfig",
-	"extends": "@tsconfig/node12/tsconfig.json",
+	"extends": "@tsconfig/node18/tsconfig.json",
 	"compilerOptions": {
-		"target": "es2017",
+		"noUncheckedIndexedAccess": true,
 		"declaration": true,
 		"newLine": "lf",
 		"outDir": "."
