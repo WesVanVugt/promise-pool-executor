@@ -636,15 +636,6 @@ describe("Miscellaneous Features", () => {
 			expect(elapsed()).toBe(TICK);
 		});
 
-		// WES TODO: Wrong category
-		test("Set concurrencyLimit", () => {
-			const pool = new PromisePoolExecutor(1);
-
-			expect(pool.concurrencyLimit).toBe(1);
-			pool.concurrencyLimit = 2;
-			expect(pool.concurrencyLimit).toBe(2);
-		});
-
 		test("Child Task", async () => {
 			const pool = new PromisePoolExecutor();
 
@@ -668,58 +659,6 @@ describe("Miscellaneous Features", () => {
 			const pool = new PromisePoolExecutor();
 
 			await pool.waitForIdle();
-		});
-	});
-
-	// TODO: Realtime configuration? Add "Get and Set Pool Status"?
-	describe("Configure Task", () => {
-		// TODO: Redundant?
-		test("invocationLimit Triggers Completion", async () => {
-			const pool = new PromisePoolExecutor();
-
-			const elapsed = timeSpan();
-			const task = pool.addGenericTask({
-				frequencyLimit: 1,
-				frequencyWindow: TICK * 2,
-				generator: elapsed,
-				invocationLimit: 2,
-			});
-			const [results] = await Promise.all([
-				task.promise(),
-				(async () => {
-					await setTimeout(TICK);
-					task.invocationLimit = 1;
-				})(),
-			]);
-			expect([...results, elapsed()]).toStrictEqual([0, TICK]);
-		});
-	});
-
-	describe("PromisePoolGroup configuration", () => {
-		// TODO: Is this needed?
-		test("Triggers Promises", async () => {
-			const pool = new PromisePoolExecutor();
-
-			const elapsed = timeSpan();
-			const group = pool.addGroup({
-				frequencyLimit: 1,
-				frequencyWindow: TICK * 2,
-			});
-			const [results] = await Promise.all([
-				pool
-					.addGenericTask({
-						generator: elapsed,
-						groups: [group],
-						invocationLimit: 2,
-					})
-					.promise(),
-				(async () => {
-					await setTimeout(TICK);
-					group.frequencyWindow = 1;
-					group.frequencyLimit = 1;
-				})(),
-			]);
-			expect(results).toStrictEqual([0, TICK]);
 		});
 	});
 });

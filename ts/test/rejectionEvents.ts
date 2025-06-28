@@ -36,11 +36,11 @@ export const isCatchingHandledRejection = () => rejectionEventHandlerSets.reject
 
 export const setupCatchingRejections = () => {
 	const [unhandled] = process.actual().listeners("unhandledRejection");
-	process.actual().removeListener("unhandledRejection", unhandled);
+	process.actual().removeListener("unhandledRejection", unhandled!);
 	process.actual().addListener("unhandledRejection", (...args) => {
 		// istanbul ignore if -- Only called during failing tests
 		if (!isCatchingUnhandledRejection()) {
-			return unhandled(...args);
+			return unhandled!(...args);
 		}
 	});
 };

@@ -2,6 +2,8 @@
 	"$schema": "https://json.schemastore.org/tsconfig",
 	"extends": "@tsconfig/node18/tsconfig.json",
 	"compilerOptions": {
+		"module": "commonjs",
+		"moduleResolution": "node",
 		"noUncheckedIndexedAccess": true,
 		"declaration": true,
 		"newLine": "lf",

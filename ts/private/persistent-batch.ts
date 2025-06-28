@@ -127,6 +127,4 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 	public end(): void {
 		this._task.end();
 	}
-
-	// TODO: waitForIdle?
 }
