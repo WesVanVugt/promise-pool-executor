@@ -1,27 +1,33 @@
-import EventEmitter from "events";
+// istanbul ignore file -- Not all code is required for this project
 import mimicFn from "mimic-fn";
+import { setImmediate } from "timers/promises";
 
-const AUTO_ADVANCE_SYMBOL = Symbol("AutoAdvanceTimers");
+const AUTO_ADVANCE_EVENT = "AutoAdvanceTimers";
 const HOOK_SYMBOL = Symbol("EventHook");
 
-const eventEmitter = new EventEmitter();
+const eventTarget = new EventTarget();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CleanFn<T> = T extends (...args: any) => any ? (...args: Parameters<T>) => ReturnType<T> : never;
-
-const wrapMethod = <T extends object, M extends jest.FunctionPropertyNames<Required<T>>>(
-	object: T,
-	method: M,
-	cb: (fn: CleanFn<T[M]>) => CleanFn<T[M]>,
-) => {
-	const fn = object[method] as CleanFn<T[M]>;
-	const newFn = cb(fn);
-	mimicFn(newFn as () => void, fn);
+const hookMethod = <T extends object, M extends jest.FunctionPropertyNames<Required<T>>>(object: T, method: M) => {
+	const fn = object[method] as (...args: unknown[]) => unknown;
+	const newFn = (...args: unknown[]) => {
+		autoAdvanceTimers();
+		return fn.call(object, ...args);
+	};
+	mimicFn(newFn, fn);
 	object[method] = newFn as T[M];
 };
 
 export const autoAdvanceTimers = () => {
-	eventEmitter.emit(AUTO_ADVANCE_SYMBOL);
+	eventTarget.dispatchEvent(new Event(AUTO_ADVANCE_EVENT));
+};
+
+const applyHooks = () => {
+	if (HOOK_SYMBOL in globalThis.setTimeout) {
+		return;
+	}
+	hookMethod(globalThis, "setTimeout");
+	hookMethod(globalThis, "setInterval");
+	(globalThis.setTimeout as typeof setTimeout & { [HOOK_SYMBOL]: undefined })[HOOK_SYMBOL] = undefined;
 };
 
 // Issue: https://github.com/facebook/jest/issues/10555
@@ -29,29 +35,17 @@ const areTimersMocked = () => typeof (setTimeout as { clock?: { Date?: unknown }
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 (async () => {
-	// eslint-disable-next-line no-constant-condition
-	while (true) {
-		for (let i = 0; i < 10; i++) {
-			await Promise.resolve();
-		}
-		const isFakeTimers = areTimersMocked();
-		if (isFakeTimers && jest.getTimerCount() > 0) {
-			jest.advanceTimersToNextTimer();
-		} else {
-			if (isFakeTimers && !(HOOK_SYMBOL in globalThis.setTimeout)) {
-				wrapMethod(globalThis, "setTimeout", (fn) => (...args) => {
-					autoAdvanceTimers();
-					return fn(...args);
-				});
-				wrapMethod(globalThis, "setInterval", (fn) => (...args) => {
-					autoAdvanceTimers();
-					return fn(...args);
-				});
-				(globalThis.setTimeout as typeof setTimeout & { [HOOK_SYMBOL]: undefined })[HOOK_SYMBOL] = undefined;
+	for (;;) {
+		await setImmediate();
+		if (areTimersMocked()) {
+			if (jest.getTimerCount() > 0) {
+				jest.advanceTimersToNextTimer();
+				continue;
 			}
-			await new Promise<void>((resolve) => {
-				eventEmitter.once(AUTO_ADVANCE_SYMBOL, () => resolve());
-			});
+			applyHooks();
 		}
+		await new Promise((resolve) => {
+			eventTarget.addEventListener(AUTO_ADVANCE_EVENT, resolve);
+		});
 	}
 })();

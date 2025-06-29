@@ -2,9 +2,9 @@
 
 A module for managing ES6 promise concurrency, frequency, and efficiency.
 
-For release notes, see the [CHANGELOG](https://github.com/baudzilla/promise-pool-executor/blob/master/CHANGELOG.md).
+For release notes, see the [CHANGELOG](https://github.com/WesVanVugt/promise-pool-executor/blob/master/CHANGELOG.md).
 
-If you are upgrading from version 0.x to 1.0, please see the [UPGRADING](https://github.com/baudzilla/promise-pool-executor/blob/master/UPGRADING.md) notes for information on how to migrate existing code to work with the new major version.
+If you are upgrading from version 0.x to 1.0, please see the [UPGRADING](https://github.com/WesVanVugt/promise-pool-executor/blob/master/UPGRADING.md) notes for information on how to migrate existing code to work with the new major version.
 
 ## Installation
 
@@ -233,4 +233,4 @@ A task which can be used to combine multiple individual requests into batch requ
 
 ## License
 
-[MIT](https://github.com/baudzilla/promise-pool-executor/blob/master/LICENSE)
+[MIT](https://github.com/WesVanVugt/promise-pool-executor/blob/master/LICENSE)

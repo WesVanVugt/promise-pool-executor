@@ -1,83 +1,70 @@
-import defer = require("p-defer");
+import assert from "assert/strict";
 import util from "util";
 import { PromisePoolExecutor } from "../public/pool";
-import { GenericTaskConvertedOptions, GenericTaskOptions, PromisePoolTask, TaskState } from "../public/task";
+import { GenericTaskConvertedOptions, PromisePoolTask, TaskState } from "../public/task";
 import { PromisePoolGroupPrivate } from "./group";
-import { isNull, TaskError } from "./utils";
+import { OptionalDeferredPromise } from "./optional-defer";
+import { isNull } from "./utils";
 
 const debug = util.debuglog("promise-pool-executor:task");
 
-const GLOBAL_GROUP_INDEX = 0;
-
 export interface GenericTaskOptionsPrivate {
-	pool: PromisePoolExecutor;
-	globalGroup: PromisePoolGroupPrivate;
-	triggerNowCallback: () => void;
-	detach: () => void;
+	readonly pool: PromisePoolExecutor;
+	readonly globalGroup: PromisePoolGroupPrivate;
+	readonly triggerNowCallback: () => void;
+	readonly detach: () => void;
 }
 
-export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
+export class PromisePoolTaskPrivate<R, I = R> implements PromisePoolTask<R> {
 	private readonly _groups: PromisePoolGroupPrivate[];
-	private readonly _generator: (invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	private readonly _generator: (invocation: number) => I | PromiseLike<I> | undefined | null | void;
+	private readonly _result: I[] = [];
 	private readonly _taskGroup: PromisePoolGroupPrivate;
 	private _invocations = 0;
-	private _invocationLimit = Infinity;
-	private _result?: R[] = [];
-	private _returnResult: any;
+	private _invocationLimit!: number;
 	private _state: TaskState;
-	private _rejection?: TaskError;
 	/**
 	 * Set to true while the generator function is being run. Prevents the task from being terminated since a final
 	 * promise may be generated.
 	 */
 	private _generating?: boolean;
-	private readonly _deferreds: Array<Deferred<any>> = [];
+	private readonly _deferred = new OptionalDeferredPromise<R>();
 	private readonly _pool: PromisePoolExecutor;
 	private readonly _triggerCallback: () => void;
 	private readonly _detachCallback: () => void;
-	private readonly _resultConverter?: (result: R[]) => any;
+	private readonly _resultConverter?: (result: readonly I[]) => R;
 
-	public constructor(
-		privateOptions: GenericTaskOptionsPrivate,
-		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>,
-	) {
+	public constructor(privateOptions: GenericTaskOptionsPrivate, options: GenericTaskConvertedOptions<I, R>) {
 		debug("Creating task");
 		this._pool = privateOptions.pool;
-		this._triggerCallback = privateOptions.triggerNowCallback;
-		this._detachCallback = privateOptions.detach;
-		this._resultConverter = (options as GenericTaskConvertedOptions<any, R>).resultConverter;
+		this._resultConverter = options.resultConverter;
 		this._state = options.paused ? TaskState.Paused : TaskState.Active;
 
-		if (!isNull(options.invocationLimit)) {
-			if (typeof options.invocationLimit !== "number") {
-				throw new Error("Invalid invocation limit: " + options.invocationLimit);
-			}
-			this._invocationLimit = options.invocationLimit;
-		}
 		// Create a group exclusively for this task. This may throw errors.
 		this._taskGroup = privateOptions.pool.addGroup(options) as PromisePoolGroupPrivate;
 		this._groups = [privateOptions.globalGroup, this._taskGroup];
 		if (options.groups) {
 			const groups = options.groups as PromisePoolGroupPrivate[];
-			groups.forEach((group) => {
+			for (const group of groups) {
 				if (group._pool !== this._pool) {
 					throw new Error("options.groups contains a group belonging to a different pool");
 				}
-			});
+			}
 			this._groups.push(...groups);
 		}
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 
-		// Resolve the promise only after all options have been validated
-		if (!isNull(options.invocationLimit) && options.invocationLimit <= 0) {
-			this.end();
-			return;
+		// This may terminate the task
+		this.invocationLimit = isNull(options.invocationLimit) ? Infinity : options.invocationLimit;
+
+		if ((this._state as TaskState) !== TaskState.Terminated) {
+			for (const group of this._groups) {
+				group._incrementTasks();
+			}
 		}
-
-		this._groups.forEach((group) => {
-			group._incrementTasks();
-		});
-
+		this._detachCallback = privateOptions.detach;
+		this._triggerCallback = privateOptions.triggerNowCallback;
 		// The creator will trigger the promises to run
 	}
 
@@ -93,54 +80,49 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		return this._invocationLimit;
 	}
 
-	public set invocationLimit(val: number) {
-		if (isNull(val)) {
-			this._invocationLimit = Infinity;
-		} else if (!isNaN(val) && typeof val === "number" && val >= 0) {
-			this._invocationLimit = val;
-			if (this._invocations >= this._invocationLimit) {
-				this.end();
-			}
-		} else {
-			throw new Error("Invalid invocation limit: " + val);
+	public set invocationLimit(v: number) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error("Invalid invocationLimit: " + v);
 		}
-		if (this._triggerCallback) {
-			this._triggerCallback();
+		this._invocationLimit = v;
+		if (this._invocations >= this._invocationLimit) {
+			this.end();
 		}
+		this._triggerCallback?.();
 	}
 
 	public get concurrencyLimit(): number {
 		return this._taskGroup.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._taskGroup.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._taskGroup.concurrencyLimit = v;
 	}
 
 	public get frequencyLimit(): number {
 		return this._taskGroup.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._taskGroup.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._taskGroup.frequencyLimit = v;
 	}
 
 	public get frequencyWindow(): number {
 		return this._taskGroup.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._taskGroup.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._taskGroup.frequencyWindow = v;
 	}
 
 	public get freeSlots(): number {
 		let freeSlots: number = this._invocationLimit - this._invocations;
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			const slots = group.freeSlots;
 			if (slots < freeSlots) {
 				freeSlots = slots;
 			}
-		});
+		}
 		return freeSlots;
 	}
 
@@ -151,22 +133,8 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	/**
 	 * Returns a promise which resolves when the task completes.
 	 */
-	public promise(): Promise<any> {
-		if (this._rejection) {
-			if (this._rejection.promise) {
-				// First handling of this rejection. Return the unhandled promise.
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			return Promise.reject(this._rejection.error);
-		} else if (this._state === TaskState.Terminated) {
-			return Promise.resolve(this._returnResult);
-		}
-
-		const deferred: Deferred<any> = defer();
-		this._deferreds.push(deferred);
-		return deferred.promise;
+	public async promise(): Promise<R> {
+		return this._deferred.promise();
 	}
 
 	/**
@@ -183,7 +151,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	 * Resumes a paused task, allowing for the generation of additional promises.
 	 */
 	public resume(): void {
-		if (this._state === TaskState.Paused) {
+		if (this._state <= TaskState.Paused) {
 			debug("State: %o", "Active");
 			this._state = TaskState.Active;
 			this._triggerCallback();
@@ -199,18 +167,16 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 		if (this._state < TaskState.Exhausted) {
 			debug("State: %o", "Exhausted");
 			this._state = TaskState.Exhausted;
-			if (this._taskGroup._activeTaskCount > 0) {
-				this._detachCallback();
-			}
+			this._detachCallback?.();
 		}
 		if (!this._generating && this._state < TaskState.Terminated && this._taskGroup._activePromiseCount <= 0) {
 			debug("State: %o", "Terminated");
 			this._state = TaskState.Terminated;
 
 			if (this._taskGroup._activeTaskCount > 0) {
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._decrementTasks();
-				});
+				}
 			}
 			this._resolve();
 		}
@@ -227,7 +193,7 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
 		let time = 0;
 		for (const group of this._groups) {
-			const busyTime: number = group._busyTime();
+			const busyTime = group._busyTime();
 			if (busyTime > time) {
 				time = busyTime;
 			}
@@ -236,33 +202,24 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 	}
 
 	public _cleanFrequencyStarts(now: number): void {
-		this._groups.forEach((group, index) => {
-			if (index > GLOBAL_GROUP_INDEX) {
-				group._cleanFrequencyStarts(now);
-			}
-		});
+		const groups = this._groups.values();
+		// Skip the global group
+		groups.next();
+		for (const group of groups) {
+			group._cleanFrequencyStarts(now);
+		}
 	}
 
 	/**
 	 * Private. Invokes the task.
 	 */
 	public _run(): void {
-		if (this._generating) {
-			// This should never happen
-			throw new Error("Internal Error: Task is already being run");
-		}
-		if (this._invocations >= this._invocationLimit) {
-			// TODO: Make a test for this
-			// This may detach / resolve the task if no promises are active
-			this.end();
-			return;
-		}
+		assert(!this._generating, "Internal Error: Task is already being run");
 		debug("Running generator");
 
-		let promise: Promise<any>;
+		let promise: PromiseLike<I> | I | undefined | null | void;
 		this._generating = true; // prevent task termination
 		try {
-			// @ts-expect-error
 			promise = this._generator.call(this, this._invocations);
 		} catch (err) {
 			this._generating = false;
@@ -278,37 +235,35 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 			return;
 		}
 
-		if (!(promise instanceof Promise)) {
-			// In case what is returned is not a promise, make it one
-			promise = Promise.resolve(promise);
-		}
-		this._groups.forEach((group) => {
+		for (const group of this._groups) {
 			group._activePromiseCount++;
 			if (group._frequencyLimit !== Infinity) {
 				group._frequencyStarts.push(Date.now());
 			}
-		});
-		const resultIndex: number = this._invocations;
+		}
+		const resultIndex = this._invocations;
 		this._invocations++;
 		if (this._invocations >= this._invocationLimit) {
 			// this will not detach the task since there are active promises
 			this.end();
 		}
 
-		promise
-			.catch((err) => {
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
+		(async () => {
+			let result: I | undefined;
+			try {
+				result = await (promise as PromiseLike<I>);
+			} catch (err) {
 				this._reject(err);
-				// Resolve
-			})
-			.then((result) => {
+			} finally {
 				debug("Promise ended.");
-				this._groups.forEach((group) => {
+				for (const group of this._groups) {
 					group._activePromiseCount--;
-				});
+				}
 				debug("Promise Count: %o", this._taskGroup._activePromiseCount);
 				// Avoid storing the result if it is undefined.
 				// Some tasks may have countless iterations and never return anything, so this could eat memory.
-				if (result !== undefined && this._result) {
+				if (result !== undefined) {
 					this._result[resultIndex] = result;
 				}
 				if (this._state >= TaskState.Exhausted && this._taskGroup._activePromiseCount <= 0) {
@@ -317,74 +272,40 @@ export class PromisePoolTaskPrivate<R> implements PromisePoolTask<any> {
 
 				// Remove the task if needed and start the next task
 				this._triggerCallback();
-			});
+			}
+		})();
 	}
 
 	/**
 	 * Private. Resolves the task if possible. Should only be called by end()
 	 */
 	private _resolve(): void {
-		if (this._rejection || !this._result) {
-			return;
-		}
 		// Set the length of the resulting array in case some undefined results affected this
 		this._result.length = this._invocations;
 
 		this._state = TaskState.Terminated;
 
+		let returnResult: R;
 		if (this._resultConverter) {
 			try {
-				this._returnResult = this._resultConverter(this._result);
+				returnResult = this._resultConverter(this._result);
 			} catch (err) {
 				this._reject(err);
 				return;
 			}
 		} else {
-			this._returnResult = this._result;
+			returnResult = this._result as R;
 		}
-		// discard the original array to free memory
-		this._result = undefined;
-
-		if (this._deferreds.length) {
-			this._deferreds.forEach((deferred) => {
-				deferred.resolve(this._returnResult);
-			});
-			this._deferreds.length = 0;
-		}
+		this._deferred.resolve(returnResult);
 	}
 
-	private _reject(err: any) {
-		// Check if the task has already failed
-		if (this._rejection) {
-			debug("This task already failed. Redundant error: %O", err);
-			return;
+	private _reject(err: unknown) {
+		// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+		const promise = Promise.reject(err);
+		this._deferred.resolve(promise);
+		for (const group of this._groups) {
+			group._reject(promise);
 		}
-
-		const taskError: TaskError = {
-			error: err,
-		};
-		this._rejection = taskError;
-		let handled = false;
-
-		// This may detach the task
 		this.end();
-
-		if (this._deferreds.length) {
-			handled = true;
-			this._deferreds.forEach((deferred) => {
-				deferred.reject(taskError.error);
-			});
-			this._deferreds.length = 0;
-		}
-		this._groups.forEach((group) => {
-			if (group._reject(taskError)) {
-				handled = true;
-			}
-		});
-
-		if (!handled) {
-			// Create an unhandled rejection which may be handled later
-			taskError.promise = Promise.reject(err);
-		}
 	}
 }

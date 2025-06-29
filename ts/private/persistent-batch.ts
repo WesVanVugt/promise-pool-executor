@@ -1,63 +1,52 @@
-import defer = require("p-defer");
-import { Batcher } from "promise-batcher";
-import { BatchingResult } from "promise-batcher";
+import assert from "assert/strict";
+import defer, { DeferredPromise } from "p-defer";
+import { Batcher, BatchingResult } from "promise-batcher";
 import { PersistentBatchTask, PersistentBatchTaskOptions } from "../public/persistent-batch";
 import { PromisePoolExecutor } from "../public/pool";
 import { PromisePoolTask, TaskState } from "../public/task";
 
 export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, O> {
 	private readonly _batcher: Batcher<I, O>;
-	private readonly _generator: (input: I[]) => Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
-	private readonly _task: PromisePoolTask<any>;
+	private readonly _generator: (
+		input: readonly I[],
+	) => ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
+	private readonly _task: PromisePoolTask<unknown>;
 
 	constructor(pool: PromisePoolExecutor, options: PersistentBatchTaskOptions<I, O>) {
-		let immediate: boolean | Error;
-		let delayDeferred: Deferred<void> | undefined;
-		let taskDeferred: Deferred<void> | undefined;
+		let synchronousResult = false;
+		let waitForTask: DeferredPromise<void> | undefined;
+		let waitForBatcher: DeferredPromise<void> | undefined;
 
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		this._generator = options.generator;
 		this._batcher = new Batcher<I, O>({
-			batchingFunction: (inputs) => {
-				if (!taskDeferred) {
-					throw new Error("Expected taskPromise to be set (internal error).");
-				}
-				const localTaskDeferred = taskDeferred;
-				taskDeferred = undefined;
-				let promise: Promise<Array<BatchingResult<O>>>;
+			batchingFunction: async (inputs) => {
+				assert(waitForBatcher, "Expected taskPromise to be set");
+				const localWaitForBatcher = waitForBatcher;
+				waitForBatcher = undefined;
+
 				try {
-					const result = this._generator(inputs);
-					promise = result instanceof Promise ? result : Promise.resolve(result);
-				} catch (err) {
-					promise = Promise.reject(err);
+					return await this._generator(inputs);
+				} finally {
+					// Do not send errors to the task, since they will be received via the getResult promises
+					localWaitForBatcher.resolve();
 				}
-				return promise
-					.catch((err) => {
-						// Do not send errors to the task, since they will be received via the getResult promises
-						localTaskDeferred.resolve();
-						throw err;
-					})
-					.then((outputs) => {
-						localTaskDeferred.resolve();
-						return outputs;
-					});
 			},
 			delayFunction: () => {
-				if (delayDeferred) {
-					throw new Error("Expected delayDeferred not to be set (internal error).");
-				}
+				assert(!waitForTask, "Expected waitForTask not to be set");
 				if (this._task.state >= TaskState.Exhausted) {
 					throw new Error("This task has ended and cannot process more items");
 				}
-				immediate = false;
+				synchronousResult = false;
+				// Wake the task to allow processing
 				this._task.resume();
-				if (immediate) {
-					if (immediate !== true) {
-						throw immediate;
-					}
+				// If the task is ready or errored immediately, process that
+				if (synchronousResult) {
 					return;
 				}
-				delayDeferred = defer();
-				return delayDeferred.promise;
+				// The task is not ready, so we wait for it
+				waitForTask = defer();
+				return waitForTask.promise;
 			},
 			maxBatchSize: options.maxBatchSize,
 			queuingDelay: options.queuingDelay,
@@ -70,19 +59,15 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 			frequencyWindow: options.frequencyWindow,
 			generator: () => {
 				this._task.pause();
-				if (taskDeferred) {
-					immediate = new Error("Expected taskDeferred not to be set (internal error).");
-					return;
-				}
-				taskDeferred = defer();
-				if (delayDeferred) {
-					const localDelayDefered: Deferred<void> = delayDeferred;
-					delayDeferred = undefined;
-					localDelayDefered.resolve();
+				assert(!waitForBatcher, "Expected taskDeferred not to be set.");
+				waitForBatcher = defer();
+				if (waitForTask) {
+					waitForTask.resolve();
+					waitForTask = undefined;
 				} else {
-					immediate = true;
+					synchronousResult = true;
 				}
-				return taskDeferred.promise;
+				return waitForBatcher.promise;
 			},
 			paused: true,
 		});
@@ -92,28 +77,32 @@ export class PersistentBatchTaskPrivate<I, O> implements PersistentBatchTask<I, 
 		return this._task.activePromiseCount;
 	}
 
+	public get invocations(): number {
+		return this._task.invocations;
+	}
+
 	public get concurrencyLimit(): number {
 		return this._task.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._task.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._task.concurrencyLimit = v;
 	}
 
 	public get frequencyLimit(): number {
 		return this._task.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._task.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._task.frequencyLimit = v;
 	}
 
 	public get frequencyWindow(): number {
 		return this._task.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._task.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._task.frequencyWindow = v;
 	}
 
 	public get freeSlots(): number {

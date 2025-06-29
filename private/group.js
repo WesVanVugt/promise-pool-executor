@@ -1,24 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolGroupPrivate = void 0;
-const defer = require("p-defer");
+const optional_defer_1 = require("./optional-defer");
 const utils_1 = require("./utils");
 class PromisePoolGroupPrivate {
+	_pool;
+	_concurrencyLimit;
+	_frequencyLimit;
+	_frequencyWindow;
+	_frequencyStarts = [];
+	_activeTaskCount = 0;
+	_activePromiseCount = 0;
+	_deferred;
+	_recentRejection = false;
+	_triggerNextCallback;
 	constructor(pool, triggerNextCallback, options) {
-		this._frequencyStarts = [];
-		this._activeTaskCount = 0;
-		this._activePromiseCount = 0;
-		this._deferreds = [];
-		this._recentRejection = false;
-		this._locallyHandled = false;
-		this._secondaryRejections = [];
 		this._pool = pool;
 		if (!options) {
 			options = {};
 		}
-		this.concurrencyLimit = options.concurrencyLimit;
-		this.frequencyLimit = options.frequencyLimit;
-		this.frequencyWindow = options.frequencyWindow;
+		this.concurrencyLimit = (0, utils_1.isNull)(options.concurrencyLimit) ? Infinity : options.concurrencyLimit;
+		this.frequencyLimit = (0, utils_1.isNull)(options.frequencyLimit) ? Infinity : options.frequencyLimit;
+		this.frequencyWindow = (0, utils_1.isNull)(options.frequencyWindow) ? 1000 : options.frequencyWindow;
 		this._triggerNextCallback = triggerNextCallback;
 	}
 	get activeTaskCount() {
@@ -30,47 +33,32 @@ class PromisePoolGroupPrivate {
 	get concurrencyLimit() {
 		return this._concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._concurrencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._concurrencyLimit = val;
-		} else {
-			throw new Error("Invalid concurrency limit: " + val);
+	set concurrencyLimit(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid concurrencyLimit: ${v}`);
 		}
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._concurrencyLimit = v;
+		this._triggerNextCallback?.();
 	}
 	get frequencyLimit() {
 		return this._frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._frequencyLimit = Infinity;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyLimit = val;
-		} else {
-			throw new Error("Invalid frequency limit: " + val);
+	set frequencyLimit(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyLimit: ${v}`);
 		}
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._frequencyLimit = v;
+		this._triggerNextCallback?.();
 	}
 	get frequencyWindow() {
 		return this._frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		if ((0, utils_1.isNull)(val)) {
-			this._frequencyWindow = 1000;
-		} else if (val && typeof val === "number" && val > 0) {
-			this._frequencyWindow = val;
-		} else {
-			throw new Error("Invalid frequency window: " + val);
+	set frequencyWindow(v) {
+		if (typeof v !== "number" || isNaN(v)) {
+			throw new Error(`Invalid frequencyWindow: ${v}`);
 		}
-		if (this._triggerNextCallback) {
-			this._triggerNextCallback();
-		}
+		this._frequencyWindow = v;
+		this._triggerNextCallback?.();
 	}
 	get freeSlots() {
 		if (this._frequencyLimit !== Infinity) {
@@ -104,84 +92,42 @@ class PromisePoolGroupPrivate {
 		}
 		return 0;
 	}
-	_resolve() {
-		if (!this._rejection && this._deferreds.length) {
-			this._deferreds.forEach((deferred) => {
-				deferred.resolve();
-			});
-			this._deferreds.length = 0;
-		}
-	}
-	_reject(err) {
-		if (this._rejection) {
-			if (this._locallyHandled) {
-				return true;
+	_reject(promise) {
+		if (!this._deferred) {
+			if (this._activeTaskCount <= 0) {
+				return;
 			}
-			this._secondaryRejections.push(err);
-			return false;
+			this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		}
-		let handled = false;
-		this._rejection = err;
-		if (this._deferreds.length) {
-			handled = true;
-			this._locallyHandled = true;
-			this._deferreds.forEach((deferred) => {
-				deferred.reject(err.error);
-			});
-			this._deferreds.length = 0;
+		this._deferred.resolve(promise);
+		if (this._recentRejection) {
+			return;
 		}
 		this._recentRejection = true;
-		process.nextTick(() => {
+		setImmediate(() => {
 			this._recentRejection = false;
-			if (this._activeTaskCount < 1) {
-				this._rejection = undefined;
-				this._locallyHandled = false;
-				if (this._secondaryRejections.length) {
-					this._secondaryRejections.length = 0;
-				}
+			if (this._activeTaskCount <= 0) {
+				this._deferred = undefined;
 			}
 		});
-		return handled;
 	}
 	waitForIdle() {
-		if (this._rejection) {
-			this._locallyHandled = true;
-			if (this._secondaryRejections.length) {
-				this._secondaryRejections.forEach((rejection) => {
-					if (rejection.promise) {
-						rejection.promise.catch(() => {});
-						rejection.promise = undefined;
-					}
-				});
-				this._secondaryRejections.length = 0;
+		if (!this._deferred) {
+			if (this._activeTaskCount <= 0) {
+				return Promise.resolve();
 			}
-			if (this._rejection.promise) {
-				const promise = this._rejection.promise;
-				this._rejection.promise = undefined;
-				return promise;
-			}
-			return Promise.reject(this._rejection.error);
+			this._deferred = new optional_defer_1.OptionalDeferredPromise();
 		}
-		if (this._activeTaskCount <= 0) {
-			return Promise.resolve();
-		}
-		const deferred = defer();
-		this._deferreds.push(deferred);
-		return deferred.promise;
+		return this._deferred.promise();
 	}
 	_incrementTasks() {
 		this._activeTaskCount++;
 	}
 	_decrementTasks() {
 		this._activeTaskCount--;
-		if (this._activeTaskCount > 0) {
-			return;
-		}
-		if (this._rejection && !this._recentRejection) {
-			this._rejection = undefined;
-			this._locallyHandled = false;
-		} else {
-			this._resolve();
+		if (this._activeTaskCount <= 0 && this._deferred && !this._recentRejection) {
+			this._deferred.resolve(undefined);
+			this._deferred = undefined;
 		}
 	}
 }

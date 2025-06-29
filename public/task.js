@@ -7,4 +7,4 @@ var TaskState;
 	TaskState[(TaskState["Paused"] = 1)] = "Paused";
 	TaskState[(TaskState["Exhausted"] = 2)] = "Exhausted";
 	TaskState[(TaskState["Terminated"] = 3)] = "Terminated";
-})((TaskState = exports.TaskState || (exports.TaskState = {})));
+})(TaskState || (exports.TaskState = TaskState = {}));

@@ -8,7 +8,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isNull = exports.debug = void 0;
 const util_1 = __importDefault(require("util"));
 exports.debug = util_1.default.debuglog("promise-pool-executor");
-function isNull(val) {
-	return val === undefined || val === null;
-}
+const isNull = (val) => val === undefined || val === null;
 exports.isNull = isNull;

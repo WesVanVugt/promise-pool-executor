@@ -1,4 +1,3 @@
-import nextTick from "next-tick";
 import util from "util";
 import { PromisePoolGroupPrivate } from "../private/group";
 import { PersistentBatchTaskPrivate } from "../private/persistent-batch";
@@ -17,6 +16,7 @@ import {
 
 const debug = util.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
+let warnedThrottle = false;
 
 export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 	/**
@@ -26,7 +26,7 @@ export interface SingleTaskOptions<T, R> extends TaskOptionsBase {
 	/**
 	 * A function used for creating promises to run.
 	 */
-	generator(this: PromisePoolTask<any>, data: T): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, data: T): R | PromiseLike<R> | undefined | null | void;
 }
 
 export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<FrequencyLimit>, Partial<InvocationLimit> {
@@ -36,7 +36,7 @@ export interface LinearTaskOptions<R> extends TaskOptionsBase, Partial<Frequency
 	 * @param invocation The invocation number for this call, starting at 0 and incrementing by 1 for each
 	 * promise returned.
 	 */
-	generator: (this: PromisePoolTask<any[]>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
+	generator: (this: PromisePoolTask<unknown>, invocation: number) => R | PromiseLike<R> | undefined | null | void;
 }
 
 export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroupOptions, Partial<InvocationLimit> {
@@ -47,7 +47,7 @@ export interface BatchTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGrou
 	 * @param startIndex The original index for the first element in {values}.
 	 */
 	generator: (
-		this: PromisePoolTask<any[]>,
+		this: PromisePoolTask<unknown>,
 		values: T[],
 		startIndex: number,
 		invocation: number,
@@ -76,17 +76,17 @@ export interface EachTaskOptions<T, R> extends TaskOptionsBase, PromisePoolGroup
 	 * @param value The value from {data} for this invocation.
 	 * @param index The original index which {value} was stored at.
 	 */
-	generator(this: PromisePoolTask<any[]>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
+	generator(this: PromisePoolTask<unknown>, value: T, index: number): R | PromiseLike<R> | undefined | null | void;
 }
 
 export class PromisePoolExecutor implements PromisePoolGroup {
-	private _nextTriggerTime?: number;
-	private _nextTriggerTimeout?: any;
+	private _nextTriggerTime = Infinity;
+	private _nextTriggerClear?: () => void;
 	/**
 	 * All tasks which are active or waiting.
 	 */
-	private _tasks: Array<PromisePoolTaskPrivate<any>> = [];
-	private _globalGroup: PromisePoolGroupPrivate;
+	private readonly _tasks: Set<PromisePoolTaskPrivate<unknown>> = new Set();
+	private readonly _globalGroup: PromisePoolGroupPrivate;
 	/**
 	 * Currently in the process of triggering promises. Used to prevent recursion on generator functions.
 	 */
@@ -125,8 +125,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.concurrencyLimit;
 	}
 
-	public set concurrencyLimit(val: number) {
-		this._globalGroup.concurrencyLimit = val;
+	public set concurrencyLimit(v: number) {
+		this._globalGroup.concurrencyLimit = v;
 	}
 
 	/**
@@ -136,8 +136,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.frequencyLimit;
 	}
 
-	public set frequencyLimit(val: number) {
-		this._globalGroup.frequencyLimit = val;
+	public set frequencyLimit(v: number) {
+		this._globalGroup.frequencyLimit = v;
 	}
 
 	/**
@@ -147,8 +147,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.frequencyWindow;
 	}
 
-	public set frequencyWindow(val: number) {
-		this._globalGroup.frequencyWindow = val;
+	public set frequencyWindow(v: number) {
+		this._globalGroup.frequencyWindow = v;
 	}
 
 	/**
@@ -169,14 +169,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * The number of promises which can be created before reaching the pool's configured limits.
 	 */
 	public get freeSlots(): number {
-		return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
+		return this._globalGroup.freeSlots;
 	}
 
 	/**
 	 * Adds a group to the pool.
 	 */
 	public addGroup(options?: PromisePoolGroupOptions): PromisePoolGroup {
-		return new PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
+		return new PromisePoolGroupPrivate(this, () => this._setNextTrigger(0), options);
 	}
 
 	/**
@@ -189,21 +189,23 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * of the task, or a modified result using the resultConverter option.
 	 */
 	public addGenericTask<R>(options: GenericTaskOptions<R>): PromisePoolTask<R[]>;
-	public addGenericTask<R>(options: GenericTaskOptions<R> | GenericTaskConvertedOptions<any, R>): PromisePoolTask<R[]> {
-		const task: PromisePoolTaskPrivate<R> = new PromisePoolTaskPrivate(
+	public addGenericTask<I, R>(
+		options: GenericTaskOptions<R> | GenericTaskConvertedOptions<I, R>,
+	): PromisePoolTask<R | R[]> {
+		const task = new PromisePoolTaskPrivate<R, I>(
 			{
 				detach: () => {
-					this._removeTask(task);
+					this._tasks.delete(task as PromisePoolTaskPrivate<unknown>);
+					debug("Task removed");
 				},
 				globalGroup: this._globalGroup,
 				pool: this,
 				triggerNowCallback: () => this._triggerNow(),
 			},
-			options,
+			options as GenericTaskConvertedOptions<I, R>,
 		);
-		if (task.state <= TaskState.Paused) {
-			// Attach the task
-			this._tasks.push(task);
+		if (task.state < TaskState.Exhausted) {
+			this._tasks.add(task as PromisePoolTaskPrivate<unknown>);
 		}
 		this._triggerNow();
 		return task;
@@ -213,7 +215,8 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * Adds a task with a single promise. The resulting task can be resolved to the result of this promise.
 	 */
 	public addSingleTask<T, R>(options: SingleTaskOptions<T, R>): PromisePoolTask<R> {
-		const data: T | undefined = options.data;
+		const data = options.data;
+		// eslint-disable-next-line @typescript-eslint/unbound-method
 		const generator = options.generator;
 		return this.addGenericTask<R, R>({
 			generator() {
@@ -222,7 +225,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 			groups: options.groups,
 			invocationLimit: 1,
 			paused: options.paused,
-			resultConverter: (result) => result[0],
+			resultConverter: (result) => result[0]!,
 		});
 	}
 
@@ -247,14 +250,14 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 	 * resolved to an array containing the results of the task.
 	 */
 	public addBatchTask<T, R>(options: BatchTaskOptions<T, R>): PromisePoolTask<R[]> {
-		let index: number = 0;
+		let index = 0;
 
 		// Unacceptable values: NaN, <=0, type not number/function
 		if (
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batch size: " + options.batchSize);
+			throw new Error(`Invalid batchSize: ${options.batchSize}`);
 		}
 
 		const data = options.data;
@@ -268,12 +271,12 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 				if (index >= data.length) {
 					return; // No data to process
 				}
-				const oldIndex: number = index;
+				const oldIndex = index;
 				if (typeof batchSizeOption === "function") {
-					const batchSize: number = batchSizeOption(data.length - oldIndex, this.freeSlots);
+					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					// Unacceptable values: NaN, <=0, type not number
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batch size: " + batchSize));
+						throw new Error(`Invalid batchSize: ${batchSize}`);
 					}
 					index += batchSize;
 				} else {
@@ -311,7 +314,7 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 					// Last element
 					this.end();
 				}
-				return options.generator.call(this, data[index], index);
+				return options.generator.call(this, data[index]!, index);
 			},
 		});
 	}
@@ -330,35 +333,48 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		return this._globalGroup.waitForIdle();
 	}
 
-	private _cleanFrequencyStarts(): void {
+	private _cleanFrequencyStarts(now: number): void {
 		// Remove the frequencyStarts entries which are outside of the window
-		const now = Date.now();
 		this._globalGroup._cleanFrequencyStarts(now);
-		this._tasks.forEach((task) => {
+		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
-		});
-	}
-
-	private _clearTriggerTimeout(): void {
-		if (this._nextTriggerTimeout) {
-			clearTimeout(this._nextTriggerTimeout);
-			this._nextTriggerTimeout = undefined;
 		}
-		this._nextTriggerTime = undefined;
 	}
 
-	private _triggerNextTick(): void {
-		if (this._nextTriggerTime === -1) {
+	private _setNextTrigger(time: 0): void;
+	private _setNextTrigger(time: number, now: number): void;
+	private _setNextTrigger(time: number, now?: number): void {
+		if (time === this._nextTriggerTime) {
 			return;
 		}
-		this._clearTriggerTimeout();
-		this._nextTriggerTime = -1;
-		nextTick(() => {
-			if (this._nextTriggerTime === -1) {
-				this._nextTriggerTime = undefined;
-				this._triggerNow();
-			}
-		});
+		this._nextTriggerTime = time;
+		this._nextTriggerClear?.();
+		switch (time) {
+			case 0:
+				// eslint-disable-next-line no-case-declarations
+				const immediate = setImmediate(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				});
+				this._nextTriggerClear = () => {
+					clearImmediate(immediate);
+				};
+				break;
+			case Infinity:
+				this._nextTriggerClear = undefined;
+				break;
+			default:
+				// eslint-disable-next-line no-case-declarations
+				const timeout = setTimeout(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				}, time - now!);
+				this._nextTriggerClear = () => {
+					clearTimeout(timeout);
+				};
+		}
 	}
 
 	/**
@@ -374,55 +390,46 @@ export class PromisePoolExecutor implements PromisePoolGroup {
 		this._triggering = true;
 		this._triggerAgain = false;
 		debug("Trigger promises");
-		this._cleanFrequencyStarts();
+		const now = Date.now();
+		this._cleanFrequencyStarts(now);
 
-		this._clearTriggerTimeout();
+		let soonest = Infinity;
+		let lastTask: PromisePoolTaskPrivate<unknown, unknown> | undefined;
+		for (const task of this._tasks) {
+			for (;;) {
+				const busyTime = task._busyTime();
+				debug("BusyTime: %o", busyTime);
 
-		let taskIndex: number = 0;
-		let task: PromisePoolTaskPrivate<any[]>;
-		let soonest: number = Infinity;
-		let busyTime: number;
-
-		while (taskIndex < this._tasks.length) {
-			task = this._tasks[taskIndex];
-			busyTime = task._busyTime();
-			debug("BusyTime: %o", busyTime);
-
-			if (!busyTime) {
-				task._run();
-			} else {
-				taskIndex++;
-				if (busyTime < soonest) {
-					soonest = busyTime;
+				if (!busyTime) {
+					if (task.activePromiseCount > 100000) {
+						if (lastTask === task) {
+							soonest = 0;
+							if (!warnedThrottle) {
+								warnedThrottle = true;
+								console.warn(
+									"[PromisePoolExecutor] Throttling task with activePromiseCount %o.",
+									task.activePromiseCount,
+								);
+							}
+							break;
+						}
+						lastTask = task;
+					}
+					task._run();
+				} else {
+					if (busyTime < soonest) {
+						soonest = busyTime;
+					}
+					break;
 				}
 			}
 		}
 		this._triggering = false;
 		if (this._triggerAgain) {
+			debug("TriggerAgain");
 			return this._triggerNow();
 		}
 
-		let time: number;
-		if (soonest !== Infinity) {
-			time = Date.now();
-			if (time >= soonest) {
-				return this._triggerNow();
-			}
-
-			this._nextTriggerTime = soonest;
-			this._nextTriggerTimeout = setTimeout(() => {
-				this._nextTriggerTimeout = undefined;
-				this._nextTriggerTime = 0;
-				this._triggerNow();
-			}, soonest - time);
-		}
-	}
-
-	private _removeTask(task: PromisePoolTaskPrivate<any>) {
-		const i: number = this._tasks.indexOf(task);
-		if (i !== -1) {
-			debug("Task removed");
-			this._tasks.splice(i, 1);
-		}
+		this._setNextTrigger(soonest, now);
 	}
 }

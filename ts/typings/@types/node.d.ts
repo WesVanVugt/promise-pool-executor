@@ -3,6 +3,6 @@ declare namespace NodeJS {
 		/**
 		 * Issue: https://github.com/facebook/jest/issues/5620
 		 */
-		_original: () => NodeJS.Process;
+		actual: () => NodeJS.Process;
 	}
 }

@@ -1,5 +1,5 @@
 import { BatchingResult } from "promise-batcher";
-import { ActivePromiseCount, FreeSlots, PromisePoolGroupOptions } from "./group";
+import { ActivePromiseCount, ConcurrencyLimit, FreeSlots, FrequencyLimit, PromisePoolGroupOptions } from "./group";
 import { EndMethod, TaskStateProperty } from "./task";
 export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOptions {
 	/**
@@ -21,15 +21,20 @@ export interface PersistentBatchTaskOptions<I, O> extends PromisePoolGroupOption
 	 */
 	generator(
 		this: PersistentBatchTaskOptions<I, O>,
-		input: I[],
-	): Array<BatchingResult<O>> | PromiseLike<Array<BatchingResult<O>>>;
+		input: readonly I[],
+	): ReadonlyArray<BatchingResult<O>> | PromiseLike<ReadonlyArray<BatchingResult<O>>>;
 }
 export interface PersistentBatchTask<I, O>
 	extends ActivePromiseCount,
-		PromisePoolGroupOptions,
+		ConcurrencyLimit,
+		FrequencyLimit,
 		FreeSlots,
 		TaskStateProperty,
 		EndMethod {
+	/**
+	 * The number of times the task has been invoked.
+	 */
+	readonly invocations: number;
 	/**
 	 * Returns a promise which resolves or rejects with the individual result returned from the task's generator
 	 * function.

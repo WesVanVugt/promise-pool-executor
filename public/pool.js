@@ -6,7 +6,6 @@ var __importDefault =
 	};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromisePoolExecutor = void 0;
-const next_tick_1 = __importDefault(require("next-tick"));
 const util_1 = __importDefault(require("util"));
 const group_1 = require("../private/group");
 const persistent_batch_1 = require("../private/persistent-batch");
@@ -15,9 +14,15 @@ const utils_1 = require("../private/utils");
 const task_2 = require("./task");
 const debug = util_1.default.debuglog("promise-pool-executor:pool");
 debug("booting %o", "promise-pool-executor");
+let warnedThrottle = false;
 class PromisePoolExecutor {
+	_nextTriggerTime = Infinity;
+	_nextTriggerClear;
+	_tasks = new Set();
+	_globalGroup;
+	_triggering;
+	_triggerAgain;
 	constructor(options) {
-		this._tasks = [];
 		let groupOptions;
 		if (!(0, utils_1.isNull)(options)) {
 			if (typeof options === "object") {
@@ -35,20 +40,20 @@ class PromisePoolExecutor {
 	get concurrencyLimit() {
 		return this._globalGroup.concurrencyLimit;
 	}
-	set concurrencyLimit(val) {
-		this._globalGroup.concurrencyLimit = val;
+	set concurrencyLimit(v) {
+		this._globalGroup.concurrencyLimit = v;
 	}
 	get frequencyLimit() {
 		return this._globalGroup.frequencyLimit;
 	}
-	set frequencyLimit(val) {
-		this._globalGroup.frequencyLimit = val;
+	set frequencyLimit(v) {
+		this._globalGroup.frequencyLimit = v;
 	}
 	get frequencyWindow() {
 		return this._globalGroup.frequencyWindow;
 	}
-	set frequencyWindow(val) {
-		this._globalGroup.frequencyWindow = val;
+	set frequencyWindow(v) {
+		this._globalGroup.frequencyWindow = v;
 	}
 	get activeTaskCount() {
 		return this._globalGroup.activeTaskCount;
@@ -57,16 +62,17 @@ class PromisePoolExecutor {
 		return this._globalGroup.activePromiseCount;
 	}
 	get freeSlots() {
-		return this._globalGroup._concurrencyLimit - this._globalGroup._activePromiseCount;
+		return this._globalGroup.freeSlots;
 	}
 	addGroup(options) {
-		return new group_1.PromisePoolGroupPrivate(this, () => this._triggerNextTick(), options);
+		return new group_1.PromisePoolGroupPrivate(this, () => this._setNextTrigger(0), options);
 	}
 	addGenericTask(options) {
 		const task = new task_1.PromisePoolTaskPrivate(
 			{
 				detach: () => {
-					this._removeTask(task);
+					this._tasks.delete(task);
+					debug("Task removed");
 				},
 				globalGroup: this._globalGroup,
 				pool: this,
@@ -74,8 +80,8 @@ class PromisePoolExecutor {
 			},
 			options,
 		);
-		if (task.state <= task_2.TaskState.Paused) {
-			this._tasks.push(task);
+		if (task.state < task_2.TaskState.Exhausted) {
+			this._tasks.add(task);
 		}
 		this._triggerNow();
 		return task;
@@ -110,7 +116,7 @@ class PromisePoolExecutor {
 			!options.batchSize ||
 			(typeof options.batchSize !== "function" && (typeof options.batchSize !== "number" || options.batchSize <= 0))
 		) {
-			throw new Error("Invalid batch size: " + options.batchSize);
+			throw new Error(`Invalid batchSize: ${options.batchSize}`);
 		}
 		const data = options.data;
 		const generator = options.generator;
@@ -127,7 +133,7 @@ class PromisePoolExecutor {
 				if (typeof batchSizeOption === "function") {
 					const batchSize = batchSizeOption(data.length - oldIndex, this.freeSlots);
 					if (!batchSize || typeof batchSize !== "number" || batchSize <= 0) {
-						return Promise.reject(new Error("Invalid batch size: " + batchSize));
+						throw new Error(`Invalid batchSize: ${batchSize}`);
 					}
 					index += batchSize;
 				} else {
@@ -168,32 +174,42 @@ class PromisePoolExecutor {
 	waitForIdle() {
 		return this._globalGroup.waitForIdle();
 	}
-	_cleanFrequencyStarts() {
-		const now = Date.now();
+	_cleanFrequencyStarts(now) {
 		this._globalGroup._cleanFrequencyStarts(now);
-		this._tasks.forEach((task) => {
+		for (const task of this._tasks) {
 			task._cleanFrequencyStarts(now);
-		});
-	}
-	_clearTriggerTimeout() {
-		if (this._nextTriggerTimeout) {
-			clearTimeout(this._nextTriggerTimeout);
-			this._nextTriggerTimeout = undefined;
 		}
-		this._nextTriggerTime = undefined;
 	}
-	_triggerNextTick() {
-		if (this._nextTriggerTime === -1) {
+	_setNextTrigger(time, now) {
+		if (time === this._nextTriggerTime) {
 			return;
 		}
-		this._clearTriggerTimeout();
-		this._nextTriggerTime = -1;
-		(0, next_tick_1.default)(() => {
-			if (this._nextTriggerTime === -1) {
-				this._nextTriggerTime = undefined;
-				this._triggerNow();
-			}
-		});
+		this._nextTriggerTime = time;
+		this._nextTriggerClear?.();
+		switch (time) {
+			case 0:
+				const immediate = setImmediate(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				});
+				this._nextTriggerClear = () => {
+					clearImmediate(immediate);
+				};
+				break;
+			case Infinity:
+				this._nextTriggerClear = undefined;
+				break;
+			default:
+				const timeout = setTimeout(() => {
+					this._nextTriggerClear = undefined;
+					this._nextTriggerTime = Infinity;
+					this._triggerNow();
+				}, time - now);
+				this._nextTriggerClear = () => {
+					clearTimeout(timeout);
+				};
+		}
 	}
 	_triggerNow() {
 		if (this._triggering) {
@@ -204,49 +220,44 @@ class PromisePoolExecutor {
 		this._triggering = true;
 		this._triggerAgain = false;
 		debug("Trigger promises");
-		this._cleanFrequencyStarts();
-		this._clearTriggerTimeout();
-		let taskIndex = 0;
-		let task;
+		const now = Date.now();
+		this._cleanFrequencyStarts(now);
 		let soonest = Infinity;
-		let busyTime;
-		while (taskIndex < this._tasks.length) {
-			task = this._tasks[taskIndex];
-			busyTime = task._busyTime();
-			debug("BusyTime: %o", busyTime);
-			if (!busyTime) {
-				task._run();
-			} else {
-				taskIndex++;
-				if (busyTime < soonest) {
-					soonest = busyTime;
+		let lastTask;
+		for (const task of this._tasks) {
+			for (;;) {
+				const busyTime = task._busyTime();
+				debug("BusyTime: %o", busyTime);
+				if (!busyTime) {
+					if (task.activePromiseCount > 100000) {
+						if (lastTask === task) {
+							soonest = 0;
+							if (!warnedThrottle) {
+								warnedThrottle = true;
+								console.warn(
+									"[PromisePoolExecutor] Throttling task with activePromiseCount %o.",
+									task.activePromiseCount,
+								);
+							}
+							break;
+						}
+						lastTask = task;
+					}
+					task._run();
+				} else {
+					if (busyTime < soonest) {
+						soonest = busyTime;
+					}
+					break;
 				}
 			}
 		}
 		this._triggering = false;
 		if (this._triggerAgain) {
+			debug("TriggerAgain");
 			return this._triggerNow();
 		}
-		let time;
-		if (soonest !== Infinity) {
-			time = Date.now();
-			if (time >= soonest) {
-				return this._triggerNow();
-			}
-			this._nextTriggerTime = soonest;
-			this._nextTriggerTimeout = setTimeout(() => {
-				this._nextTriggerTimeout = undefined;
-				this._nextTriggerTime = 0;
-				this._triggerNow();
-			}, soonest - time);
-		}
-	}
-	_removeTask(task) {
-		const i = this._tasks.indexOf(task);
-		if (i !== -1) {
-			debug("Task removed");
-			this._tasks.splice(i, 1);
-		}
+		this._setNextTrigger(soonest, now);
 	}
 }
 exports.PromisePoolExecutor = PromisePoolExecutor;

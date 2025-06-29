@@ -1,15 +1,21 @@
 // @ts-check
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
-process._original = (function (_original) {
-	return () => _original;
+
+// @ts-expect-error -- custom property
+process.actual = (function (actual) {
+	return () => actual;
 })(process);
 
 /** @type {import("jest").Config} */
 const config = {
-	testMatch: ["<rootDir>/ts/test/index.ts"],
 	preset: "ts-jest",
+	testPathIgnorePatterns: ["./test-package"],
 	collectCoverage: true,
+	setupFilesAfterEnv: ["./ts/test/jestSetupEnv.ts"],
+	fakeTimers: {
+		enableGlobally: true,
+	},
+	maxWorkers: 1, // Needed to support use of "actual" above
+	collectCoverageFrom: ["./ts/**/*"],
 	coverageThreshold: {
 		global: {
 			branches: 100,
