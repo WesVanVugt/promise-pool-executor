@@ -8,6 +8,7 @@ process.actual = (function (actual) {
 /** @type {import("jest").Config} */
 const config = {
 	preset: "ts-jest",
+	testPathIgnorePatterns: ["./test-package"],
 	collectCoverage: true,
 	setupFilesAfterEnv: ["./ts/test/jestSetupEnv.ts"],
 	fakeTimers: {

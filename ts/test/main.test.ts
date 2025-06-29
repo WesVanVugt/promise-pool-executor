@@ -1,6 +1,5 @@
 import timeSpan from "time-span";
 import { expectType } from "ts-expect";
-import { PromisePoolGroupPrivate } from "../private/group";
 import {
 	BatchingResult,
 	BatchTaskOptions,
@@ -226,7 +225,9 @@ describe("frequencyLimit", () => {
 			})
 			.promise();
 		expect(results).toStrictEqual([0, 0, TICK]);
-		expect((group as PromisePoolGroupPrivate)._frequencyStarts.length).toBeGreaterThanOrEqual(1);
+		// @ts-expect-error -- Accessing private property for testing
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+		expect(group._frequencyStarts.length).toBeGreaterThanOrEqual(1);
 	});
 
 	test("Should Not Collect Timestamps If Not Set", async () => {

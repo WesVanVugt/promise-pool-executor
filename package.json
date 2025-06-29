@@ -23,9 +23,10 @@
 		"prepare": "npm run build",
 		"build": "npm run clean && tsc -p ./tsconfig.build.json && tsc -p ./tsconfig.nocomments.json && rm private/*.d.ts && prettier -w index.js index.d.ts private public",
 		"clean": "rm -rf index.js index.d.ts private public",
-		"test": "npm run lint && npm run test:local",
+		"test": "npm run lint && npm run test:local && npm run test:package",
 		"test:local": "jest",
-		"test:debug": "cross-env NODE_DEBUG=promise-pool-executor* npm test",
+		"test:package": "bash test-package.sh",
+		"test:debug": "cross-env NODE_DEBUG=promise-pool-executor* npm test:local",
 		"lint": "eslint --max-warnings 0"
 	},
 	"main": "index.js",

@@ -5,7 +5,7 @@ import pluginJest from "eslint-plugin-jest";
 import pluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 export default tseslint.config([
-	{ ignores: ["./coverage/**/*.js"] },
+	{ ignores: ["./coverage", "./test-package"] },
 	{
 		languageOptions: {
 			parserOptions: {
