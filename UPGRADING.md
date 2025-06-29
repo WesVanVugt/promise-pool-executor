@@ -1,3 +1,11 @@
+# Upgrading Notes (1.x to 2.0)
+
+Notes regarding breaking changes when transitioning from version 1.x to version 2.0.
+
+## 1. Updated target NodeJS version
+
+That's it.
+
 # Upgrading Notes (0.x to 1.0)
 
 Notes regarding breaking changes when transitioning from version 0.x to version 1.0.

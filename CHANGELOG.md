@@ -1,7 +1,14 @@
 # Changelog for promise-pool-executor
 
+## 2.0.0 (2025-06-28)
+* Updated target NodeJS version to 18.
+* Updated various packages.
+* Added 100% testing coverage.
+* Swapped use of nextTick for setImmediate.
+* Cleaned up code where possible.
+
 ## 1.1.1 (2018-04-19)
-* bugfix: Replaced a dependancy which had a reference to global Promise.defer method because it was causing deprecation
+* bugfix: Replaced a dependency which had a reference to global Promise.defer method because it was causing deprecation
 warnings in some cases.
 
 ## 1.1.0 (2017-12-26)
